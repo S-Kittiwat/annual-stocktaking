@@ -1,0 +1,1168 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>StockCount — นับสต็อก Pallet</title>
+<script src="config.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
+
+:root {
+  --bg:        #f8f6f1;
+  --surface:   #ffffff;
+  --surface2:  #f3f0e8;
+  --border:    #e5dfc8;
+  --border2:   #d4c99a;
+  --accent:    #C89B2E;
+  --accent2:   #F5C842;
+  --accent-bg: #FEF9EC;
+  --success:   #2e7d32;
+  --success-bg:#e8f5e9;
+  --warn:      #b45309;
+  --warn-bg:   #fef3c7;
+  --danger:    #c62828;
+  --danger-bg: #fdecea;
+  --text:      #1a1612;
+  --text2:     #4a3f2f;
+  --muted:     #8a7a5e;
+  --chep:      #1565c0;
+  --loscam:    #c62828;
+  --brs:       #e65100;
+  --font:      'IBM Plex Sans Thai', sans-serif;
+  --mono:      'IBM Plex Mono', monospace;
+  --r:12px; --rs:8px;
+  --shadow:    0 1px 4px rgba(100,80,20,.08), 0 4px 16px rgba(100,80,20,.06);
+  --shadow-sm: 0 1px 3px rgba(100,80,20,.1);
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:100vh;font-size:15px;}
+
+/* ── Topnav ── */
+.topnav{height:56px;background:var(--surface);border-bottom:2px solid var(--accent2);display:flex;align-items:center;padding:0 24px;gap:0;position:sticky;top:0;z-index:200;box-shadow:var(--shadow-sm);}
+.nav-brand{display:flex;align-items:center;gap:10px;margin-right:24px;text-decoration:none;}
+.nav-brand-icon{width:36px;height:36px;background:var(--accent2);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:18px;box-shadow:0 2px 6px rgba(245,200,66,.4);}
+.nav-brand-name{font-size:15px;font-weight:700;color:var(--text);}
+.nav-brand-sub{font-size:10px;color:var(--muted);}
+.nav-right{margin-left:auto;display:flex;align-items:center;gap:12px;}
+.nav-user-name{font-size:12px;font-weight:600;color:var(--text);}
+.nav-user-site{font-size:10px;color:var(--accent);}
+.btn-admin{background:var(--accent-bg);border:1px solid var(--border2);color:var(--accent);border-radius:var(--rs);padding:5px 12px;font-family:var(--font);font-size:11px;font-weight:600;cursor:pointer;text-decoration:none;display:flex;align-items:center;gap:4px;transition:all .15s;}
+.btn-admin:hover{background:var(--accent2);color:var(--text);border-color:var(--accent);}
+.btn-clear{background:none;border:none;color:var(--muted);font-size:11px;cursor:pointer;font-family:var(--font);transition:color .15s;}
+.btn-clear:hover{color:var(--danger);}
+
+/* ── Page ── */
+.page{min-height:calc(100vh - 56px);}
+.content{padding:20px 24px 130px;max-width:820px;margin:0 auto;display:flex;flex-direction:column;gap:14px;}
+
+/* ── Round banner ── */
+.round-hero{background:linear-gradient(135deg, var(--accent2) 0%, var(--accent) 100%);border-radius:var(--r);padding:20px 24px;display:flex;align-items:center;justify-content:space-between;gap:12px;box-shadow:0 4px 16px rgba(200,155,46,.25);}
+.round-hero-left{display:flex;align-items:center;gap:14px;}
+.round-hero-icon{width:44px;height:44px;background:rgba(255,255,255,.25);border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:22px;}
+.round-hero-title{font-size:17px;font-weight:700;color:#1a1612;}
+.round-hero-sub{font-size:11px;color:rgba(26,22,18,.6);margin-top:2px;}
+.round-hero-open{background:rgba(255,255,255,.3);border:1px solid rgba(255,255,255,.5);border-radius:20px;font-size:11px;font-weight:700;color:#1a1612;padding:3px 12px;}
+
+/* ── Cards ── */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;box-shadow:var(--shadow);}
+.card.active{border-color:var(--accent2);box-shadow:0 0 0 2px rgba(245,200,66,.15), var(--shadow);}
+.card.done{border-color:var(--success);box-shadow:0 0 0 2px rgba(46,125,50,.1), var(--shadow);}
+.card.locked{opacity:.5;pointer-events:none;box-shadow:none;}
+.card-head{padding:13px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;gap:10px;background:var(--surface2);}
+.step-badge{font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;}
+.step-badge.active{background:var(--accent2);color:#1a1612;}
+.step-badge.done{background:var(--success-bg);border:1px solid var(--success);color:var(--success);}
+.step-badge.locked{background:var(--border);color:var(--muted);}
+.card-title{font-size:13px;font-weight:600;color:var(--text);}
+.card-hint{font-size:11px;color:var(--muted);margin-left:auto;}
+.card-body{padding:18px;}
+
+/* ── Form ── */
+.field{display:flex;flex-direction:column;gap:6px;margin-bottom:14px;}
+.field:last-child{margin-bottom:0;}
+label{font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.04em;text-transform:uppercase;}
+.input,.select{background:var(--surface);border:1.5px solid var(--border);border-radius:var(--rs);color:var(--text);font-family:var(--font);font-size:14px;padding:10px 14px;outline:none;width:100%;transition:border-color .15s,box-shadow .15s;}
+.input:focus,.select:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(200,155,46,.12);}
+.input::placeholder{color:var(--muted);opacity:.5;}
+.select option{background:var(--surface);}
+.btn{border:none;border-radius:var(--rs);padding:10px 18px;font-family:var(--font);font-size:13px;font-weight:600;cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:6px;}
+.btn:disabled{opacity:.35;cursor:not-allowed;}
+.btn-primary{background:var(--accent2);color:#1a1612;box-shadow:0 2px 8px rgba(245,200,66,.3);}
+.btn-primary:hover:not(:disabled){background:var(--accent);color:#fff;}
+.btn-success{background:#2e7d32;color:#fff;}
+.btn-success:hover:not(:disabled){background:#1b5e20;}
+.btn-outline{background:var(--surface);border:1.5px solid var(--border2);color:var(--text2);}
+.btn-outline:hover:not(:disabled){border-color:var(--accent);color:var(--accent);}
+
+/* ── Pallet Input Grid (2-col: LOSCAM|CHEP / BRS|SWWI) ── */
+.material-section{margin-bottom:18px;}
+.material-head{display:flex;align-items:center;gap:8px;padding:8px 0 6px;margin-bottom:8px;border-bottom:2px solid var(--border);}
+.material-icon{font-size:16px;}
+.material-label{font-size:13px;font-weight:700;color:var(--text);}
+.material-total{margin-left:auto;font-size:12px;font-family:var(--mono);font-weight:600;color:var(--muted);}
+/* ── 3-column table: Status | Brand1 | Brand2 ── */
+.pallet-table{width:100%;border-collapse:collapse;border-radius:var(--rs);overflow:hidden;border:1px solid var(--border);margin-bottom:14px;}
+.pallet-table thead th{padding:9px 14px;font-size:11px;font-weight:700;letter-spacing:.04em;border-bottom:2px solid var(--border);text-align:center;background:var(--surface2);}
+.pallet-table thead th:first-child{text-align:left;color:var(--muted);font-size:10px;text-transform:uppercase;font-weight:600;}
+.pallet-table thead th.loscam-h{color:var(--loscam);background:#fff5f5;}
+.pallet-table thead th.chep-h  {color:var(--chep);background:#f0f7ff;}
+.pallet-table thead th.brs-h   {color:var(--brs);background:#fff8f0;}
+.pallet-table thead th.swwi-h  {color:#2e7d32;background:#f3fbf3;}
+.pallet-table tbody tr td{padding:7px 10px;border-bottom:1px solid var(--border);font-size:12px;color:var(--text2);}
+.pallet-table tbody tr:last-child td{border-bottom:none;}
+.pallet-table tbody tr:hover td{background:#fafaf7;}
+.pallet-table td.inp-cell{text-align:center;padding:4px 8px;}
+.pallet-table tfoot td{padding:8px 14px;font-weight:700;font-size:13px;background:var(--surface2);border-top:2px solid var(--border);text-align:center;}
+.pallet-table tfoot td:first-child{text-align:left;}
+.status-input{background:var(--surface2);border:1px solid var(--border);border-radius:4px;color:#1a1612;font-family:var(--mono);font-size:13px;font-weight:600;padding:5px 6px;width:72px;text-align:center;outline:none;transition:border-color .15s;}
+.status-input:focus{border-color:var(--accent);background:#fff;}
+.status-input.has-val{background:#fffef0;border-color:var(--accent2);}
+/* ── Location chips (updated for new structure) ── */
+.loc-chip{font-size:11px;font-family:var(--mono);font-weight:700;padding:2px 9px;border-radius:20px;}
+.loc-chip.loscam{background:#ffebee;color:var(--loscam);border:1px solid #ffcdd2;}
+.loc-chip.chep  {background:#e3f2fd;color:var(--chep);border:1px solid #bbdefb;}
+.loc-chip.brs   {background:#fff3e0;color:var(--brs);border:1px solid #ffe0b2;}
+.loc-chip.swwi  {background:#e8f5e9;color:#2e7d32;border:1px solid #a5d6a7;}
+/* ── Summary ── */
+.sum-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:10px;margin-bottom:14px;}
+.sum-card{border-radius:var(--rs);padding:14px;border:1.5px solid;}
+.sum-card.wood   {background:#fdf6e3;border-color:#d4c99a;grid-column:1/-1;}
+.sum-card.plastic{background:#f0f4ff;border-color:#b0c4de;grid-column:1/-1;}
+.sum-card.loscam {background:#ffebee;border-color:#ef9a9a;}
+.sum-card.chep   {background:#e3f2fd;border-color:#90caf9;}
+.sum-card.brs    {background:#fff3e0;border-color:#ffcc80;}
+.sum-card.swwi   {background:#e8f5e9;border-color:#a5d6a7;}
+.sum-num{font-size:24px;font-weight:700;font-family:var(--mono);color:#1a1612;}
+.sum-lbl{font-size:11px;color:var(--muted);margin-top:2px;font-weight:500;}
+.sum-sub{font-size:10px;color:var(--muted);margin-top:1px;}
+/* status summary table */
+.status-sum-table{width:100%;border-collapse:collapse;font-size:12px;margin-top:10px;}
+.status-sum-table th{text-align:left;padding:6px 10px;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;border-bottom:1px solid var(--border);background:var(--surface2);}
+.status-sum-table th.r{text-align:right;}
+.status-sum-table td{padding:7px 10px;border-bottom:1px solid var(--border);}
+.status-sum-table td.r{text-align:right;font-family:var(--mono);font-weight:600;color:#1a1612;}
+.status-sum-table tr:last-child td{border-bottom:none;}
+.status-sum-table tr.bold-row td{font-weight:700;background:var(--surface2);}
+@media(max-width:600px){
+  .brand-grid{grid-template-columns:1fr;}
+  .sum-grid{grid-template-columns:1fr;}
+}
+.sum-num{font-size:30px;font-weight:700;font-family:var(--mono);color:#1a1612;}
+.sum-lbl{font-size:11px;color:var(--muted);margin-top:3px;font-weight:500;}
+
+/* ── Location table ── */
+.loc-table-wrap{border:1px solid var(--border);border-radius:var(--rs);overflow:hidden;margin-bottom:14px;}
+.loc-table-wrap table{width:100%;border-collapse:collapse;}
+.loc-table-wrap th{background:var(--surface2);padding:8px 14px;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;text-align:left;border-bottom:1px solid var(--border);font-weight:700;}
+.loc-table-wrap td{padding:10px 14px;font-size:13px;border-bottom:1px solid var(--border);}
+.loc-table-wrap tr:last-child td{border-bottom:none;}
+.loc-table-wrap tr:hover td{background:var(--surface2);}
+.loc-table-wrap tr.total-row td{background:var(--surface2);font-weight:700;font-size:13px;}
+td.num{font-family:var(--mono);text-align:right;font-weight:600;color:#1a1612;}
+td.chep-c  {color:#1a1612;}
+td.loscam-c{color:#1a1612;}
+td.brs-c   {color:#1a1612;}
+.compare-table{width:100%;border-collapse:collapse;border-radius:var(--rs);overflow:hidden;border:1px solid var(--border);margin-bottom:14px;}
+.compare-table th{background:var(--surface2);padding:10px 14px;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;text-align:center;border-bottom:1px solid var(--border);font-weight:700;}
+.compare-table th:first-child{text-align:left;}
+.compare-table td{padding:12px 14px;font-size:15px;font-family:var(--mono);font-weight:700;text-align:center;border-bottom:1px solid var(--border);color:#1a1612;}
+.compare-table td:first-child{font-family:var(--font);font-size:12px;color:var(--text2);text-align:left;font-weight:500;}
+.compare-table tr:last-child td{border-bottom:none;}
+.compare-table .row-physical td{background:#fffef7;}
+.compare-table .row-book td{background:#f0f9ff;}
+.compare-table .row-var td{background:var(--surface2);font-size:17px;}
+.var-pos{color:var(--success);}
+.var-neg{color:var(--danger);}
+.var-zero{color:var(--muted);}
+.book-pending{background:var(--warn-bg);border:1px solid #fcd34d;border-radius:var(--rs);padding:10px 14px;font-size:12px;color:var(--warn);display:flex;align-items:center;gap:8px;margin-bottom:14px;}
+
+/* ── Upload ── */
+.upload-zone{border:2px dashed var(--border2);border-radius:var(--r);padding:22px;text-align:center;cursor:pointer;transition:all .15s;background:var(--accent-bg);}
+.upload-zone:hover,.upload-zone.drag{border-color:var(--accent);background:#fef9d9;}
+.upload-zone .icon{font-size:30px;margin-bottom:6px;}
+.upload-zone .label{font-size:13px;font-weight:600;color:var(--text2);}
+.upload-zone .sub{font-size:11px;color:var(--muted);}
+.file-list{display:flex;flex-direction:column;gap:6px;margin-top:10px;}
+.file-item{background:var(--surface2);border:1px solid var(--border);border-radius:var(--rs);padding:8px 12px;display:flex;align-items:center;gap:8px;font-size:12px;color:var(--text2);}
+.file-item .fname{flex:1;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.file-item .fdel{background:none;border:none;color:var(--muted);cursor:pointer;font-size:13px;}
+.file-item .fdel:hover{color:var(--danger);}
+
+/* ── Print button ── */
+.btn-print{background:var(--surface);border:1.5px solid var(--border2);color:var(--text2);border-radius:var(--rs);padding:10px 18px;font-family:var(--font);font-size:13px;font-weight:600;cursor:pointer;display:flex;align-items:center;gap:7px;transition:all .15s;box-shadow:var(--shadow-sm);}
+.btn-print:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-bg);}
+.btn-print:disabled{opacity:.4;cursor:not-allowed;}
+
+/* ── Submit bar ── */
+.submit-bar{position:fixed;bottom:0;left:0;right:0;background:var(--surface);border-top:2px solid var(--accent2);padding:14px 24px;display:flex;gap:10px;align-items:center;z-index:100;box-shadow:0 -4px 16px rgba(100,80,20,.08);}
+.submit-bar .note{font-size:11px;color:var(--muted);flex:1;}
+
+/* ── Resume banner ── */
+.resume-banner{background:var(--success-bg);border:1px solid #a5d6a7;border-radius:var(--rs);padding:10px 14px;font-size:12px;color:var(--success);display:flex;align-items:center;gap:8px;}
+
+/* ── Success overlay ── */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:500;display:none;align-items:center;justify-content:center;padding:20px;}
+.overlay.open{display:flex;}
+.overlay-box{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);width:100%;max-width:420px;padding:32px;text-align:center;box-shadow:0 20px 60px rgba(0,0,0,.2);}
+.overlay-icon{font-size:52px;margin-bottom:14px;}
+.overlay-title{font-size:20px;font-weight:700;color:var(--text);margin-bottom:6px;}
+.overlay-sub{font-size:13px;color:var(--muted);line-height:1.7;margin-bottom:16px;}
+.overlay-id{font-family:var(--mono);font-size:12px;color:var(--accent);background:var(--accent-bg);border:1px solid var(--border2);padding:5px 14px;border-radius:20px;margin-bottom:20px;display:inline-block;font-weight:600;}
+.round-banner{background:var(--warn-bg);border:1px solid #fcd34d;border-radius:var(--rs);padding:12px 16px;font-size:13px;color:var(--warn);display:flex;align-items:center;gap:8px;margin-bottom:4px;font-weight:500;}
+
+/* ── Loading / Toast ── */
+.loading{text-align:center;padding:48px;color:var(--muted);font-size:13px;}
+.spinner{width:18px;height:18px;border:2px solid rgba(200,155,46,.3);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;display:inline-block;vertical-align:middle;margin-right:8px;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.toast{position:fixed;top:70px;left:50%;transform:translateX(-50%) translateY(-60px);background:var(--surface);border:1.5px solid var(--border2);border-radius:var(--rs);padding:10px 18px;font-size:13px;transition:transform .3s;z-index:999;white-space:nowrap;box-shadow:0 8px 24px rgba(0,0,0,.12);}
+.toast.show{transform:translateX(-50%) translateY(0);}
+.toast.success{border-color:#a5d6a7;color:var(--success);background:var(--success-bg);}
+.toast.error  {border-color:#ef9a9a;color:var(--danger);background:var(--danger-bg);}
+.toast.info   {border-color:var(--border2);color:var(--accent);}
+
+/* ── Location list ── */
+.loc-list{display:flex;flex-direction:column;gap:8px;margin-bottom:12px;}
+.loc-item{background:var(--surface2);border:1px solid var(--border);border-radius:var(--rs);padding:10px 12px;}
+.loc-item-top{display:flex;align-items:center;gap:6px;margin-bottom:5px;}
+.loc-name{font-size:13px;font-weight:700;color:var(--text);flex:1;}
+.loc-item-bot{display:flex;align-items:center;gap:5px;flex-wrap:wrap;}
+.loc-total{font-size:12px;font-family:var(--mono);font-weight:700;color:var(--text2);margin-left:auto;padding:0 4px;}
+.loc-act{background:none;border:1px solid var(--border);border-radius:4px;cursor:pointer;font-size:12px;padding:2px 8px;transition:all .15s;font-family:var(--font);}
+.loc-act.edit{color:var(--accent);}
+.loc-act.edit:hover{background:var(--accent-bg);border-color:var(--accent);}
+.loc-act.del{color:var(--danger);}
+.loc-act.del:hover{background:var(--danger-bg);border-color:var(--danger);}
+
+/* ── Add location ── */
+.add-loc-btn{width:100%;background:var(--surface);border:1.5px dashed var(--border2);border-radius:var(--rs);padding:11px;font-family:var(--font);font-size:13px;font-weight:600;color:var(--accent);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:all .15s;}
+.add-loc-btn:hover{background:var(--accent-bg);border-color:var(--accent);}
+.add-loc-btn.editing{background:#fff8e1;border:1.5px solid var(--accent);color:var(--accent);border-style:solid;}
+.add-loc-box{background:var(--accent-bg);border:1.5px solid var(--border2);border-radius:var(--rs);padding:16px;margin-top:8px;display:none;}
+.add-loc-box.open{display:block;}
+.add-loc-box.editing{background:#fff8e1;border-color:var(--accent);border-width:2px;}
+.edit-banner{background:var(--accent2);border-radius:var(--rs);padding:8px 14px;font-size:12px;font-weight:700;color:#1a1612;display:flex;align-items:center;gap:8px;margin-bottom:12px;}
+
+@media(max-width:600px){
+  .pallet-grid{grid-template-columns:1fr;}
+  .sum-grid{grid-template-columns:1fr;}
+  .content{padding:14px 14px 130px;}
+  .round-hero{flex-direction:column;align-items:flex-start;}
+}
+@media print{
+  .topnav,.submit-bar,.btn-print,.add-loc-box,
+  button:not(.no-hide),.overlay{display:none!important;}
+  body{background:#fff;}
+  .card{box-shadow:none;border:1px solid #ccc;}
+}
+</style>
+</head>
+<body>
+
+<!-- Topnav -->
+<nav class="topnav">
+  <a class="nav-brand" href="#">
+    <div class="nav-brand-icon">📦</div>
+    <div>
+      <div class="nav-brand-name">StockCount</div>
+      <div class="nav-brand-sub">นับสต็อก Pallet</div>
+    </div>
+  </a>
+  <div class="nav-right">
+    <div id="navUserInfo" style="display:none;">
+      <div class="nav-user-name" id="navName">—</div>
+      <div class="nav-user-site" id="navSite">—</div>
+    </div>
+    <a class="btn-admin" href="admin.html">⚙️ Admin</a>
+    <button class="btn-clear" id="btnReset" onclick="resetSession()" style="display:none;">↩ เริ่มใหม่</button>
+  </div>
+</nav>
+
+<div class="page">
+  <div class="content" id="mainContent">
+    <div class="loading"><span class="spinner"></span>กำลังโหลด...</div>
+  </div>
+</div>
+
+<!-- Submit Bar -->
+<div class="submit-bar" id="submitBar" style="display:none;">
+  <div class="note" id="submitNote">—</div>
+  <button class="btn btn-success" id="btnSubmit" onclick="submitCount()" disabled>
+    📤 Submit ผลการนับ
+  </button>
+</div>
+
+<!-- Success Overlay -->
+<div class="overlay" id="successOverlay">
+  <div class="overlay-box">
+    <div class="overlay-icon">✅</div>
+    <div class="overlay-title">ส่งผลการนับสำเร็จ</div>
+    <div class="overlay-sub">ข้อมูลถูกบันทึกแล้ว รอ Admin ตรวจสอบและอนุมัติ<br>ท่านจะได้รับการแจ้งเตือนเมื่อได้รับการอนุมัติ</div>
+    <div class="overlay-id" id="successId">SC-—</div>
+    <button class="btn btn-outline" onclick="resetSession()" style="width:100%;">🔄 นับ Site อื่น</button>
+  </div>
+</div>
+
+<!-- Photo choice modal -->
+<div class="overlay" id="photoChoiceModal" onclick="if(event.target===this)closePhotoChoice()">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r);width:100%;max-width:320px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.15);">
+    <div style="padding:14px 18px;border-bottom:1px solid var(--border);background:var(--surface2);font-size:13px;font-weight:600;">📷 เพิ่มรูป Location</div>
+    <div style="padding:12px;display:flex;flex-direction:column;gap:8px;">
+      <button onclick="document.getElementById('photoInputCamera').click();closePhotoChoice();"
+        style="background:var(--accent-bg);border:1.5px solid var(--border2);border-radius:var(--rs);padding:14px;font-family:var(--font);font-size:14px;font-weight:600;cursor:pointer;color:var(--text);display:flex;align-items:center;gap:10px;transition:all .15s;"
+        onmouseenter="this.style.borderColor='var(--accent)'" onmouseleave="this.style.borderColor='var(--border2)'">
+        <span style="font-size:22px;">📸</span> ถ่ายรูปด้วยกล้อง
+      </button>
+      <button onclick="document.getElementById('photoInputGallery').click();closePhotoChoice();"
+        style="background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--rs);padding:14px;font-family:var(--font);font-size:14px;font-weight:600;cursor:pointer;color:var(--text);display:flex;align-items:center;gap:10px;transition:all .15s;"
+        onmouseenter="this.style.borderColor='var(--accent)'" onmouseleave="this.style.borderColor='var(--border)'">
+        <span style="font-size:22px;">🖼️</span> เลือกจากอัลบั้ม
+      </button>
+      <button onclick="closePhotoChoice()"
+        style="background:none;border:none;color:var(--muted);font-family:var(--font);font-size:13px;cursor:pointer;padding:6px;">
+        ยกเลิก
+      </button>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script>
+var API_URL = (typeof STOCKCOUNT_CONFIG !== 'undefined') ? STOCKCOUNT_CONFIG.API_URL : '';
+
+// ── State ─────────────────────────────────────────────────
+var session   = null;
+var locations = [];   // [{ name, photo, wood:{loscam:{...}, chep:{...}}, plastic:{brs:{...}, swwi:{...}} }]
+var files     = [];
+var _emptyPCS = function(){ return {คงเหลือ:0,ระหว่างโอนออก:0,ระหว่างโอนเข้า:0,ชำรุดเสียหาย:0,สูญหาย:0}; };
+var bookBalance = { loscam:_emptyPCS(), chep:_emptyPCS(), brs:_emptyPCS(), swwi:_emptyPCS() };
+var _editingIdx = null;
+var _formOpen   = false;
+
+// ── Pallet schema ─────────────────────────────────────────
+var WOOD_STATUS    = [
+  'พาเลทเปล่า RFI',
+  'พาเลทเปล่า TBR',
+  'พาเลทเปล่า BER',
+  'พาเลทเปล่า TBC',
+  'พาเลทเปล่า TBS',
+  'พาเลทที่ใช้วางสินค้า',
+  'พาเลทที่ใช้ในสายการผลิต',
+  'พาเลทที่ควบคุมนอกระบบ PCS'
+];
+var PLASTIC_STATUS = [
+  'พาเลทเปล่า RFI',
+  'พาเลทเปล่า TBS',
+  'พาเลทที่ใช้วางสินค้า',
+  'พาเลทที่ใช้ในสายการผลิต',
+  'พาเลทชำรุด รออนุมัติโอนเข้า BRS-900',
+  'พาเลทชำรุด โอน BRS-900 แล้ว (ตัวเอง)',
+  'พาเลทชำรุด โอน BRS-900 แล้ว (ที่อื่น)',
+  'พาเลทที่ควบคุมนอกระบบ PCS'
+];
+
+function emptyWood()    { var o={}; WOOD_STATUS.forEach(function(s){o[s]=0;}); return o; }
+function emptyPlastic() { var o={}; PLASTIC_STATUS.forEach(function(s){o[s]=0;}); return o; }
+function emptyLoc(name) {
+  return { name:name, photo:'',
+    wood   :{ loscam:emptyWood(),    chep:emptyWood()    },
+    plastic:{ brs:emptyPlastic(),    swwi:emptyPlastic() } };
+}
+function brandTotal(obj) { return Object.values(obj).reduce(function(s,v){return s+Number(v||0);},0); }
+function locTotal(loc) {
+  return brandTotal(loc.wood.loscam) + brandTotal(loc.wood.chep)
+       + brandTotal(loc.plastic.brs) + brandTotal(loc.plastic.swwi);
+}
+
+function fetchBookBalance(site) {
+  fetch(API_URL + '?action=getBookBalance&site=' + encodeURIComponent(site))
+    .then(function(r){ return r.json(); })
+    .then(function(data) {
+      if (data.status === 'ok' && data.book) {
+        bookBalance = data.book;
+        render(); // re-render เพื่ออัป comparison
+      }
+    })
+    .catch(function(){}); // ถ้าไม่มีข้อมูลก็แสดง pending
+}
+
+// ── Auto-save helper ─────────────────────────────────────
+function saveProgress() {
+  localStorage.setItem('stockCountLocations', JSON.stringify(locations));
+}
+
+function loadProgress() {
+  try {
+    var saved = localStorage.getItem('stockCountLocations');
+    if (saved) locations = JSON.parse(saved);
+  } catch(e) { locations = []; }
+}
+var siteList  = [];
+var locList   = [];
+var roundInfo = null;  // { round_name, is_open }
+var toastTimer;
+
+// ── Init ──────────────────────────────────────────────────
+window.onload = function() {
+  var saved = localStorage.getItem('stockCountSession');
+  if (saved) {
+    try { session = JSON.parse(saved); } catch(e) { session = null; }
+  }
+  if (session) loadProgress(); // restore locations ที่ค้างไว้
+  loadConfig();
+};
+
+function loadConfig() {
+  fetch(API_URL + '?action=getConfig')
+    .then(function(r){ return r.json(); })
+    .then(function(data) {
+      roundInfo = data.round || { round_name:'นับสต็อก', is_open:true };
+      siteList  = data.sites    || [];
+      locList   = data.locations|| [];
+      // โหลด book balance ถ้ามี session อยู่แล้ว
+      if (session && data.book_balances) {
+        var bb = data.book_balances[session.site];
+        if (bb) bookBalance = bb;
+      }
+      render();
+    })
+    .catch(function() {
+      // fallback demo
+      roundInfo = { round_name:'นับสต็อก 2569', is_open:true };
+      siteList  = ['NDC-วังน้อย','คลังชลบุรี','RDC-ขอนแก่น','คลังลาดหลุมแก้ว','คลังลำไทร'];
+      locList   = ['Zone A','Zone B','Zone C','หน้าโรงงาน','ลานจอดรถ','ใน Rack','นอก Rack'];
+      render();
+    });
+}
+
+// ── Render ────────────────────────────────────────────────
+function render() {
+  var content = document.getElementById('mainContent');
+
+  if (!roundInfo || !roundInfo.is_open) {
+    content.innerHTML = '<div class="round-banner">⚠️ ขณะนี้ยังไม่มีรอบการนับที่เปิดอยู่ — กรุณาติดต่อ Admin</div>';
+    return;
+  }
+
+  if (!session) {
+    renderStep1(content);
+  } else {
+    renderStep2(content);
+    // แสดง banner ถ้ามีข้อมูลค้างอยู่
+    if (locations.length > 0) {
+      var banner = document.createElement('div');
+      banner.className = 'resume-banner';
+      banner.innerHTML = '💾 มีข้อมูลค้างอยู่จากครั้งก่อน — '+locations.length+' Location (รวม '
+        + locations.reduce(function(s,l){return s+Number(l.chep||0)+Number(l.loscam||0)+Number(l.brs||0);},0)
+        + ' ใบ) ถูกโหลดกลับมาแล้ว';
+      content.insertBefore(banner, content.firstChild);
+    }
+  }
+}
+
+// ── Step 1: เลือก Site + ชื่อ ─────────────────────────────
+function renderStep1(content) {
+  document.getElementById('submitBar').style.display = 'none';
+  document.getElementById('navUserInfo').style.display = 'none';
+  document.getElementById('btnReset').style.display = 'none';
+
+  content.innerHTML = '<div class="round-hero">'
+    +'<div class="round-hero-left">'
+      +'<div class="round-hero-icon">📦</div>'
+      +'<div>'
+        +'<div class="round-hero-title">'+esc(roundInfo.round_name)+'</div>'
+        +'<div class="round-hero-sub">บันทึกผลการนับสต็อก Pallet</div>'
+      +'</div>'
+    +'</div>'
+    +'<span class="round-hero-open">● เปิดรับผลการนับ</span>'
+  +'</div>'
+
+    +'<div class="card active">'
+      +'<div class="card-head"><span class="step-badge active">ขั้นที่ 1</span><span class="card-title">ระบุ Site และผู้นับ</span></div>'
+      +'<div class="card-body">'
+        +'<div class="field">'
+          +'<label>Site / คลังสินค้า</label>'
+          +'<select class="select" id="selSite">'
+            +'<option value="">— เลือก Site —</option>'
+            +siteList.map(function(s){ return '<option value="'+esc(s)+'">'+esc(s)+'</option>'; }).join('')
+          +'</select>'
+        +'</div>'
+        +'<div class="field">'
+          +'<label>ชื่อผู้นับสต็อก</label>'
+          +'<input class="input" id="inputName" type="text" placeholder="ชื่อ-นามสกุล" oninput="checkStep1()">'
+        +'</div>'
+        +'<div id="step1Error" style="font-size:12px;color:var(--danger);display:none;margin-bottom:10px;"></div>'
+        +'<button class="btn btn-primary" id="btnStep1" onclick="confirmStep1()" disabled style="width:100%;">เริ่มนับสต็อก →</button>'
+      +'</div>'
+    +'</div>';
+
+  document.getElementById('selSite').addEventListener('change', checkStep1);
+}
+
+function checkStep1() {
+  var site = document.getElementById('selSite').value;
+  var name = document.getElementById('inputName').value.trim();
+  document.getElementById('btnStep1').disabled = !(site && name);
+}
+
+function confirmStep1() {
+  var site = document.getElementById('selSite').value;
+  var name = document.getElementById('inputName').value.trim();
+  if (!site || !name) return;
+  session = { site:site, name:name, round:roundInfo.round_name };
+  localStorage.setItem('stockCountSession', JSON.stringify(session));
+  loadProgress();
+  files = [];
+  // ดึง book balance ของ site นี้
+  fetchBookBalance(site);
+  render();
+}
+
+// ── Step 2: กรอกยอดนับ ────────────────────────────────────
+function renderStep2(content) {
+  document.getElementById('navUserInfo').style.display = 'block';
+  document.getElementById('navName').textContent = session.name;
+  document.getElementById('navSite').textContent = session.site;
+  document.getElementById('btnReset').style.display = 'block';
+  document.getElementById('submitBar').style.display = 'flex';
+
+  var hasLoc = locations.length > 0;
+
+  // ── totals ──
+  var tot = _calcTotals();
+
+  // ── location list chips ──
+  var locRows = locations.map(function(l, i) {
+    var lt = locTotal(l);
+    var wl = brandTotal(l.wood.loscam);
+    var wc = brandTotal(l.wood.chep);
+    var pb = brandTotal(l.plastic.brs);
+    var ps = brandTotal(l.plastic.swwi);
+    return '<div class="loc-item">'+
+      '<div class="loc-item-top">'+
+        '<span class="loc-name">'+esc(l.name)+'</span>'+
+      '</div>'+
+      '<div class="loc-item-bot">'+
+        '<span class="loc-chip loscam">L '+wl+'</span>'+
+        '<span class="loc-chip chep">C '+wc+'</span>'+
+        '<span class="loc-chip brs">B '+pb+'</span>'+
+        '<span class="loc-chip swwi">S '+ps+'</span>'+
+        '<span class="loc-total">'+lt+'</span>'+
+        '<button class="loc-act edit" onclick="editLocation('+i+')">✏️ แก้ไข</button>'+
+        '<button class="loc-act del"  onclick="removeLocation('+i+')">✕</button>'+
+      '</div>'+
+    '</div>';
+  }).join('');
+
+  content.innerHTML =
+    // ── Step 2: กรอกยอด ──
+    '<div class="card active" id="step2Card">'+
+      '<div class="card-head">'+
+        '<span class="step-badge active">ขั้นที่ 2</span>'+
+        '<span class="card-title">'+(_editingIdx!==null?'✏️ แก้ไข Location':_formOpen?'+ เพิ่ม Location':'กรอกยอดนับ')+'</span>'+
+        '<span class="card-hint">'+esc(session.site)+' · '+esc(session.round)+'</span>'+
+      '</div>'+
+      '<div class="card-body">'+
+
+        // ── VIEW A: รายการ (ซ่อนเมื่อ formOpen หรือ editing) ──
+        (_formOpen||_editingIdx!==null ? '' :
+          (hasLoc
+            ? '<div class="loc-list">'+locRows+'</div>'
+            : '<div style="text-align:center;padding:20px 0;color:var(--muted);font-size:13px;">ยังไม่มี Location — กด "+ เพิ่ม Location" เพื่อเริ่ม</div>'
+          )+
+          '<button class="add-loc-btn" onclick="toggleLocForm()">+ เพิ่ม Location</button>'
+        )+
+
+        // ── VIEW B: Form เพิ่ม/แก้ไข (แสดงเมื่อ formOpen หรือ editing) ──
+        (_formOpen||_editingIdx!==null ?
+          '<div style="background:'+(_editingIdx!==null?'#fff8e1':'var(--accent-bg)')+';border:2px solid '+(_editingIdx!==null?'var(--accent)':'var(--border2)')+';border-radius:var(--rs);padding:16px;">'+
+            // header bar
+            '<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border);">'+
+              '<span style="font-size:18px;">'+(_editingIdx!==null?'✏️':'📍')+'</span>'+
+              '<div style="flex:1;">'+
+                '<div style="font-size:13px;font-weight:700;">'+(_editingIdx!==null?'แก้ไข Location: <span style="color:var(--accent);">'+esc(locations[_editingIdx].name)+'</span>':'เพิ่ม Location ใหม่')+'</div>'+
+                '<div style="font-size:11px;color:var(--muted);">'+(_editingIdx!==null?'แก้ไขยอดนับแล้วกด "บันทึก"':'กรอกชื่อและยอดพาเลท')+'</div>'+
+              '</div>'+
+              '<button onclick="cancelEdit()" style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:5px 12px;font-family:var(--font);font-size:12px;color:var(--muted);cursor:pointer;">✕ ยกเลิก</button>'+
+            '</div>'+
+            // ถ่ายรูป + ชื่อ location
+            '<div style="display:grid;grid-template-columns:80px 1fr;gap:10px;margin-bottom:12px;align-items:end;">'+
+              '<div>'+
+                '<label style="display:block;margin-bottom:5px;">📷 รูป</label>'+
+                '<div id="photoPreview" style="width:72px;height:72px;border:1.5px dashed var(--border2);border-radius:var(--rs);background:var(--accent-bg);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:22px;overflow:hidden;" onclick="openPhotoChoice()">📷</div>'+
+                '<input type="file" id="photoInputCamera"  accept="image/*" capture="environment" onchange="handlePhoto(this)" style="display:none;">'+
+                '<input type="file" id="photoInputGallery" accept="image/*"                       onchange="handlePhoto(this)" style="display:none;">'+
+              '</div>'+
+              '<div class="field" style="margin-bottom:0;flex:1;">'+
+                '<label>Location / Zone <span style="color:var(--danger);">*</span></label>'+
+                '<input class="input" id="selLocation" type="text" placeholder="เช่น Zone A, ลาน CHEP" required>'+
+              '</div>'+
+            '</div>'+
+            // Wood
+            '<div class="material-section">'+
+              '<div class="material-head">'+
+                '<span class="material-icon">🪵</span>'+
+                '<span class="material-label">Wood Pallet</span>'+
+                '<span class="material-total" id="woodTotal">รวม 0</span>'+
+              '</div>'+
+              _renderPalletTable('wood','loscam','LOSCAM','chep','CHEP')+
+            '</div>'+
+            // Plastic
+            '<div class="material-section">'+
+              '<div class="material-head">'+
+                '<span class="material-icon">🟧</span>'+
+                '<span class="material-label">Plastic Pallet</span>'+
+                '<span class="material-total" id="plasticTotal">รวม 0</span>'+
+              '</div>'+
+              _renderPalletTable('plastic','brs','BRS','swwi','SWWI')+
+            '</div>'+
+            '<button class="btn '+(_editingIdx!==null?'btn-primary':'btn-success')+'" onclick="addLocation()" style="width:100%;margin-top:8px;">'+
+              (_editingIdx!==null?'💾 บันทึกการแก้ไข':'+ บันทึก Location นี้')+
+            '</button>'+
+          '</div>'
+        : '')+
+
+      '</div>'+
+    '</div>'+
+
+    // ── Step 3: สรุป (ซ่อนไว้จนกว่าจะกดแสดง) ──
+    '<div class="card '+(hasLoc?'active':'locked')+'" id="step3Card">'+
+      '<div class="card-head" style="cursor:pointer;" onclick="toggleStep3()" id="step3Head">'+
+        '<span class="step-badge '+(hasLoc?'active':'locked')+'">ขั้นที่ 3</span>'+
+        '<span class="card-title">สรุปยอดนับ &amp; เทียบ Book</span>'+
+        '<span id="step3Toggle" style="margin-left:auto;font-size:13px;color:var(--accent);font-weight:600;">'+(hasLoc?'▸ แสดง':'')+'</span>'+
+      '</div>'+
+      '<div class="card-body" id="step3Body" style="display:none;">'+
+        (hasLoc ? _renderSummary(tot) : '')+
+        (hasLoc ? _renderComparison(tot) : '')+
+        (hasLoc ?
+          '<button class="btn-print" onclick="printDoc()">🖨️ พิมพ์เอกสารยืนยัน</button>'
+        : '')+
+      '</div>'+
+    '</div>'+
+
+    // ── Step 4: Upload ──
+    '<div class="card '+(hasLoc?'active':'locked')+'" id="step4Card">'+
+      '<div class="card-head"><span class="step-badge '+(hasLoc?'active':'locked')+'">ขั้นที่ 4</span>'+
+        '<span class="card-title">Upload หลักฐาน</span>'+
+        '<span class="card-hint">รูปภาพหรือ PDF</span></div>'+
+      '<div class="card-body">'+
+        '<div class="upload-zone" id="uploadZone"'+
+          ' onclick="document.getElementById(\'fileInput\').click()"'+
+          ' ondragover="event.preventDefault();this.classList.add(\'drag\')"'+
+          ' ondragleave="this.classList.remove(\'drag\')"'+
+          ' ondrop="handleDrop(event)">'+
+          '<div class="icon">📎</div>'+
+          '<div class="label">ลากไฟล์หรือคลิกเลือก</div>'+
+          '<div class="sub">JPG, PNG, PDF — หลักฐานการนับ</div>'+
+        '</div>'+
+        '<input type="file" id="fileInput" accept="image/*,application/pdf" multiple'+
+          ' onchange="handleFiles(this.files);this.value=\'\';" style="display:none;">'+
+        '<div class="file-list" id="fileList">'+_renderFileList()+'</div>'+
+      '</div>'+
+    '</div>';
+
+  updateSubmitBar();
+  _updateLiveTotal();
+}
+
+function _renderPalletTable(material, brand1cls, brand1name, brand2cls, brand2name) {
+  var statusList = material === 'wood' ? WOOD_STATUS : PLASTIC_STATUS;
+  var brand1 = brand1name.toLowerCase();
+  var brand2 = brand2name.toLowerCase();
+
+  var rows = statusList.map(function(s) {
+    var k = s.replace(/\s+/g,'_').replace(/[^\w]/g,'');
+    var id1 = 'inp_'+material+'_'+brand1+'_'+k;
+    var id2 = 'inp_'+material+'_'+brand2+'_'+k;
+    return '<tr>'+
+      '<td>'+esc(s)+'</td>'+
+      '<td class="inp-cell"><input class="status-input" id="'+id1+'" type="text" inputmode="numeric" pattern="[0-9]*" value=""'+
+        ' placeholder="0"'+
+        ' onkeypress="return /[0-9]/.test(event.key)"'+
+        ' oninput="this.value=this.value.replace(/[^0-9]/g,\'\');this.classList.toggle(\'has-val\',this.value!==\'\'&&this.value!==\'0\');_updateLiveTotal()"></td>'+
+      '<td class="inp-cell"><input class="status-input" id="'+id2+'" type="text" inputmode="numeric" pattern="[0-9]*" value=""'+
+        ' placeholder="0"'+
+        ' onkeypress="return /[0-9]/.test(event.key)"'+
+        ' oninput="this.value=this.value.replace(/[^0-9]/g,\'\');this.classList.toggle(\'has-val\',this.value!==\'\'&&this.value!==\'0\');_updateLiveTotal()"></td>'+
+    '</tr>';
+  }).join('');
+
+  return '<table class="pallet-table">'+
+    '<thead><tr>'+
+      '<th>สถานะ</th>'+
+      '<th class="'+brand1cls+'-h">'+brand1name+'</th>'+
+      '<th class="'+brand2cls+'-h">'+brand2name+'</th>'+
+    '</tr></thead>'+
+    '<tbody>'+rows+'</tbody>'+
+    '<tfoot><tr>'+
+      '<td>รวม</td>'+
+      '<td id="sub_'+material+'_'+brand1+'">0</td>'+
+      '<td id="sub_'+material+'_'+brand2+'">0</td>'+
+    '</tr></tfoot>'+
+  '</table>';
+}
+
+function _updateLiveTotal() {
+  var wl=0, wc=0, pb=0, ps=0;
+  WOOD_STATUS.forEach(function(s){
+    var k = s.replace(/\s+/g,'_').replace(/[^\w]/g,'');
+    wl += _getInpVal('wood','loscam',k);
+    wc += _getInpVal('wood','chep',k);
+  });
+  PLASTIC_STATUS.forEach(function(s){
+    var k = s.replace(/\s+/g,'_').replace(/[^\w]/g,'');
+    pb += _getInpVal('plastic','brs',k);
+    ps += _getInpVal('plastic','swwi',k);
+  });
+  _setEl('sub_wood_loscam',    wl);
+  _setEl('sub_wood_chep',      wc);
+  _setEl('sub_plastic_brs',    pb);
+  _setEl('sub_plastic_swwi',   ps);
+  _setEl('woodTotal',    'รวม '+(wl+wc));
+  _setEl('plasticTotal', 'รวม '+(pb+ps));
+}
+
+function _getInpVal(material, brand, statusKey) {
+  var el = document.getElementById('inp_'+material+'_'+brand+'_'+statusKey);
+  return el ? (parseInt(el.value.replace(/[^0-9]/g,''),10)||0) : 0;
+}
+
+function _setEl(id, val) {
+  var el = document.getElementById(id);
+  if (el) el.textContent = val;
+}
+
+function _readForm() {
+  var loc = emptyLoc(document.getElementById('selLocation').value);
+  WOOD_STATUS.forEach(function(s){
+    var k = s.replace(/\s+/g,'_').replace(/[^\w]/g,'');
+    loc.wood.loscam[s] = _getInpVal('wood','loscam',k);
+    loc.wood.chep[s]   = _getInpVal('wood','chep',k);
+  });
+  PLASTIC_STATUS.forEach(function(s){
+    var k = s.replace(/\s+/g,'_').replace(/[^\w]/g,'');
+    loc.plastic.brs[s]  = _getInpVal('plastic','brs',k);
+    loc.plastic.swwi[s] = _getInpVal('plastic','swwi',k);
+  });
+  // รูปถ่าย
+  var pp = document.getElementById('photoPreview');
+  if (pp && pp.dataset.photo) loc.photo = pp.dataset.photo;
+  return loc;
+}
+
+function _calcTotals() {
+  var t = { loscam:{}, chep:{}, brs:{}, swwi:{} };
+  WOOD_STATUS.forEach(function(s){
+    t.loscam[s] = locations.reduce(function(a,l){return a+Number(l.wood.loscam[s]||0);},0);
+    t.chep[s]   = locations.reduce(function(a,l){return a+Number(l.wood.chep[s]||0);},0);
+  });
+  PLASTIC_STATUS.forEach(function(s){
+    t.brs[s]  = locations.reduce(function(a,l){return a+Number(l.plastic.brs[s]||0);},0);
+    t.swwi[s] = locations.reduce(function(a,l){return a+Number(l.plastic.swwi[s]||0);},0);
+  });
+  t.totLoscam = brandTotal(t.loscam);
+  t.totChep   = brandTotal(t.chep);
+  t.totBrs    = brandTotal(t.brs);
+  t.totSwwi   = brandTotal(t.swwi);
+  t.totWood    = t.totLoscam + t.totChep;
+  t.totPlastic = t.totBrs    + t.totSwwi;
+  t.grand      = t.totWood   + t.totPlastic;
+  return t;
+}
+
+var PCS_BOOK_FIELDS = ['คงเหลือ','ระหว่างโอนออก','ระหว่างโอนเข้า','ชำรุดเสียหาย','สูญหาย'];
+
+function _renderSummary(tot) {
+  // ไม่มี summary card — แสดงแค่ตาราง status breakdown
+  return _renderStatusTable(tot);
+}
+
+function _renderStatusTable(tot) {
+  var woodRows = WOOD_STATUS.map(function(s){
+    var l = tot.loscam[s]||0, c = tot.chep[s]||0;
+    return '<tr>'+
+      '<td>'+esc(s)+'</td>'+
+      '<td class="r" style="color:var(--loscam);">'+l+'</td>'+
+      '<td class="r" style="color:var(--chep);">'+c+'</td>'+
+      '<td class="r">'+(l+c)+'</td>'+
+    '</tr>';
+  }).join('');
+  var plasticRows = PLASTIC_STATUS.map(function(s){
+    var b = tot.brs[s]||0, w = tot.swwi[s]||0;
+    return '<tr>'+
+      '<td>'+esc(s)+'</td>'+
+      '<td class="r" style="color:var(--brs);">'+b+'</td>'+
+      '<td class="r" style="color:#2e7d32;">'+w+'</td>'+
+      '<td class="r">'+(b+w)+'</td>'+
+    '</tr>';
+  }).join('');
+
+  return '<table class="status-sum-table">'+
+    '<thead><tr>'+
+      '<th>🪵 Wood Pallet</th>'+
+      '<th class="r" style="color:var(--loscam);">LOSCAM</th>'+
+      '<th class="r" style="color:var(--chep);">CHEP</th>'+
+      '<th class="r">รวม</th>'+
+    '</tr></thead>'+
+    '<tbody>'+woodRows+'</tbody>'+
+    '<tfoot><tr class="bold-row">'+
+      '<td>รวม Wood</td>'+
+      '<td class="r">'+tot.totLoscam+'</td>'+
+      '<td class="r">'+tot.totChep+'</td>'+
+      '<td class="r">'+tot.totWood+'</td>'+
+    '</tr></tfoot>'+
+  '</table>'+
+  '<table class="status-sum-table" style="margin-top:10px;">'+
+    '<thead><tr>'+
+      '<th>🟧 Plastic Pallet</th>'+
+      '<th class="r" style="color:var(--brs);">BRS</th>'+
+      '<th class="r" style="color:#2e7d32;">SWWI</th>'+
+      '<th class="r">รวม</th>'+
+    '</tr></thead>'+
+    '<tbody>'+plasticRows+'</tbody>'+
+    '<tfoot>'+
+      '<tr class="bold-row"><td>รวม Plastic</td>'+
+        '<td class="r">'+tot.totBrs+'</td>'+
+        '<td class="r">'+tot.totSwwi+'</td>'+
+        '<td class="r">'+tot.totPlastic+'</td>'+
+      '</tr>'+
+      '<tr class="bold-row" style="background:var(--accent-bg);">'+
+        '<td><b>รวมทั้งหมด</b></td>'+
+        '<td class="r" colspan="2"></td>'+
+        '<td class="r"><b>'+tot.grand+'</b></td>'+
+      '</tr>'+
+    '</tfoot>'+
+  '</table>';
+}
+
+function toggleStep3() {
+  var body   = document.getElementById('step3Body');
+  var toggle = document.getElementById('step3Toggle');
+  if (!body) return;
+  var hidden = body.style.display === 'none';
+  body.style.display = hidden ? '' : 'none';
+  if (toggle) {
+    toggle.textContent = hidden ? '▾ ซ่อน' : '▸ แสดง';
+    toggle.style.color = hidden ? 'var(--muted)' : 'var(--accent)';
+  }
+}
+
+function toggleLocForm(forceOpen) {
+  if (_editingIdx !== null && forceOpen === undefined) {
+    cancelEdit();
+    return;
+  }
+  _formOpen = (forceOpen !== undefined) ? forceOpen : !_formOpen;
+  render();
+  if (_formOpen) {
+    setTimeout(function(){
+      var card = document.getElementById('step2Card');
+      if (card) card.scrollIntoView({ behavior:'smooth', block:'start' });
+    }, 50);
+  }
+}
+
+function cancelEdit() {
+  _editingIdx = null;
+  _formOpen   = false;
+  render();
+}
+
+function openPhotoChoice() {
+  document.getElementById('photoChoiceModal').classList.add('open');
+}
+function closePhotoChoice() {
+  document.getElementById('photoChoiceModal').classList.remove('open');
+}
+
+function handlePhoto(input) {
+  if (!input.files.length) return;
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    var pp = document.getElementById('photoPreview');
+    if (!pp) return;
+    pp.innerHTML = '<img src="'+e.target.result+'" style="width:100%;height:100%;object-fit:cover;">';
+    pp.dataset.photo = e.target.result;
+  };
+  reader.readAsDataURL(input.files[0]);
+}
+
+function addLocation() {
+  var locName = document.getElementById('selLocation').value;
+  if (!locName) { showToast('กรุณาเลือก Location', 'error'); return; }
+  if (_editingIdx === null) {
+    var dup = locations.find(function(l){ return l.name === locName; });
+    if (dup) { showToast(locName+' มีอยู่แล้ว', 'error'); return; }
+  }
+  var loc = _readForm();
+  if (_editingIdx !== null) {
+    locations[_editingIdx] = loc;
+    _editingIdx = null;
+    showToast('บันทึกการแก้ไข '+locName+' ✅', 'success');
+  } else {
+    locations.push(loc);
+    showToast('บันทึก '+locName+' ✅', 'success');
+  }
+  saveProgress();
+  _editingIdx = null;
+  _formOpen   = false;
+  render();
+}
+
+function editLocation(i) {
+  _editingIdx = i;
+  _formOpen   = true;
+  render();
+  // scroll to form แล้ว pre-fill ค่า
+  setTimeout(function() {
+    var loc = locations[i];
+    var sel = document.getElementById('selLocation');
+    if (sel) sel.value = loc.name;
+    WOOD_STATUS.forEach(function(s){
+      var k = s.replace(/\s+/g,'_').replace(/[^\w]/g,'');
+      var el = document.getElementById('inp_wood_loscam_'+k);
+      if (el) { el.value = loc.wood.loscam[s]||0; el.classList.toggle('has-val',(loc.wood.loscam[s]||0)>0); }
+      el = document.getElementById('inp_wood_chep_'+k);
+      if (el) { el.value = loc.wood.chep[s]||0; el.classList.toggle('has-val',(loc.wood.chep[s]||0)>0); }
+    });
+    PLASTIC_STATUS.forEach(function(s){
+      var k = s.replace(/\s+/g,'_').replace(/[^\w]/g,'');
+      var el = document.getElementById('inp_plastic_brs_'+k);
+      if (el) { el.value = loc.plastic.brs[s]||0; el.classList.toggle('has-val',(loc.plastic.brs[s]||0)>0); }
+      el = document.getElementById('inp_plastic_swwi_'+k);
+      if (el) { el.value = loc.plastic.swwi[s]||0; el.classList.toggle('has-val',(loc.plastic.swwi[s]||0)>0); }
+    });
+    if (loc.photo) {
+      var pp = document.getElementById('photoPreview');
+      if (pp) { pp.innerHTML='<img src="'+loc.photo+'" style="width:100%;height:100%;object-fit:cover;">'; pp.dataset.photo=loc.photo; }
+    }
+    _updateLiveTotal();
+    var box = document.querySelector('.add-loc-box');
+    if (box) box.scrollIntoView({ behavior:'smooth', block:'start' });
+  }, 100);
+}
+
+function removeLocation(i) {
+  if (_editingIdx === i) _editingIdx = null;
+  locations.splice(i, 1);
+  saveProgress();
+  render();
+}
+
+function updateSubmitBar() {
+  var hasLoc = locations.length > 0;
+  var btn    = document.getElementById('btnSubmit');
+  var note   = document.getElementById('submitNote');
+  if (!btn) return;
+  btn.disabled = !hasLoc;
+  if (!hasLoc) {
+    note.textContent = 'กรุณาบันทึกอย่างน้อย 1 Location ก่อน Submit';
+  } else {
+    var tot = _calcTotals();
+    note.textContent = locations.length+' Location · รวม '+tot.grand+' ใบ · ไฟล์ '+files.length+' รายการ';
+  }
+}
+
+function _renderComparison(tot) {
+  var hasB = bookBalance && Object.keys(bookBalance).some(function(k){ return bookBalance[k] && typeof bookBalance[k]==='object'; });
+
+  function val(brand, field) {
+    if (!hasB || !bookBalance[brand]) return '—';
+    return (bookBalance[brand][field] !== undefined) ? bookBalance[brand][field] : '—';
+  }
+  function bookTotal(brand) {
+    if (!hasB || !bookBalance[brand]) return null;
+    return PCS_BOOK_FIELDS.reduce(function(s,f){ return s + (Number(bookBalance[brand][f])||0); }, 0);
+  }
+  function varNum(phys, book) {
+    if (book === null || book === undefined) return '<span style="color:var(--muted);">—</span>';
+    var v = phys - book;
+    var col = v>0 ? 'var(--success)' : v<0 ? 'var(--danger)' : 'var(--muted)';
+    return '<span style="color:'+col+';font-weight:700;">'+(v>0?'+':'')+v+'</span>';
+  }
+
+  var html = '';
+  if (!hasB) {
+    html += '<div class="book-pending">⏳ Admin ยังไม่ได้ใส่ข้อมูลจากระบบ PCS สำหรับ '+esc(session.site)+'</div>';
+  }
+
+  // ── ตาราง Wood: PCS rows x LOSCAM/CHEP column ──
+  var woodPCSrows = PCS_BOOK_FIELDS.map(function(f) {
+    var vL = val('loscam', f), vC = val('chep', f);
+    return '<tr>'+
+      '<td>'+esc(f)+'</td>'+
+      '<td class="r" style="color:var(--loscam);">'+(vL!=='—'?vL:'<span style="color:var(--muted);">—</span>')+'</td>'+
+      '<td class="r" style="color:var(--chep);">'+(vC!=='—'?vC:'<span style="color:var(--muted);">—</span>')+'</td>'+
+    '</tr>';
+  }).join('');
+
+  var btL = bookTotal('loscam'), btC = bookTotal('chep');
+  html += '<div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin:14px 0 6px;">ข้อมูลจากระบบควบคุมพาเลท (PCS) — Wood</div>'+
+  '<table class="status-sum-table">'+
+    '<thead><tr>'+
+      '<th>รายการ</th>'+
+      '<th class="r" style="color:var(--loscam);">LOSCAM</th>'+
+      '<th class="r" style="color:var(--chep);">CHEP</th>'+
+    '</tr></thead>'+
+    '<tbody>'+woodPCSrows+'</tbody>'+
+    '<tfoot>'+
+      '<tr class="bold-row">'+
+        '<td>รวม Book</td>'+
+        '<td class="r">'+(btL!==null?btL:'—')+'</td>'+
+        '<td class="r">'+(btC!==null?btC:'—')+'</td>'+
+      '</tr>'+
+      '<tr class="bold-row" style="background:var(--accent-bg);">'+
+        '<td>± Variance (นับจริง − Book)</td>'+
+        '<td class="r">'+varNum(tot.totLoscam, btL)+'</td>'+
+        '<td class="r">'+varNum(tot.totChep, btC)+'</td>'+
+      '</tr>'+
+    '</tfoot>'+
+  '</table>';
+
+  // ── ตาราง Plastic: PCS rows x BRS/SWWI column ──
+  var plasticPCSrows = PCS_BOOK_FIELDS.map(function(f) {
+    var vB = val('brs', f), vS = val('swwi', f);
+    return '<tr>'+
+      '<td>'+esc(f)+'</td>'+
+      '<td class="r" style="color:var(--brs);">'+(vB!=='—'?vB:'<span style="color:var(--muted);">—</span>')+'</td>'+
+      '<td class="r" style="color:#2e7d32;">'+(vS!=='—'?vS:'<span style="color:var(--muted);">—</span>')+'</td>'+
+    '</tr>';
+  }).join('');
+
+  var btB = bookTotal('brs'), btS = bookTotal('swwi');
+  html += '<div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin:14px 0 6px;">ข้อมูลจากระบบควบคุมพาเลท (PCS) — Plastic</div>'+
+  '<table class="status-sum-table">'+
+    '<thead><tr>'+
+      '<th>รายการ</th>'+
+      '<th class="r" style="color:var(--brs);">BRS</th>'+
+      '<th class="r" style="color:#2e7d32;">SWWI</th>'+
+    '</tr></thead>'+
+    '<tbody>'+plasticPCSrows+'</tbody>'+
+    '<tfoot>'+
+      '<tr class="bold-row">'+
+        '<td>รวม Book</td>'+
+        '<td class="r">'+(btB!==null?btB:'—')+'</td>'+
+        '<td class="r">'+(btS!==null?btS:'—')+'</td>'+
+      '</tr>'+
+      '<tr class="bold-row" style="background:var(--accent-bg);">'+
+        '<td>± Variance (นับจริง − Book)</td>'+
+        '<td class="r">'+varNum(tot.totBrs, btB)+'</td>'+
+        '<td class="r">'+varNum(tot.totSwwi, btS)+'</td>'+
+      '</tr>'+
+    '</tfoot>'+
+  '</table>';
+
+  return html;
+}
+
+function hasBook() {
+  return bookBalance && (bookBalance.loscam||bookBalance.chep||bookBalance.brs||bookBalance.swwi);
+}
+function printDoc() { window.print(); }
+function _renderFileList() {
+  return files.map(function(f,i){
+    return '<div class="file-item"><span>📄</span><span class="fname">'+esc(f.name)+'</span>'+
+      '<span style="font-size:11px;color:var(--muted);">'+_fmtSize(f.size)+'</span>'+
+      '<button class="fdel" onclick="removeFile('+i+')" title="ลบ">✕</button></div>';
+  }).join('');
+}
+function _fmtSize(b){if(b<1024)return b+'B';if(b<1048576)return Math.round(b/1024)+'KB';return (b/1048576).toFixed(1)+'MB';}
+
+
+// ── Submit ────────────────────────────────────────────────
+async function submitCount() {
+  if (!locations.length) return;
+  var btn = document.getElementById('btnSubmit');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span>กำลังส่ง...';
+
+  try {
+    // upload files ก่อน
+    var fileUrls = [];
+    for (var i = 0; i < files.length; i++) {
+      var url = await uploadFile(files[i]);
+      if (url) fileUrls.push(url);
+    }
+
+    var countId = 'SC-' + new Date().toISOString().slice(0,10).replace(/-/g,'') + '-' + Math.floor(Math.random()*900+100);
+    var tot = _calcTotals();
+
+    var payload = {
+      action        : 'submitCount',
+      count_id      : countId,
+      round         : session.round,
+      site          : session.site,
+      counter_name  : session.name,
+      timestamp     : new Date().toISOString(),
+      locations     : locations,
+      total_loscam  : tot.totLoscam,
+      total_chep    : tot.totChep,
+      total_brs     : tot.totBrs,
+      total_swwi    : tot.totSwwi,
+      total_wood    : tot.totWood,
+      total_plastic : tot.totPlastic,
+      grand_total   : tot.grand,
+      file_urls     : fileUrls,
+      status        : 'pending'
+    };
+
+    var res  = await fetch(API_URL, {
+      method:'POST', redirect:'follow',
+      headers:{'Content-Type':'text/plain'},
+      body: JSON.stringify(payload)
+    });
+    var data = await res.json();
+    if (data.status !== 'ok') throw new Error(data.message || 'Error');
+
+    document.getElementById('successId').textContent = countId;
+    document.getElementById('successOverlay').classList.add('open');
+  } catch(err) {
+    showToast('ส่งไม่สำเร็จ: '+err.message, 'error');
+    btn.disabled = false;
+    btn.innerHTML = '📤 Submit ผลการนับ';
+  }
+}
+
+async function uploadFile(file) {
+  return new Promise(function(resolve) {
+    var reader = new FileReader();
+    reader.onload = async function(e) {
+      try {
+        var res = await fetch(API_URL, {
+          method:'POST', redirect:'follow',
+          headers:{'Content-Type':'text/plain'},
+          body: JSON.stringify({ action:'uploadFile', filename:file.name, data:e.target.result })
+        });
+        var data = await res.json();
+        resolve(data.url || '');
+      } catch(e){ resolve(''); }
+    };
+    reader.readAsDataURL(file);
+  });
+}
+
+function resetSession() {
+  localStorage.removeItem('stockCountSession');
+  localStorage.removeItem('stockCountLocations');
+  session = null;
+  locations = [];
+  files = [];
+  document.getElementById('successOverlay').classList.remove('open');
+  render();
+}
+
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); }
+function showToast(msg, type) {
+  var t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast '+(type||'info')+' show';
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(function(){ t.classList.remove('show'); }, 3000);
+}
+</script>
+</body>
+</html>
