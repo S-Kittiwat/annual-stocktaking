@@ -1,0 +1,459 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<title>StockCount — Admin</title>
+<script src="config.js"></script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0f172a;--surface:#1e293b;--surface2:#263348;--border:#334155;--accent:#38bdf8;--success:#34d399;--warn:#fbbf24;--danger:#f87171;--text:#f1f5f9;--muted:#94a3b8;--chep:#38bdf8;--loscam:#a78bfa;--brs:#34d399;--font:'IBM Plex Sans Thai',sans-serif;--mono:'IBM Plex Mono',monospace;--r:12px;--rs:8px;}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:100vh;font-size:15px;}
+.topnav{height:52px;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 20px;position:sticky;top:0;z-index:200;}
+.nav-brand{display:flex;align-items:center;gap:10px;margin-right:20px;text-decoration:none;}
+.nav-brand-icon{width:32px;height:32px;background:var(--warn);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;}
+.nav-brand-name{font-size:14px;font-weight:700;color:var(--text);}
+.nav-brand-sub{font-size:10px;color:var(--muted);}
+.nav-right{margin-left:auto;display:flex;align-items:center;gap:10px;}
+.badge-admin{background:rgba(251,191,36,.15);border:1px solid rgba(251,191,36,.3);color:var(--warn);font-size:11px;font-weight:600;padding:2px 10px;border-radius:20px;}
+.btn-back{background:none;border:1px solid var(--border);color:var(--muted);border-radius:var(--rs);padding:5px 12px;font-family:var(--font);font-size:11px;cursor:pointer;text-decoration:none;}
+.btn-back:hover{border-color:var(--accent);color:var(--accent);}
+/* PIN */
+.pin-wrap{min-height:calc(100vh - 52px);display:flex;align-items:center;justify-content:center;padding:24px;}
+.pin-box{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:32px;width:100%;max-width:360px;text-align:center;}
+.pin-icon{font-size:40px;margin-bottom:12px;}
+.pin-title{font-size:18px;font-weight:700;margin-bottom:4px;}
+.pin-sub{font-size:12px;color:var(--muted);margin-bottom:20px;}
+.pin-input{background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--rs);color:var(--text);font-family:var(--mono);font-size:22px;padding:12px;outline:none;width:100%;text-align:center;letter-spacing:.3em;margin-bottom:12px;}
+.pin-input:focus{border-color:var(--accent);}
+.btn{border:none;border-radius:var(--rs);padding:10px 18px;font-family:var(--font);font-size:13px;font-weight:600;cursor:pointer;transition:opacity .15s;display:inline-flex;align-items:center;gap:6px;}
+.btn:disabled{opacity:.35;cursor:not-allowed;}
+.btn-primary{background:var(--accent);color:#0f172a;}
+.btn-success{background:var(--success);color:#0f172a;}
+.btn-danger{background:var(--danger);color:#fff;}
+.btn-outline{background:none;border:1px solid var(--border);color:var(--text);}
+.btn-warn{background:var(--warn);color:#0f172a;}
+.pin-error{font-size:12px;color:var(--danger);margin-top:8px;display:none;}
+/* Content */
+.admin-wrap{padding:20px 24px 40px;max-width:1000px;margin:0 auto;}
+.section-title{font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px;display:flex;align-items:center;gap:8px;}
+.section-title::after{content:'';flex:1;height:1px;background:var(--border);}
+/* Round card */
+.round-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:20px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;}
+.round-name{font-size:16px;font-weight:700;}
+.round-status-open{color:var(--success);font-size:12px;font-weight:600;}
+.round-status-closed{color:var(--muted);font-size:12px;font-weight:600;}
+.round-actions{display:flex;gap:8px;flex-wrap:wrap;}
+/* Stats */
+.stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px;}
+.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--rs);padding:14px;text-align:center;}
+.stat-num{font-size:24px;font-weight:700;font-family:var(--mono);}
+.stat-num.warn{color:var(--warn);}
+.stat-num.success{color:var(--success);}
+.stat-num.danger{color:var(--danger);}
+.stat-lbl{font-size:11px;color:var(--muted);margin-top:3px;}
+/* Table */
+.table-wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;margin-bottom:20px;}
+table{width:100%;border-collapse:collapse;}
+th{background:var(--surface2);padding:9px 14px;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;text-align:left;border-bottom:1px solid var(--border);}
+td{padding:10px 14px;font-size:12px;border-bottom:1px solid var(--border);vertical-align:middle;}
+tr:last-child td{border-bottom:none;}
+tr:hover td{background:rgba(255,255,255,.01);}
+.mono{font-family:var(--mono);}
+.status-badge{font-size:10px;font-weight:600;padding:2px 8px;border-radius:20px;white-space:nowrap;}
+.sb-pending {background:rgba(251,191,36,.12);border:1px solid rgba(251,191,36,.3);color:var(--warn);}
+.sb-approved{background:rgba(52,211,153,.12);border:1px solid rgba(52,211,153,.3);color:var(--success);}
+.sb-rejected{background:rgba(248,113,113,.12);border:1px solid rgba(248,113,113,.3);color:var(--danger);}
+.action-btns{display:flex;gap:6px;}
+.btn-sm{padding:4px 10px;font-size:11px;border-radius:6px;border:none;font-family:var(--font);font-weight:600;cursor:pointer;}
+.btn-sm-approve{background:rgba(52,211,153,.15);color:var(--success);border:1px solid rgba(52,211,153,.3);}
+.btn-sm-reject {background:rgba(248,113,113,.1); color:var(--danger); border:1px solid rgba(248,113,113,.3);}
+.btn-sm-view   {background:var(--surface2);color:var(--text);border:1px solid var(--border);}
+.num-chep  {color:var(--chep);font-family:var(--mono);font-weight:600;}
+.num-loscam{color:var(--loscam);font-family:var(--mono);font-weight:600;}
+.num-brs   {color:var(--brs);font-family:var(--mono);font-weight:600;}
+/* Book balance modal */
+.overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:500;display:none;align-items:center;justify-content:center;padding:20px;}
+.overlay.open{display:flex;}
+.modal-box{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);width:100%;max-width:480px;overflow:hidden;}
+.modal-head{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:var(--surface2);}
+.modal-title{font-size:14px;font-weight:600;}
+.modal-close{background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;line-height:1;}
+.modal-body{padding:16px 18px;display:flex;flex-direction:column;gap:12px;}
+.modal-foot{padding:12px 18px;border-top:1px solid var(--border);display:flex;gap:8px;}
+.field label{font-size:11px;font-weight:600;color:var(--muted);letter-spacing:.04em;text-transform:uppercase;display:block;margin-bottom:5px;}
+.field .input{background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--rs);color:var(--text);font-family:var(--mono);font-size:16px;padding:9px 12px;outline:none;width:100%;text-align:center;}
+.field .input:focus{border-color:var(--accent);}
+.book-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
+.var-display{background:var(--surface2);border-radius:var(--rs);padding:10px;text-align:center;}
+.var-label{font-size:10px;color:var(--muted);margin-bottom:4px;}
+.var-num{font-size:16px;font-weight:700;font-family:var(--mono);}
+.var-num.pos{color:var(--success);}
+.var-num.neg{color:var(--danger);}
+.var-num.zero{color:var(--muted);}
+/* spinner */
+.spinner{width:14px;height:14px;border:2px solid rgba(56,189,248,.3);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;display:inline-block;vertical-align:middle;}
+@keyframes spin{to{transform:rotate(360deg);}}
+.toast{position:fixed;top:68px;left:50%;transform:translateX(-50%) translateY(-60px);background:var(--surface);border:1px solid var(--border);border-radius:var(--rs);padding:10px 18px;font-size:13px;transition:transform .3s;z-index:999;white-space:nowrap;box-shadow:0 8px 24px rgba(0,0,0,.4);}
+.toast.show{transform:translateX(-50%) translateY(0);}
+.toast.success{border-color:rgba(52,211,153,.4);color:var(--success);}
+.toast.error{border-color:rgba(248,113,113,.4);color:var(--danger);}
+@media(max-width:600px){.stat-grid{grid-template-columns:repeat(2,1fr);}.admin-wrap{padding:14px 14px 40px;}}
+</style>
+</head>
+<body>
+
+<nav class="topnav">
+  <a class="nav-brand" href="count.html">
+    <div class="nav-brand-icon">📦</div>
+    <div><div class="nav-brand-name">StockCount</div><div class="nav-brand-sub">Admin Panel</div></div>
+  </a>
+  <div class="nav-right">
+    <span class="badge-admin">⚙️ Admin</span>
+    <a class="btn-back" href="count.html">← หน้านับ</a>
+  </div>
+</nav>
+
+<!-- PIN Screen -->
+<div id="pinScreen" class="pin-wrap">
+  <div class="pin-box">
+    <div class="pin-icon">🔐</div>
+    <div class="pin-title">Admin Access</div>
+    <div class="pin-sub">กรอก PIN เพื่อเข้าใช้งาน Admin Panel</div>
+    <input class="pin-input" id="pinInput" type="password" maxlength="6" placeholder="••••"
+      onkeydown="if(event.key==='Enter')verifyPin()">
+    <button class="btn btn-primary" onclick="verifyPin()" style="width:100%;">เข้าสู่ระบบ</button>
+    <div class="pin-error" id="pinError">PIN ไม่ถูกต้อง กรุณาลองใหม่</div>
+  </div>
+</div>
+
+<!-- Admin Content -->
+<div id="adminContent" style="display:none;">
+  <div class="admin-wrap">
+
+    <!-- Section: Round -->
+    <div class="section-title">รอบการนับปัจจุบัน</div>
+    <div class="round-card">
+      <div>
+        <div class="round-name" id="roundName">—</div>
+        <div id="roundStatus" class="round-status-open">● เปิดอยู่</div>
+      </div>
+      <div class="round-actions">
+        <button class="btn btn-outline" onclick="openNewRoundModal()">+ เปิดรอบใหม่</button>
+        <button class="btn btn-warn" id="btnToggleRound" onclick="toggleRound()">⏸ ปิดรอบ</button>
+      </div>
+    </div>
+
+    <!-- Section: Stats -->
+    <div class="section-title">สรุปภาพรวม</div>
+    <div class="stat-grid">
+      <div class="stat-card"><div class="stat-num warn" id="statPending">—</div><div class="stat-lbl">⏳ รออนุมัติ</div></div>
+      <div class="stat-card"><div class="stat-num success" id="statApproved">—</div><div class="stat-lbl">✅ อนุมัติแล้ว</div></div>
+      <div class="stat-card"><div class="stat-num danger" id="statRejected">—</div><div class="stat-lbl">❌ Reject</div></div>
+      <div class="stat-card"><div class="stat-num" id="statSites">—</div><div class="stat-lbl">🏭 Site ทั้งหมด</div></div>
+    </div>
+
+    <!-- Section: Pending Approval -->
+    <div class="section-title">รอการอนุมัติ</div>
+    <div class="table-wrap" id="pendingTable">
+      <div style="padding:32px;text-align:center;color:var(--muted);"><span class="spinner"></span> กำลังโหลด...</div>
+    </div>
+
+    <!-- Section: All Results -->
+    <div class="section-title">ผลการนับทั้งหมด</div>
+    <div class="table-wrap" id="allTable">
+      <div style="padding:32px;text-align:center;color:var(--muted);"><span class="spinner"></span> กำลังโหลด...</div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Book Balance Modal -->
+<div class="overlay" id="bookModal">
+  <div class="modal-box">
+    <div class="modal-head">
+      <div class="modal-title">📊 ใส่ Book Balance — <span id="bookSiteName">—</span></div>
+      <button class="modal-close" onclick="closeBookModal()">×</button>
+    </div>
+    <div class="modal-body">
+      <div style="font-size:12px;color:var(--muted);">Physical count ที่นับได้</div>
+      <div class="book-grid">
+        <div class="var-display"><div class="var-label">CHEP</div><div class="var-num" id="physChep">—</div></div>
+        <div class="var-display"><div class="var-label">LOSCAM</div><div class="var-num" id="physLoscam">—</div></div>
+        <div class="var-display"><div class="var-label">BRS</div><div class="var-num" id="physBrs">—</div></div>
+      </div>
+      <div style="font-size:12px;color:var(--muted);">Book Balance (จากระบบ)</div>
+      <div class="book-grid">
+        <div class="field"><label style="color:var(--chep);">CHEP</label><input class="input" id="bookChep" type="number" min="0" placeholder="0" oninput="calcVar()"></div>
+        <div class="field"><label style="color:var(--loscam);">LOSCAM</label><input class="input" id="bookLoscam" type="number" min="0" placeholder="0" oninput="calcVar()"></div>
+        <div class="field"><label style="color:var(--brs);">BRS</label><input class="input" id="bookBrs" type="number" min="0" placeholder="0" oninput="calcVar()"></div>
+      </div>
+      <div style="font-size:12px;color:var(--muted);">Variance (Physical − Book)</div>
+      <div class="book-grid">
+        <div class="var-display"><div class="var-label">CHEP</div><div class="var-num zero" id="varChep">—</div></div>
+        <div class="var-display"><div class="var-label">LOSCAM</div><div class="var-num zero" id="varLoscam">—</div></div>
+        <div class="var-display"><div class="var-label">BRS</div><div class="var-num zero" id="varBrs">—</div></div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-outline" onclick="closeBookModal()" style="flex:1;">ยกเลิก</button>
+      <button class="btn btn-success" onclick="saveBookBalance()" style="flex:2;">💾 บันทึก Book Balance</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script>
+var API_URL = (typeof STOCKCOUNT_CONFIG !== 'undefined') ? STOCKCOUNT_CONFIG.API_URL : '';
+var _authed    = false;
+var _counts    = [];
+var _roundInfo = null;
+var _bookTarget= null;
+var toastTimer;
+
+// ── PIN ───────────────────────────────────────────────────
+function verifyPin() {
+  var pin = document.getElementById('pinInput').value.trim();
+  if (!pin) return;
+  fetch(API_URL+'?action=verifyPin&pin='+encodeURIComponent(pin))
+    .then(function(r){ return r.json(); })
+    .then(function(data) {
+      if (data.ok) {
+        _authed = true;
+        document.getElementById('pinScreen').style.display = 'none';
+        document.getElementById('adminContent').style.display = 'block';
+        loadAdminData();
+      } else {
+        document.getElementById('pinError').style.display = 'block';
+        document.getElementById('pinInput').value = '';
+      }
+    })
+    .catch(function() {
+      // demo mode — accept "1234"
+      if (pin === '1234') {
+        _authed = true;
+        document.getElementById('pinScreen').style.display = 'none';
+        document.getElementById('adminContent').style.display = 'block';
+        loadAdminData();
+      } else {
+        document.getElementById('pinError').style.display = 'block';
+        document.getElementById('pinInput').value = '';
+      }
+    });
+}
+
+// ── Load Data ─────────────────────────────────────────────
+function loadAdminData() {
+  fetch(API_URL+'?action=getAdminData')
+    .then(function(r){ return r.json(); })
+    .then(function(data) {
+      _counts    = data.counts    || [];
+      _roundInfo = data.round     || { round_name:'นับสต็อก 2569', is_open:true };
+      renderAdmin();
+    })
+    .catch(function() {
+      // demo
+      _roundInfo = { round_name:'นับสต็อก 2569', is_open:true };
+      _counts = [
+        {count_id:'SC-20260610-001',round:'นับสต็อก 2569',site:'NDC-วังน้อย',counter_name:'สมชาย ใจดี',timestamp:'2026-06-10T08:30:00Z',total_chep:165,total_loscam:115,total_brs:350,book_chep:160,book_loscam:120,book_brs:345,status:'pending',file_urls:[]},
+        {count_id:'SC-20260610-002',round:'นับสต็อก 2569',site:'คลังชลบุรี',counter_name:'สมหญิง มีสุข',timestamp:'2026-06-10T09:15:00Z',total_chep:80,total_loscam:60,total_brs:200,book_chep:0,book_loscam:0,book_brs:0,status:'pending',file_urls:[]},
+        {count_id:'SC-20260609-099',round:'นับสต็อก 2569',site:'RDC-ขอนแก่น',counter_name:'อรทัย รักดี',timestamp:'2026-06-09T14:00:00Z',total_chep:45,total_loscam:30,total_brs:120,book_chep:45,book_loscam:32,book_brs:118,status:'approved',file_urls:[]}
+      ];
+      renderAdmin();
+    });
+}
+
+function renderAdmin() {
+  // round
+  var r = _roundInfo;
+  document.getElementById('roundName').textContent = r.round_name;
+  document.getElementById('roundStatus').textContent = r.is_open ? '● เปิดอยู่' : '● ปิดแล้ว';
+  document.getElementById('roundStatus').className = r.is_open ? 'round-status-open' : 'round-status-closed';
+  document.getElementById('btnToggleRound').textContent = r.is_open ? '⏸ ปิดรอบ' : '▶ เปิดรอบ';
+
+  // stats
+  var pending  = _counts.filter(function(c){ return c.status==='pending'; }).length;
+  var approved = _counts.filter(function(c){ return c.status==='approved'; }).length;
+  var rejected = _counts.filter(function(c){ return c.status==='rejected'; }).length;
+  var sites    = new Set(_counts.map(function(c){ return c.site; })).size;
+  document.getElementById('statPending').textContent  = pending;
+  document.getElementById('statApproved').textContent = approved;
+  document.getElementById('statRejected').textContent = rejected;
+  document.getElementById('statSites').textContent    = sites;
+
+  // pending table
+  var pendingCounts = _counts.filter(function(c){ return c.status==='pending'; });
+  renderTable('pendingTable', pendingCounts, true);
+  renderTable('allTable', _counts, false);
+}
+
+function renderTable(elId, counts, isPending) {
+  var el = document.getElementById(elId);
+  if (!counts.length) {
+    el.innerHTML = '<div style="padding:32px;text-align:center;color:var(--muted);">'+(isPending?'ไม่มีรายการรออนุมัติ ✅':'ยังไม่มีข้อมูล')+'</div>';
+    return;
+  }
+  var rows = counts.map(function(c) {
+    var dt = c.timestamp ? new Date(c.timestamp).toLocaleString('th-TH',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}) : '—';
+    var varChep   = c.book_chep   ? (c.total_chep   - c.book_chep)   : null;
+    var varLoscam = c.book_loscam ? (c.total_loscam - c.book_loscam) : null;
+    var varBrs    = c.book_brs    ? (c.total_brs    - c.book_brs)    : null;
+    function varStr(v) {
+      if (v === null) return '<span style="color:var(--muted);">—</span>';
+      var cls = v>0?'success':v<0?'danger':'muted';
+      return '<span style="color:var(--'+cls+');">'+(v>0?'+':'')+v+'</span>';
+    }
+    var statusBadge = {pending:'<span class="status-badge sb-pending">⏳ รออนุมัติ</span>',approved:'<span class="status-badge sb-approved">✅ อนุมัติ</span>',rejected:'<span class="status-badge sb-rejected">❌ Reject</span>'}[c.status]||c.status;
+    var actionBtns = '';
+    if (c.status === 'pending') {
+      actionBtns = '<div class="action-btns">'
+        +'<button class="btn-sm btn-sm-approve" onclick="approveCount(\''+esc(c.count_id)+'\')">✅ อนุมัติ</button>'
+        +'<button class="btn-sm btn-sm-reject"  onclick="rejectCount(\''+esc(c.count_id)+'\')">❌ Reject</button>'
+        +'<button class="btn-sm btn-sm-view"    onclick="openBookModal(\''+esc(c.count_id)+'\')">📊 Book</button>'
+        +'</div>';
+    } else {
+      actionBtns = '<button class="btn-sm btn-sm-view" onclick="openBookModal(\''+esc(c.count_id)+'\')">📊 Book</button>';
+    }
+    return '<tr>'
+      +'<td class="mono" style="color:var(--accent);font-size:10px;">'+esc(c.count_id)+'</td>'
+      +'<td style="font-weight:600;">'+esc(c.site)+'</td>'
+      +'<td style="font-size:11px;">'+esc(c.counter_name)+'</td>'
+      +'<td class="mono" style="font-size:10px;">'+dt+'</td>'
+      +'<td class="num-chep">'+c.total_chep+'</td>'
+      +'<td class="num-loscam">'+c.total_loscam+'</td>'
+      +'<td class="num-brs">'+c.total_brs+'</td>'
+      +'<td>'+varStr(varChep)+'</td>'
+      +'<td>'+varStr(varLoscam)+'</td>'
+      +'<td>'+varStr(varBrs)+'</td>'
+      +'<td>'+statusBadge+'</td>'
+      +'<td>'+actionBtns+'</td>'
+    +'</tr>';
+  }).join('');
+
+  el.innerHTML = '<table><thead><tr>'
+    +'<th>ID</th><th>Site</th><th>ผู้นับ</th><th>วันที่</th>'
+    +'<th style="color:var(--chep);">CHEP</th>'
+    +'<th style="color:var(--loscam);">LOSCAM</th>'
+    +'<th style="color:var(--brs);">BRS</th>'
+    +'<th>±CHEP</th><th>±LOSCAM</th><th>±BRS</th>'
+    +'<th>สถานะ</th><th>จัดการ</th>'
+    +'</tr></thead><tbody>'+rows+'</tbody></table>';
+}
+
+// ── Approve / Reject ──────────────────────────────────────
+async function approveCount(countId) {
+  if (!confirm('อนุมัติ '+countId+' ?')) return;
+  await postAction({ action:'updateStatus', count_id:countId, status:'approved' });
+  var c = _counts.find(function(x){ return x.count_id===countId; });
+  if (c) c.status = 'approved';
+  renderAdmin();
+  showToast('✅ อนุมัติแล้ว', 'success');
+}
+
+async function rejectCount(countId) {
+  var note = prompt('เหตุผลที่ Reject (ถ้ามี):');
+  if (note === null) return;
+  await postAction({ action:'updateStatus', count_id:countId, status:'rejected', note:note });
+  var c = _counts.find(function(x){ return x.count_id===countId; });
+  if (c) c.status = 'rejected';
+  renderAdmin();
+  showToast('❌ Reject แล้ว', 'error');
+}
+
+// ── Book Balance Modal ────────────────────────────────────
+function openBookModal(countId) {
+  var c = _counts.find(function(x){ return x.count_id===countId; });
+  if (!c) return;
+  _bookTarget = c;
+  document.getElementById('bookSiteName').textContent   = c.site;
+  document.getElementById('physChep').textContent       = c.total_chep;
+  document.getElementById('physLoscam').textContent     = c.total_loscam;
+  document.getElementById('physBrs').textContent        = c.total_brs;
+  document.getElementById('bookChep').value             = c.book_chep   || '';
+  document.getElementById('bookLoscam').value           = c.book_loscam || '';
+  document.getElementById('bookBrs').value              = c.book_brs    || '';
+  calcVar();
+  document.getElementById('bookModal').classList.add('open');
+}
+
+function closeBookModal() {
+  document.getElementById('bookModal').classList.remove('open');
+  _bookTarget = null;
+}
+
+function calcVar() {
+  if (!_bookTarget) return;
+  function setVar(elId, physical, bookVal) {
+    var book = Number(bookVal) || 0;
+    var v    = physical - book;
+    var el   = document.getElementById(elId);
+    el.textContent = book ? (v>0?'+':'')+v : '—';
+    el.className   = 'var-num ' + (book===0?'zero':v>0?'pos':v<0?'neg':'zero');
+  }
+  setVar('varChep',   _bookTarget.total_chep,   document.getElementById('bookChep').value);
+  setVar('varLoscam', _bookTarget.total_loscam, document.getElementById('bookLoscam').value);
+  setVar('varBrs',    _bookTarget.total_brs,    document.getElementById('bookBrs').value);
+}
+
+async function saveBookBalance() {
+  if (!_bookTarget) return;
+  var chep   = Number(document.getElementById('bookChep').value)   || 0;
+  var loscam = Number(document.getElementById('bookLoscam').value) || 0;
+  var brs    = Number(document.getElementById('bookBrs').value)    || 0;
+  await postAction({ action:'updateBook', count_id:_bookTarget.count_id, book_chep:chep, book_loscam:loscam, book_brs:brs });
+  _bookTarget.book_chep   = chep;
+  _bookTarget.book_loscam = loscam;
+  _bookTarget.book_brs    = brs;
+  closeBookModal();
+  renderAdmin();
+  showToast('💾 บันทึก Book Balance แล้ว', 'success');
+}
+
+// ── Toggle Round ──────────────────────────────────────────
+async function toggleRound() {
+  var newState = !_roundInfo.is_open;
+  var msg = newState ? 'เปิดรอบการนับ?' : 'ปิดรอบการนับ? ผู้นับจะไม่สามารถ submit ได้อีก';
+  if (!confirm(msg)) return;
+  await postAction({ action:'toggleRound', is_open:newState });
+  _roundInfo.is_open = newState;
+  renderAdmin();
+  showToast(newState ? '▶ เปิดรอบแล้ว' : '⏸ ปิดรอบแล้ว', 'info');
+}
+
+function openNewRoundModal() {
+  var name = prompt('ชื่อรอบการนับใหม่:', 'นับสต็อก 2570');
+  if (!name) return;
+  postAction({ action:'newRound', round_name:name }).then(function() {
+    _roundInfo.round_name = name;
+    _roundInfo.is_open    = true;
+    renderAdmin();
+    showToast('+ เปิดรอบ "'+name+'" แล้ว', 'success');
+  });
+}
+
+// ── Helper ────────────────────────────────────────────────
+async function postAction(payload) {
+  try {
+    var res = await fetch(API_URL, {
+      method:'POST', redirect:'follow',
+      headers:{'Content-Type':'text/plain'},
+      body: JSON.stringify(payload)
+    });
+    return await res.json();
+  } catch(e) { return { status:'ok' }; }
+}
+
+function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); }
+function showToast(msg, type) {
+  var t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = 'toast '+(type||'info')+' show';
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(function(){ t.classList.remove('show'); }, 3000);
+}
+</script>
+</body>
+</html>
