@@ -439,7 +439,10 @@ function loadConfig() {
 }
 
 // ── Render ────────────────────────────────────────────────
+var _renderVersion = 0; // ใช้ cancel stale setTimeout
+
 function render() {
+  _renderVersion++;
   var content = document.getElementById('mainContent');
 
   if (!roundInfo || !roundInfo.is_open) {
@@ -1043,8 +1046,9 @@ function editLocation(i) {
   _editingIdx = i;
   _formOpen   = true;
   render();
-  // scroll to form แล้ว pre-fill ค่า
+  var ver = _renderVersion;
   setTimeout(function() {
+    if (_renderVersion !== ver) return; // render ใหม่แล้ว ยกเลิก prefill
     var loc = locations[i];
     var sel = document.getElementById('selLocation');
     if (sel) sel.value = loc.name;
