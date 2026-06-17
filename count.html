@@ -276,7 +276,6 @@ td.brs-c   {color:#1a1612;}
       <div class="nav-user-name" id="navName">—</div>
       <div class="nav-user-site" id="navSite">—</div>
     </div>
-    <a class="btn-admin" href="admin.html">⚙️ Admin</a>
     <button class="btn-clear" id="btnReset" onclick="resetSession()" style="display:none;">↩ เริ่มใหม่</button>
   </div>
 </nav>
@@ -912,6 +911,10 @@ function addLocation() {
   _editingIdx = null;
   _formOpen   = false;
   render();
+  // force scroll ขึ้นบน — สำคัญบน mobile ที่ยังค้างอยู่ที่ form
+  setTimeout(function(){
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, 50);
 }
 
 function editLocation(i) {
