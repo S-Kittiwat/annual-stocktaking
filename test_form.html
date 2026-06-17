@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<title>Test Form Logic</title>
+</head>
+<body>
+<div id="log" style="font-family:monospace;padding:10px;background:#f5f5f5;"></div>
+<script>
+// ── Simulate exact same logic as count.html ──
+
+var locations    = [];
+var _editingIdx  = null;
+var _formOpen    = false;
+var _formSuccess = false;
+var _lastSaved   = null;
+
+var WOOD_STATUS    = ['พาเลทเปล่า RFI','พาเลทเปล่า TBR'];
+var PLASTIC_STATUS = ['พาเลทเปล่า RFI','พาเลทเปล่า TBS'];
+
+function emptyWood()    { var o={}; WOOD_STATUS.forEach(function(s){o[s]=0;}); return o; }
+function emptyPlastic() { var o={}; PLASTIC_STATUS.forEach(function(s){o[s]=0;}); return o; }
+function emptyLoc(name) {
+  return { name:name, photo:'',
+    wood   :{ loscam:emptyWood(), chep:emptyWood() },
+    plastic:{ brs:emptyPlastic(), swwi:emptyPlastic() } };
+}
+function brandTotal(obj){ return Object.values(obj).reduce(function(s,v){return s+Number(v||0);},0); }
+
+function _readForm() {
+  var name = document.getElementById('selLocation').value.trim();
+  var loc  = emptyLoc(name);
+  return loc;
+}
+
+function addLocation() {
+  var locName = document.getElementById('selLocation').value.trim();
+  log('addLocation called — locName: "'+locName+'"');
+
+  if (!locName) { log('❌ BLOCKED: กรุณากรอก Location'); return; }
+  if (_editingIdx === null) {
+    var dup = locations.find(function(l){ return l.name === locName; });
+    if (dup) { log('❌ BLOCKED: "'+locName+'" มีอยู่แล้ว'); return; }
+  }
+  var loc = _readForm();
+  locations.push(loc);
+  log('✅ บันทึก "'+locName+'" สำเร็จ | รวม '+locations.length+' location(s)');
+
+  _lastSaved   = { name:locName, wl:0, wc:0, pb:0, ps:0, total:0 };
+  _formOpen    = false;
+  _formSuccess = true;
+  render();
+}
+
+function openNextForm() {
+  log('openNextForm called');
+  _formSuccess = false;
+  _lastSaved   = null;
+  _formOpen    = true;
+  render();
+  requestAnimationFrame(function(){
+    var el = document.getElementById('selLocation');
+    log('rAF: selLocation element = '+(el?'FOUND':'NULL')+' | value = "'+(el?el.value:'N/A')+'"');
+    if (el) { el.value = ''; el.focus(); }
+    document.querySelectorAll('.status-input').forEach(function(inp){
+      inp.value = ''; inp.classList.remove('has-val');
+    });
+    log('rAF: cleared done');
+  });
+}
+
+function render() {
+  var content = document.getElementById('content');
+  if (_formSuccess && _lastSaved) {
+    content.innerHTML =
+      '<div style="background:#f0faf0;border:2px solid green;border-radius:8px;padding:20px;text-align:center;">'+
+      '<div style="font-size:24px;">✅</div>'+
+      '<div style="font-weight:700;">บันทึก "'+_lastSaved.name+'" แล้ว</div>'+
+      '<div style="display:flex;gap:8px;margin-top:14px;">'+
+        '<button onclick="openNextForm()" style="flex:1;padding:10px;background:#f5c842;border:none;border-radius:6px;font-size:14px;cursor:pointer;">+ เพิ่ม Location ต่อไป</button>'+
+        '<button onclick="closeFormSuccess()" style="flex:1;padding:10px;background:#eee;border:none;border-radius:6px;font-size:14px;cursor:pointer;">✓ เสร็จแล้ว</button>'+
+      '</div></div>';
+    return;
+  }
+
+  if (_formOpen || _editingIdx !== null) {
+    content.innerHTML =
+      '<div style="background:#fef9ec;border:2px solid #d4a017;border-radius:8px;padding:16px;">'+
+      '<input id="selLocation" type="text" placeholder="ชื่อ Location" style="width:100%;padding:10px;font-size:14px;border:1px solid #ccc;border-radius:6px;margin-bottom:12px;">'+
+      '<button onclick="addLocation()" style="width:100%;padding:12px;background:#34d399;border:none;border-radius:6px;font-size:14px;cursor:pointer;font-weight:700;">+ บันทึก Location นี้</button>'+
+      '</div>';
+    return;
+  }
+
+  // list view
+  var html = '<div style="margin-bottom:12px;">';
+  if (locations.length === 0) {
+    html += '<div style="color:#888;text-align:center;padding:16px;">ยังไม่มี Location</div>';
+  } else {
+    locations.forEach(function(l,i){
+      html += '<div style="background:#f3f4f6;border-radius:6px;padding:10px 14px;margin-bottom:6px;">'+l.name+'</div>';
+    });
+  }
+  html += '</div><button onclick="toggleLocForm()" style="width:100%;padding:10px;background:#38bdf8;border:none;border-radius:6px;font-size:14px;cursor:pointer;font-weight:700;">+ เพิ่ม Location</button>';
+  content.innerHTML = html;
+}
+
+function toggleLocForm() {
+  _formOpen = true;
+  render();
+  requestAnimationFrame(function(){
+    var el = document.getElementById('selLocation');
+    if (el) el.focus();
+  });
+}
+
+function closeFormSuccess() {
+  _formSuccess = false;
+  _lastSaved   = null;
+  _formOpen    = false;
+  render();
+}
+
+function log(msg) {
+  var d = document.getElementById('log');
+  var t = new Date().toLocaleTimeString('th-TH');
+  d.innerHTML += '<div>['+t+'] '+msg+'</div>';
+  d.scrollTop = d.scrollHeight;
+}
+
+// init
+render();
+</script>
+
+<div style="max-width:400px;margin:20px auto;">
+  <h3>Test: Form Logic</h3>
+  <div id="content"></div>
+  <div id="log" style="margin-top:20px;font-family:monospace;font-size:11px;background:#1e293b;color:#94a3b8;padding:12px;border-radius:8px;max-height:300px;overflow-y:auto;"></div>
+</div>
+</body>
+</html>
