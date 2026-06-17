@@ -958,6 +958,20 @@ function openNextForm() {
   _lastSaved   = null;
   _formOpen    = true;
   render();
+  requestAnimationFrame(function(){
+    // clear ทุก input ใน form
+    var el = document.getElementById('selLocation');
+    if (el) { el.value = ''; el.focus(); }
+    // clear ตัวเลขทุกช่อง
+    document.querySelectorAll('.status-input').forEach(function(inp){
+      inp.value = '';
+      inp.classList.remove('has-val');
+    });
+    // clear รูป
+    var pp = document.getElementById('photoPreview');
+    if (pp) { pp.innerHTML = '📷'; delete pp.dataset.photo; }
+    _updateLiveTotal();
+  });
 }
 
 function closeFormSuccess() {
