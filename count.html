@@ -568,7 +568,7 @@ function renderStep2(content) {
         '<span class="card-title">'+(_editingIdx!==null?'✏️ แก้ไข Location':_formOpen?'+ เพิ่ม Location':'กรอกยอดนับ')+'</span>'+
         '<span class="card-hint">'+esc(session.site)+' · '+esc(session.round)+'</span>'+
       '</div>'+
-      '<div class="card-body">'+
+      '<div class="card-body" id="step2Body">'+
 
         // ── VIEW A: รายการ (ซ่อนเมื่อ formOpen หรือ editing หรือ success) ──
         (_formOpen||_editingIdx!==null||_formSuccess ? '' :
@@ -956,25 +956,52 @@ function toggleLocForm(forceOpen) {
   }
 }
 
+function _buildFormViewHTML() {
+  return '<div style="background:var(--accent-bg);border:1.5px solid var(--border2);border-radius:var(--rs);padding:16px;">'+
+    '<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border);">'+
+      '<span style="font-size:18px;">📍</span>'+
+      '<div style="flex:1;"><div style="font-size:13px;font-weight:700;">เพิ่ม Location ใหม่</div>'+
+      '<div style="font-size:11px;color:var(--muted);">กรอกชื่อและยอดพาเลท</div></div>'+
+      '<button onclick="cancelEdit()" style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:5px 12px;font-family:var(--font);font-size:12px;color:var(--muted);cursor:pointer;">✕ ยกเลิก</button>'+
+    '</div>'+
+    '<div style="display:grid;grid-template-columns:80px 1fr;gap:10px;margin-bottom:12px;align-items:end;">'+
+      '<div><label style="display:block;margin-bottom:5px;">📷 รูป</label>'+
+      '<div id="photoPreview" style="width:72px;height:72px;border:1.5px dashed var(--border2);border-radius:var(--rs);background:var(--accent-bg);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:22px;overflow:hidden;" onclick="openPhotoChoice()">📷</div>'+
+      '<input type="file" id="photoInputCamera" accept="image/*" capture="environment" onchange="handlePhoto(this)" style="display:none;">'+
+      '<input type="file" id="photoInputGallery" accept="image/*" onchange="handlePhoto(this)" style="display:none;"></div>'+
+      '<div class="field" style="margin-bottom:0;flex:1;"><label>Location / Zone <span style="color:var(--danger);">*</span></label>'+
+      '<input class="input" id="selLocation" type="text" placeholder="เช่น Zone A, ลาน CHEP" required></div>'+
+    '</div>'+
+    '<div class="material-section">'+
+      '<div class="material-head"><span class="material-icon">🪵</span><span class="material-label">Wood Pallet</span>'+
+      '<span class="material-total" id="woodTotal">รวม 0</span></div>'+
+      _renderPalletTable('wood','loscam','LOSCAM','chep','CHEP')+
+    '</div>'+
+    '<div class="material-section">'+
+      '<div class="material-head"><span class="material-icon">🟧</span><span class="material-label">Plastic Pallet</span>'+
+      '<span class="material-total" id="plasticTotal">รวม 0</span></div>'+
+      _renderPalletTable('plastic','brs','BRS','swwi','SWWI')+
+    '</div>'+
+    '<button class="btn btn-success" onclick="addLocation()" style="width:100%;margin-top:8px;">+ บันทึก Location นี้</button>'+
+  '</div>';
+}
+
 function openNextForm() {
+  _renderVersion++;
   _formSuccess = false;
   _lastSaved   = null;
   _formOpen    = true;
-  render();
-  requestAnimationFrame(function(){
-    // clear ทุก input ใน form
+
+  // swap เฉพาะ step2Body โดยตรง — ไม่ re-render ทั้งหน้า
+  var body = document.getElementById('step2Body');
+  if (body) {
+    body.innerHTML = _buildFormViewHTML();
     var el = document.getElementById('selLocation');
     if (el) { el.value = ''; el.focus(); }
-    // clear ตัวเลขทุกช่อง
-    document.querySelectorAll('.status-input').forEach(function(inp){
-      inp.value = '';
-      inp.classList.remove('has-val');
-    });
-    // clear รูป
-    var pp = document.getElementById('photoPreview');
-    if (pp) { pp.innerHTML = '📷'; delete pp.dataset.photo; }
     _updateLiveTotal();
-  });
+  } else {
+    render();
+  }
 }
 
 function closeFormSuccess() {
