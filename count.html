@@ -335,9 +335,12 @@ var locations = [];   // [{ name, photo, wood:{loscam:{...}, chep:{...}}, plasti
 var files     = [];
 var _emptyPCS = function(){ return {คงเหลือ:0,ระหว่างโอนออก:0,ระหว่างโอนเข้า:0,ชำรุดเสียหาย:0,สูญหาย:0}; };
 var bookBalance = { loscam:_emptyPCS(), chep:_emptyPCS(), brs:_emptyPCS(), swwi:_emptyPCS() };
-var _editingIdx = null;
-var _formOpen   = false;
-var _step3Seen  = false; // ผู้ใช้เปิดดู step 3 แล้วหรือยัง
+var _editingIdx   = null;
+var _formOpen     = false;
+var _formSuccess  = false; // แสดง success state หลังบันทึก
+var _lastSaved    = null;  // { name, wl, wc, pb, ps, total }
+var _step3Seen  = false;
+var _printed    = false; // กดพิมพ์เอกสารแล้วหรือยัง
 
 // ── Pallet schema ─────────────────────────────────────────
 var WOOD_STATUS    = [
@@ -564,8 +567,8 @@ function renderStep2(content) {
       '</div>'+
       '<div class="card-body">'+
 
-        // ── VIEW A: รายการ (ซ่อนเมื่อ formOpen หรือ editing) ──
-        (_formOpen||_editingIdx!==null ? '' :
+        // ── VIEW A: รายการ (ซ่อนเมื่อ formOpen หรือ editing หรือ success) ──
+        (_formOpen||_editingIdx!==null||_formSuccess ? '' :
           (hasLoc
             ? '<div class="loc-list">'+locRows+'</div>'
             : '<div style="text-align:center;padding:20px 0;color:var(--muted);font-size:13px;">ยังไม่มี Location — กด "+ เพิ่ม Location" เพื่อเริ่ม</div>'
@@ -573,8 +576,27 @@ function renderStep2(content) {
           '<button class="add-loc-btn" onclick="toggleLocForm()">+ เพิ่ม Location</button>'
         )+
 
-        // ── VIEW B: Form เพิ่ม/แก้ไข (แสดงเมื่อ formOpen หรือ editing) ──
-        (_formOpen||_editingIdx!==null ?
+        // ── VIEW B: Success state หลังบันทึก ──
+        (_formSuccess && _lastSaved ?
+          '<div style="background:#f0faf0;border:2px solid var(--success);border-radius:var(--rs);padding:20px;text-align:center;">'+
+            '<div style="font-size:32px;margin-bottom:8px;">✅</div>'+
+            '<div style="font-size:15px;font-weight:700;color:var(--success);margin-bottom:4px;">บันทึก "'+esc(_lastSaved.name)+'" แล้ว</div>'+
+            '<div style="display:flex;justify-content:center;gap:6px;margin:10px 0;flex-wrap:wrap;">'+
+              '<span class="loc-chip loscam">L '+_lastSaved.wl+'</span>'+
+              '<span class="loc-chip chep">C '+_lastSaved.wc+'</span>'+
+              '<span class="loc-chip brs">B '+_lastSaved.pb+'</span>'+
+              '<span class="loc-chip swwi">S '+_lastSaved.ps+'</span>'+
+              '<span style="font-size:12px;font-family:var(--mono);font-weight:700;line-height:1.8;"> | รวม '+_lastSaved.total+'</span>'+
+            '</div>'+
+            '<div style="display:flex;gap:8px;margin-top:14px;">'+
+              '<button class="btn btn-primary" onclick="openNextForm()" style="flex:1;">+ เพิ่ม Location ต่อไป</button>'+
+              '<button class="btn btn-outline" onclick="closeFormSuccess()" style="flex:1;">✓ เสร็จแล้ว ดูรายการ</button>'+
+            '</div>'+
+          '</div>'
+        : '')+
+
+        // ── VIEW C: Form เพิ่ม/แก้ไข ──
+        (!_formSuccess && (_formOpen||_editingIdx!==null) ?
           '<div style="background:'+(_editingIdx!==null?'#fff8e1':'var(--accent-bg)')+';border:2px solid '+(_editingIdx!==null?'var(--accent)':'var(--border2)')+';border-radius:var(--rs);padding:16px;">'+
             // header bar
             '<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border);">'+
@@ -667,9 +689,10 @@ function renderStep2(content) {
       '<div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:8px;">📋 ตรวจสอบก่อน Submit</div>'+
       '<div class="step-check" id="chk1">'+_chkIcon(true)+'ขั้นที่ 1 — เลือก Site และผู้นับ</div>'+
       '<div class="step-check" id="chk2">'+_chkIcon(hasLoc)+'ขั้นที่ 2 — กรอกยอดนับ ('+(hasLoc?locations.length+' Location':'ยังไม่มี Location')+')</div>'+
-      '<div class="step-check" id="chk3">'+_chkIcon(_step3Seen)+'ขั้นที่ 3 — ตรวจสอบสรุปยอดแล้ว'+(!_step3Seen?' (กด "▸ แสดง" ก่อน)':'')+'</div>'+
+      '<div class="step-check" id="chk3a">'+_chkIcon(_step3Seen)+'ขั้นที่ 3 — ตรวจสอบสรุปยอดแล้ว'+(!_step3Seen?' (กด "▸ แสดง" ก่อน)':'')+'</div>'+
+      '<div class="step-check" id="chk3b">'+_chkIcon(_printed)+'ขั้นที่ 3 — พิมพ์เอกสารยืนยันแล้ว'+(!_printed?' (กด 🖨️ พิมพ์เอกสารยืนยัน)':'')+'</div>'+
       '<div class="step-check" id="chk4">'+_chkIcon(files.length>0)+'ขั้นที่ 4 — Upload รายงาน '+(files.length>0?'('+files.length+' ไฟล์)':'(ยังไม่มีไฟล์)')+'</div>'+
-      '<button class="btn btn-success" id="btnSubmit" onclick="submitCount()" '+(!hasLoc||!_step3Seen||files.length===0?'disabled':'')+' style="width:100%;margin-top:8px;">'+
+      '<button class="btn btn-success" id="btnSubmit" onclick="submitCount()" '+(!hasLoc||!_step3Seen||!_printed||files.length===0?'disabled':'')+' style="width:100%;margin-top:8px;">'+
         '📤 Submit ผลการนับ'+
       '</button>'+
       '<div id="submitNote" style="font-size:11px;color:var(--muted);text-align:center;margin-top:4px;"></div>'+
@@ -690,13 +713,12 @@ function updateSubmitCard() {
   var btn  = document.getElementById('btnSubmit');
   var note = document.getElementById('submitNote');
   var chk2 = document.getElementById('chk2');
-  var chk3 = document.getElementById('chk3');
   var chk4 = document.getElementById('chk4');
   if (!card) return;
 
   var hasLoc  = locations.length > 0;
   var hasFile = files.length > 0;
-  var ready   = hasLoc && _step3Seen && hasFile;
+  var ready   = hasLoc && _step3Seen && _printed && hasFile;
 
   card.style.display = 'flex';
   card.classList.toggle('ready', ready);
@@ -705,9 +727,15 @@ function updateSubmitCard() {
     chk2.innerHTML = _chkIcon(hasLoc)+'ขั้นที่ 2 — กรอกยอดนับ ('+(hasLoc?locations.length+' Location':'ยังไม่มี Location')+')';
     chk2.className = 'step-check '+(hasLoc?'done':'pending');
   }
-  if (chk3) {
-    chk3.innerHTML = _chkIcon(_step3Seen)+'ขั้นที่ 3 — ตรวจสอบสรุปยอดแล้ว'+(!_step3Seen?' <span style="color:var(--warn);">(กด ▸ แสดง ก่อน)</span>':'');
-    chk3.className = 'step-check '+(_step3Seen?'done':'pending');
+  var chk3a = document.getElementById('chk3a');
+  var chk3b = document.getElementById('chk3b');
+  if (chk3a) {
+    chk3a.innerHTML = _chkIcon(_step3Seen)+'ขั้นที่ 3 — ตรวจสอบสรุปยอดแล้ว'+(!_step3Seen?' <span style="color:var(--warn);">(กด ▸ แสดง ก่อน)</span>':'');
+    chk3a.className = 'step-check '+(_step3Seen?'done':'pending');
+  }
+  if (chk3b) {
+    chk3b.innerHTML = _chkIcon(_printed)+'ขั้นที่ 3 — พิมพ์เอกสารยืนยันแล้ว'+(!_printed?' <span style="color:var(--warn);">(กด 🖨️ พิมพ์เอกสารยืนยัน)</span>':'');
+    chk3b.className = 'step-check '+(_printed?'done':'pending');
   }
   if (chk4) {
     chk4.innerHTML = _chkIcon(hasFile)+'ขั้นที่ 4 — Upload รายงาน '+(hasFile?'('+files.length+' ไฟล์)':'(ยังไม่มีไฟล์)');
@@ -716,8 +744,9 @@ function updateSubmitCard() {
   if (btn) btn.disabled = !ready;
   if (note) note.textContent = ready
     ? 'พร้อม Submit — '+locations.length+' Location · '+files.length+' ไฟล์'
-    : (!hasLoc ? 'กรุณาเพิ่มอย่างน้อย 1 Location'
+    : (!hasLoc      ? 'กรุณาเพิ่มอย่างน้อย 1 Location'
       : !_step3Seen ? 'กรุณาเปิดดูสรุปยอดในขั้นที่ 3 ก่อน'
+      : !_printed   ? 'กรุณาพิมพ์เอกสารยืนยันก่อน'
       : 'กรุณา Upload รายงาน (พร้อมลายเซ็น) ก่อน Submit');
 }
 
@@ -920,8 +949,22 @@ function toggleLocForm(forceOpen) {
     setTimeout(function(){
       var card = document.getElementById('step2Card');
       if (card) card.scrollIntoView({ behavior:'smooth', block:'start' });
-    }, 200);
+    }, 50);
   }
+}
+
+function openNextForm() {
+  _formSuccess = false;
+  _lastSaved   = null;
+  _formOpen    = true;
+  render();
+}
+
+function closeFormSuccess() {
+  _formSuccess = false;
+  _lastSaved   = null;
+  _formOpen    = false;
+  render();
 }
 
 function cancelEdit() {
@@ -959,22 +1002,27 @@ function addLocation() {
   var loc = _readForm();
   if (_editingIdx !== null) {
     locations[_editingIdx] = loc;
-    _editingIdx = null;
-    showToast('บันทึกการแก้ไข '+locName+' ✅', 'success');
+    _editingIdx  = null;
+    _formOpen    = false;
+    _formSuccess = false;
+    saveProgress();
+    render();
+    requestAnimationFrame(function(){ requestAnimationFrame(function(){
+      window.scrollTo({ top:0, behavior:'smooth' });
+    }); });
   } else {
     locations.push(loc);
-    showToast('บันทึก '+locName+' ✅', 'success');
+    saveProgress();
+    // แสดง success state แทน scroll
+    var wl = brandTotal(loc.wood.loscam);
+    var wc = brandTotal(loc.wood.chep);
+    var pb = brandTotal(loc.plastic.brs);
+    var ps = brandTotal(loc.plastic.swwi);
+    _lastSaved   = { name:loc.name, wl:wl, wc:wc, pb:pb, ps:ps, total:wl+wc+pb+ps };
+    _formOpen    = false;
+    _formSuccess = true;
+    render();
   }
-  saveProgress();
-  _editingIdx = null;
-  _formOpen   = false;
-  // render ก่อน แล้วค่อย scroll — ใช้ requestAnimationFrame ให้แน่ใจว่า DOM update แล้ว
-  render();
-  requestAnimationFrame(function(){
-    requestAnimationFrame(function(){
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    });
-  });
 }
 
 function editLocation(i) {
@@ -1135,7 +1183,11 @@ function _renderComparison(tot) {
 function hasBook() {
   return bookBalance && (bookBalance.loscam||bookBalance.chep||bookBalance.brs||bookBalance.swwi);
 }
-function printDoc() { window.print(); }
+function printDoc() {
+  window.print();
+  _printed = true;
+  updateSubmitCard();
+}
 function _renderFileList() {
   return files.map(function(f,i){
     return '<div class="file-item"><span>📄</span><span class="fname">'+esc(f.name)+'</span>'+
