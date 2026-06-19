@@ -886,13 +886,15 @@ function showListView() {
 }
 
 function showFormView(editIdx) {
+  _dbg('showFormView() called, editIdx='+editIdx);
   var isEdit = (editIdx !== undefined && editIdx !== null);
   _formOpen    = true;
   _formSuccess = false;
   _editingIdx  = isEdit ? editIdx : null;
 
   var body = document.getElementById('step2Body');
-  if (!body) { render(); return; }
+  if (!body) { _dbg('❌ step2Body NOT FOUND, falling back to render()'); render(); return; }
+  _dbg('step2Body found, writing innerHTML...');
 
   body.innerHTML =
     '<div style="background:'+( isEdit ? '#fff8e1' : 'var(--accent-bg)')+';border:2px solid '+(isEdit?'var(--accent)':'var(--border2)')+';border-radius:var(--rs);padding:16px;">'+
@@ -911,7 +913,7 @@ function showFormView(editIdx) {
           '<input type="file" id="photoInputGallery" accept="image/*" onchange="handlePhoto(this)" style="display:none;">'+
         '</div>'+
         '<div class="field" style="margin-bottom:0;"><label>Location / Zone <span style="color:var(--danger);">*</span></label>'+
-          '<input class="input" id="selLocation" type="text" placeholder="เช่น Zone A, ลาน CHEP" required>'+
+          '<input class="input" id="selLocation" type="text" placeholder="เช่น Zone A, ลาน CHEP" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false" required>'+
         '</div>'+
       '</div>'+
       '<div class="material-section">'+
@@ -954,6 +956,7 @@ function showFormView(editIdx) {
   _updateLiveTotal();
   var sel = document.getElementById('selLocation');
   if (sel && !isEdit) sel.focus();
+  _dbg('showFormView done, selLocation found='+(!!sel)+', value="'+(sel?sel.value:'N/A')+'"');
 }
 
 function showSuccessView(saved) {
@@ -1031,27 +1034,49 @@ function handlePhoto(input) {
   reader.readAsDataURL(input.files[0]);
 }
 
+function _dbg(msg) {
+  var d = document.getElementById('dbgLog');
+  if (!d) {
+    d = document.createElement('div');
+    d.id = 'dbgLog';
+    d.style.cssText = 'position:fixed;bottom:0;left:0;right:0;max-height:160px;overflow-y:auto;background:#000;color:#0f0;font-family:monospace;font-size:10px;padding:6px;z-index:9999;opacity:.9;';
+    document.body.appendChild(d);
+  }
+  var line = document.createElement('div');
+  line.textContent = '['+new Date().toLocaleTimeString()+'] ' + msg;
+  d.appendChild(line);
+  d.scrollTop = d.scrollHeight;
+}
+
 function addLocation() {
-  var locName = (document.getElementById('selLocation').value || '').trim();
-  if (!locName) { showToast('กรุณากรอกชื่อ Location', 'error'); return; }
+  _dbg('addLocation() called');
+  var selEl = document.getElementById('selLocation');
+  if (!selEl) { _dbg('❌ selLocation NOT FOUND'); alert('DEBUG: selLocation element not found!'); return; }
+  var locName = (selEl.value || '').trim();
+  _dbg('locName = "'+locName+'"');
+  if (!locName) { _dbg('❌ blocked: empty name'); showToast('กรุณากรอกชื่อ Location', 'error'); return; }
   if (_editingIdx === null) {
     var dup = locations.find(function(l){ return l.name === locName; });
-    if (dup) { showToast('"'+locName+'" มีอยู่แล้ว', 'error'); return; }
+    if (dup) { _dbg('❌ blocked: duplicate "'+locName+'"'); showToast('"'+locName+'" มีอยู่แล้ว', 'error'); return; }
   }
   var loc = _readForm();
+  _dbg('form read OK, editingIdx='+_editingIdx);
   if (_editingIdx !== null) {
     locations[_editingIdx] = loc;
     saveProgress();
+    _dbg('✅ edited & saved');
     showToast('บันทึกการแก้ไข "'+locName+'" ✅', 'success');
     showListView();
   } else {
     locations.push(loc);
     saveProgress();
+    _dbg('✅ pushed & saved, total locations='+locations.length);
     var wl = brandTotal(loc.wood.loscam);
     var wc = brandTotal(loc.wood.chep);
     var pb = brandTotal(loc.plastic.brs);
     var ps = brandTotal(loc.plastic.swwi);
     showSuccessView({ name:locName, wl:wl, wc:wc, pb:pb, ps:ps, total:wl+wc+pb+ps });
+    _dbg('✅ showSuccessView called');
   }
 }
 
