@@ -943,6 +943,9 @@ function showListView() {
   viewForm.hidden     = true;
   viewSuccess.hidden  = true;
 
+  // Scroll ขึ้นด้านบนบน mobile
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+
   updateSubmitCard();
 }
 
@@ -975,6 +978,7 @@ function showFormView(editIdx) {
   // reset ทุก input ก่อน (สำคัญ — DOM เดิมต้อง clear เองตรงนี้)
   var sel = document.getElementById('selLocation');
   sel.value = '';
+  sel.style.borderColor = '';
   document.querySelectorAll('#viewForm .status-input').forEach(function(inp){
     inp.value = '';
     inp.classList.remove('has-val');
@@ -1012,13 +1016,18 @@ function showFormView(editIdx) {
   viewSuccess.hidden  = true;
 
   _updateLiveTotal();
-  if (!isEdit) sel.focus();
+  // Scroll to form บน mobile
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  var formEl = document.getElementById('viewForm');
+  if (formEl) formEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  if (!isEdit) setTimeout(function(){ sel.focus(); }, 300);
 }
 
 function showSuccessView(saved) {
   _formOpen    = false;
   _formSuccess = true;
   _editingIdx  = null;
+  _lastSaved   = saved;
 
   var viewList    = document.getElementById('viewList');
   var viewForm    = document.getElementById('viewForm');
@@ -1038,6 +1047,11 @@ function showSuccessView(saved) {
   viewList.hidden    = true;
   viewForm.hidden     = true;
   viewSuccess.hidden  = false;
+
+  // Scroll ขึ้นด้านบนบน mobile
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  var step2 = document.getElementById('step2Card');
+  if (step2) step2.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
   updateSubmitCard();
 }
@@ -1067,11 +1081,23 @@ function addLocation() {
   var selEl = document.getElementById('selLocation');
   if (!selEl) return;
   var locName = (selEl.value || '').trim();
-  if (!locName) { showToast('กรุณากรอกชื่อ Location', 'error'); return; }
+  if (!locName) {
+    showToast('⚠️ กรุณากรอกชื่อ Location', 'error');
+    selEl.style.borderColor = 'var(--danger)';
+    selEl.focus();
+    return;
+  }
   if (_editingIdx === null) {
     var dup = locations.find(function(l){ return l.name === locName; });
-    if (dup) { showToast('"'+locName+'" มีอยู่แล้ว', 'error'); return; }
+    if (dup) {
+      showToast('⚠️ "'+locName+'" มีอยู่แล้ว — กรุณาใช้ชื่ออื่น', 'error');
+      selEl.style.borderColor = 'var(--danger)';
+      selEl.focus();
+      selEl.select();
+      return;
+    }
   }
+  selEl.style.borderColor = '';
   var loc = _readForm();
   if (_editingIdx !== null) {
     locations[_editingIdx] = loc;
