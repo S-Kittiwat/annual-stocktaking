@@ -537,119 +537,17 @@ function renderStep2(content) {
   // ── totals ──
   var tot = _calcTotals();
 
-  // ── location list chips ──
-  var locRows = locations.map(function(l, i) {
-    var lt = locTotal(l);
-    var wl = brandTotal(l.wood.loscam);
-    var wc = brandTotal(l.wood.chep);
-    var pb = brandTotal(l.plastic.brs);
-    var ps = brandTotal(l.plastic.swwi);
-    return '<div class="loc-item">'+
-      '<div class="loc-item-top">'+
-        '<span class="loc-name">'+esc(l.name)+'</span>'+
-      '</div>'+
-      '<div class="loc-item-bot">'+
-        '<span class="loc-chip loscam">L '+wl+'</span>'+
-        '<span class="loc-chip chep">C '+wc+'</span>'+
-        '<span class="loc-chip brs">B '+pb+'</span>'+
-        '<span class="loc-chip swwi">S '+ps+'</span>'+
-        '<span class="loc-total">'+lt+'</span>'+
-        '<button class="loc-act edit" onclick="editLocation('+i+')">✏️ แก้ไข</button>'+
-        '<button class="loc-act del"  onclick="removeLocation('+i+')">✕</button>'+
-      '</div>'+
-    '</div>';
-  }).join('');
 
   content.innerHTML =
-    // ── Step 2: กรอกยอด ──
+    // ── Step 2 ──
     '<div class="card active" id="step2Card">'+
       '<div class="card-head">'+
         '<span class="step-badge active">ขั้นที่ 2</span>'+
-        '<span class="card-title">'+(_editingIdx!==null?'✏️ แก้ไข Location':_formOpen?'+ เพิ่ม Location':'กรอกยอดนับ')+'</span>'+
+        '<span class="card-title">กรอกยอดนับ</span>'+
         '<span class="card-hint">'+esc(session.site)+' · '+esc(session.round)+'</span>'+
       '</div>'+
-      '<div class="card-body" id="step2Body">'+
-
-        // ── VIEW A: รายการ (ซ่อนเมื่อ formOpen หรือ editing หรือ success) ──
-        (_formOpen||_editingIdx!==null||_formSuccess ? '' :
-          (hasLoc
-            ? '<div class="loc-list">'+locRows+'</div>'
-            : '<div style="text-align:center;padding:20px 0;color:var(--muted);font-size:13px;">ยังไม่มี Location — กด "+ เพิ่ม Location" เพื่อเริ่ม</div>'
-          )+
-          '<button class="add-loc-btn" onclick="toggleLocForm()">+ เพิ่ม Location</button>'
-        )+
-
-        // ── VIEW B: Success state หลังบันทึก ──
-        (_formSuccess && _lastSaved ?
-          '<div style="background:#f0faf0;border:2px solid var(--success);border-radius:var(--rs);padding:20px;text-align:center;">'+
-            '<div style="font-size:32px;margin-bottom:8px;">✅</div>'+
-            '<div style="font-size:15px;font-weight:700;color:var(--success);margin-bottom:4px;">บันทึก "'+esc(_lastSaved.name)+'" แล้ว</div>'+
-            '<div style="display:flex;justify-content:center;gap:6px;margin:10px 0;flex-wrap:wrap;">'+
-              '<span class="loc-chip loscam">L '+_lastSaved.wl+'</span>'+
-              '<span class="loc-chip chep">C '+_lastSaved.wc+'</span>'+
-              '<span class="loc-chip brs">B '+_lastSaved.pb+'</span>'+
-              '<span class="loc-chip swwi">S '+_lastSaved.ps+'</span>'+
-              '<span style="font-size:12px;font-family:var(--mono);font-weight:700;line-height:1.8;"> | รวม '+_lastSaved.total+'</span>'+
-            '</div>'+
-            '<div style="display:flex;gap:8px;margin-top:14px;">'+
-              '<button class="btn btn-primary" onclick="openNextForm()" style="flex:1;">+ เพิ่ม Location ต่อไป</button>'+
-              '<button class="btn btn-outline" onclick="closeFormSuccess()" style="flex:1;">✓ เสร็จแล้ว ดูรายการ</button>'+
-            '</div>'+
-          '</div>'
-        : '')+
-
-        // ── VIEW C: Form เพิ่ม/แก้ไข ──
-        (!_formSuccess && (_formOpen||_editingIdx!==null) ?
-          '<div style="background:'+(_editingIdx!==null?'#fff8e1':'var(--accent-bg)')+';border:2px solid '+(_editingIdx!==null?'var(--accent)':'var(--border2)')+';border-radius:var(--rs);padding:16px;">'+
-            // header bar
-            '<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border);">'+
-              '<span style="font-size:18px;">'+(_editingIdx!==null?'✏️':'📍')+'</span>'+
-              '<div style="flex:1;">'+
-                '<div style="font-size:13px;font-weight:700;">'+(_editingIdx!==null?'แก้ไข Location: <span style="color:var(--accent);">'+esc(locations[_editingIdx].name)+'</span>':'เพิ่ม Location ใหม่')+'</div>'+
-                '<div style="font-size:11px;color:var(--muted);">'+(_editingIdx!==null?'แก้ไขยอดนับแล้วกด "บันทึก"':'กรอกชื่อและยอดพาเลท')+'</div>'+
-              '</div>'+
-              '<button onclick="cancelEdit()" style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:5px 12px;font-family:var(--font);font-size:12px;color:var(--muted);cursor:pointer;">✕ ยกเลิก</button>'+
-            '</div>'+
-            // ถ่ายรูป + ชื่อ location
-            '<div style="display:grid;grid-template-columns:80px 1fr;gap:10px;margin-bottom:12px;align-items:end;">'+
-              '<div>'+
-                '<label style="display:block;margin-bottom:5px;">📷 รูป</label>'+
-                '<div id="photoPreview" style="width:72px;height:72px;border:1.5px dashed var(--border2);border-radius:var(--rs);background:var(--accent-bg);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:22px;overflow:hidden;" onclick="openPhotoChoice()">📷</div>'+
-                '<input type="file" id="photoInputCamera"  accept="image/*" capture="environment" onchange="handlePhoto(this)" style="display:none;">'+
-                '<input type="file" id="photoInputGallery" accept="image/*"                       onchange="handlePhoto(this)" style="display:none;">'+
-              '</div>'+
-              '<div class="field" style="margin-bottom:0;flex:1;">'+
-                '<label>Location / Zone <span style="color:var(--danger);">*</span></label>'+
-                '<input class="input" id="selLocation" type="text" placeholder="เช่น Zone A, ลาน CHEP" required>'+
-              '</div>'+
-            '</div>'+
-            // Wood
-            '<div class="material-section">'+
-              '<div class="material-head">'+
-                '<span class="material-icon">🪵</span>'+
-                '<span class="material-label">Wood Pallet</span>'+
-                '<span class="material-total" id="woodTotal">รวม 0</span>'+
-              '</div>'+
-              _renderPalletTable('wood','loscam','LOSCAM','chep','CHEP')+
-            '</div>'+
-            // Plastic
-            '<div class="material-section">'+
-              '<div class="material-head">'+
-                '<span class="material-icon">🟧</span>'+
-                '<span class="material-label">Plastic Pallet</span>'+
-                '<span class="material-total" id="plasticTotal">รวม 0</span>'+
-              '</div>'+
-              _renderPalletTable('plastic','brs','BRS','swwi','SWWI')+
-            '</div>'+
-            '<button class="btn '+(_editingIdx!==null?'btn-primary':'btn-success')+'" onclick="addLocation()" style="width:100%;margin-top:8px;">'+
-              (_editingIdx!==null?'💾 บันทึกการแก้ไข':'+ บันทึก Location นี้')+
-            '</button>'+
-          '</div>'
-        : '')+
-
-      '</div>'+
+      '<div class="card-body" id="step2Body"><!-- view managed by showListView/showFormView/showSuccessView --></div>'+
     '</div>'+
-
     // ── Step 3: สรุป (ซ่อนไว้จนกว่าจะกดแสดง) ──
     '<div class="card '+(hasLoc?'active':'locked')+'" id="step3Card">'+
       '<div class="card-head" style="cursor:pointer;" onclick="toggleStep3()" id="step3Head">'+
@@ -701,8 +599,15 @@ function renderStep2(content) {
       '<div id="submitNote" style="font-size:11px;color:var(--muted);text-align:center;margin-top:4px;"></div>'+
     '</div>';
 
+  // ใช้ showListView/showFormView/showSuccessView จัดการ step2Body โดยตรง
+  if (_formOpen || _editingIdx !== null) {
+    showFormView(_editingIdx);
+  } else if (_formSuccess && _lastSaved) {
+    showSuccessView(_lastSaved);
+  } else {
+    showListView();
+  }
   updateSubmitCard();
-  _updateLiveTotal();
 }
 
 function _chkIcon(done) {
@@ -941,81 +846,171 @@ function toggleStep3() {
   }
 }
 
-function toggleLocForm(forceOpen) {
-  if (_editingIdx !== null && forceOpen === undefined) {
-    cancelEdit();
-    return;
-  }
-  _formOpen = (forceOpen !== undefined) ? forceOpen : !_formOpen;
-  render();
-  if (_formOpen) {
-    setTimeout(function(){
-      var card = document.getElementById('step2Card');
-      if (card) card.scrollIntoView({ behavior:'smooth', block:'start' });
-    }, 50);
-  }
-}
-
-function _buildFormViewHTML() {
-  return '<div style="background:var(--accent-bg);border:1.5px solid var(--border2);border-radius:var(--rs);padding:16px;">'+
-    '<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border);">'+
-      '<span style="font-size:18px;">📍</span>'+
-      '<div style="flex:1;"><div style="font-size:13px;font-weight:700;">เพิ่ม Location ใหม่</div>'+
-      '<div style="font-size:11px;color:var(--muted);">กรอกชื่อและยอดพาเลท</div></div>'+
-      '<button onclick="cancelEdit()" style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:5px 12px;font-family:var(--font);font-size:12px;color:var(--muted);cursor:pointer;">✕ ยกเลิก</button>'+
-    '</div>'+
-    '<div style="display:grid;grid-template-columns:80px 1fr;gap:10px;margin-bottom:12px;align-items:end;">'+
-      '<div><label style="display:block;margin-bottom:5px;">📷 รูป</label>'+
-      '<div id="photoPreview" style="width:72px;height:72px;border:1.5px dashed var(--border2);border-radius:var(--rs);background:var(--accent-bg);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:22px;overflow:hidden;" onclick="openPhotoChoice()">📷</div>'+
-      '<input type="file" id="photoInputCamera" accept="image/*" capture="environment" onchange="handlePhoto(this)" style="display:none;">'+
-      '<input type="file" id="photoInputGallery" accept="image/*" onchange="handlePhoto(this)" style="display:none;"></div>'+
-      '<div class="field" style="margin-bottom:0;flex:1;"><label>Location / Zone <span style="color:var(--danger);">*</span></label>'+
-      '<input class="input" id="selLocation" type="text" placeholder="เช่น Zone A, ลาน CHEP" required></div>'+
-    '</div>'+
-    '<div class="material-section">'+
-      '<div class="material-head"><span class="material-icon">🪵</span><span class="material-label">Wood Pallet</span>'+
-      '<span class="material-total" id="woodTotal">รวม 0</span></div>'+
-      _renderPalletTable('wood','loscam','LOSCAM','chep','CHEP')+
-    '</div>'+
-    '<div class="material-section">'+
-      '<div class="material-head"><span class="material-icon">🟧</span><span class="material-label">Plastic Pallet</span>'+
-      '<span class="material-total" id="plasticTotal">รวม 0</span></div>'+
-      _renderPalletTable('plastic','brs','BRS','swwi','SWWI')+
-    '</div>'+
-    '<button class="btn btn-success" onclick="addLocation()" style="width:100%;margin-top:8px;">+ บันทึก Location นี้</button>'+
-  '</div>';
-}
-
-function openNextForm() {
-  _renderVersion++;
-  _formSuccess = false;
-  _lastSaved   = null;
-  _formOpen    = true;
-
-  // swap เฉพาะ step2Body โดยตรง — ไม่ re-render ทั้งหน้า
-  var body = document.getElementById('step2Body');
-  if (body) {
-    body.innerHTML = _buildFormViewHTML();
-    var el = document.getElementById('selLocation');
-    if (el) { el.value = ''; el.focus(); }
-    _updateLiveTotal();
-  } else {
-    render();
-  }
-}
-
-function closeFormSuccess() {
-  _formSuccess = false;
-  _lastSaved   = null;
+// ============================================================
+//  3 view functions — เขียน DOM โดยตรง ไม่ผ่าน render()
+// ============================================================
+function showListView() {
   _formOpen    = false;
-  render();
+  _formSuccess = false;
+  _editingIdx  = null;
+  _lastSaved   = null;
+  var body = document.getElementById('step2Body');
+  if (!body) { render(); return; }
+
+  var hasLoc = locations.length > 0;
+  var locRows = locations.map(function(l, i) {
+    var wl = brandTotal(l.wood.loscam);
+    var wc = brandTotal(l.wood.chep);
+    var pb = brandTotal(l.plastic.brs);
+    var ps = brandTotal(l.plastic.swwi);
+    var lt = wl + wc + pb + ps;
+    return '<div class="loc-item">'+
+      '<div class="loc-item-top"><span class="loc-name">'+esc(l.name)+'</span></div>'+
+      '<div class="loc-item-bot">'+
+        '<span class="loc-chip loscam">L '+wl+'</span>'+
+        '<span class="loc-chip chep">C '+wc+'</span>'+
+        '<span class="loc-chip brs">B '+pb+'</span>'+
+        '<span class="loc-chip swwi">S '+ps+'</span>'+
+        '<span class="loc-total">'+lt+'</span>'+
+        '<button class="loc-act edit" onclick="showEditView('+i+')">✏️ แก้ไข</button>'+
+        '<button class="loc-act del" onclick="removeLocation('+i+')">✕</button>'+
+      '</div></div>';
+  }).join('');
+
+  body.innerHTML =
+    (hasLoc ? '<div class="loc-list">'+locRows+'</div>' :
+      '<div style="text-align:center;padding:20px 0;color:var(--muted);font-size:13px;">ยังไม่มี Location — กด "+ เพิ่ม Location" เพื่อเริ่ม</div>')+
+    '<button class="add-loc-btn" onclick="showFormView()">+ เพิ่ม Location</button>';
+
+  updateSubmitCard();
 }
 
-function cancelEdit() {
-  _editingIdx = null;
-  _formOpen   = false;
-  render();
+function showFormView(editIdx) {
+  var isEdit = (editIdx !== undefined && editIdx !== null);
+  _formOpen    = true;
+  _formSuccess = false;
+  _editingIdx  = isEdit ? editIdx : null;
+
+  var body = document.getElementById('step2Body');
+  if (!body) { render(); return; }
+
+  body.innerHTML =
+    '<div style="background:'+( isEdit ? '#fff8e1' : 'var(--accent-bg)')+';border:2px solid '+(isEdit?'var(--accent)':'var(--border2)')+';border-radius:var(--rs);padding:16px;">'+
+      '<div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;padding-bottom:12px;border-bottom:1px solid var(--border);">'+
+        '<span style="font-size:18px;">'+(isEdit?'✏️':'📍')+'</span>'+
+        '<div style="flex:1;">'+
+          '<div style="font-size:13px;font-weight:700;">'+(isEdit?'แก้ไข Location: <span style="color:var(--accent);">'+esc(locations[editIdx].name)+'</span>':'เพิ่ม Location ใหม่')+'</div>'+
+          '<div style="font-size:11px;color:var(--muted);">'+(isEdit?'แก้ไขยอดนับแล้วกด "บันทึก"':'กรอกชื่อและยอดพาเลท')+'</div>'+
+        '</div>'+
+        '<button onclick="showListView()" style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:5px 12px;font-family:var(--font);font-size:12px;color:var(--muted);cursor:pointer;">✕ ยกเลิก</button>'+
+      '</div>'+
+      '<div style="display:grid;grid-template-columns:80px 1fr;gap:10px;margin-bottom:12px;align-items:end;">'+
+        '<div><label style="display:block;margin-bottom:5px;">📷 รูป</label>'+
+          '<div id="photoPreview" style="width:72px;height:72px;border:1.5px dashed var(--border2);border-radius:var(--rs);background:var(--accent-bg);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:22px;overflow:hidden;" onclick="openPhotoChoice()">📷</div>'+
+          '<input type="file" id="photoInputCamera" accept="image/*" capture="environment" onchange="handlePhoto(this)" style="display:none;">'+
+          '<input type="file" id="photoInputGallery" accept="image/*" onchange="handlePhoto(this)" style="display:none;">'+
+        '</div>'+
+        '<div class="field" style="margin-bottom:0;"><label>Location / Zone <span style="color:var(--danger);">*</span></label>'+
+          '<input class="input" id="selLocation" type="text" placeholder="เช่น Zone A, ลาน CHEP" required>'+
+        '</div>'+
+      '</div>'+
+      '<div class="material-section">'+
+        '<div class="material-head"><span class="material-icon">🪵</span><span class="material-label">Wood Pallet</span><span class="material-total" id="woodTotal">รวม 0</span></div>'+
+        _renderPalletTable('wood','loscam','LOSCAM','chep','CHEP')+
+      '</div>'+
+      '<div class="material-section">'+
+        '<div class="material-head"><span class="material-icon">🟧</span><span class="material-label">Plastic Pallet</span><span class="material-total" id="plasticTotal">รวม 0</span></div>'+
+        _renderPalletTable('plastic','brs','BRS','swwi','SWWI')+
+      '</div>'+
+      '<button class="btn '+(isEdit?'btn-primary':'btn-success')+'" onclick="addLocation()" style="width:100%;margin-top:8px;">'+
+        (isEdit?'💾 บันทึกการแก้ไข':'+ บันทึก Location นี้')+
+      '</button>'+
+    '</div>';
+
+  // pre-fill ถ้า edit — ทำได้เลยเพราะ DOM พร้อมแล้ว
+  if (isEdit) {
+    var loc = locations[editIdx];
+    var sel = document.getElementById('selLocation');
+    if (sel) sel.value = loc.name;
+    WOOD_STATUS.forEach(function(s){
+      var k = s.replace(/\s+/g,'_').replace(/[^\w]/g,'');
+      var el = document.getElementById('inp_wood_loscam_'+k);
+      if (el){ el.value = loc.wood.loscam[s]||''; el.classList.toggle('has-val',(loc.wood.loscam[s]||0)>0); }
+      el = document.getElementById('inp_wood_chep_'+k);
+      if (el){ el.value = loc.wood.chep[s]||''; el.classList.toggle('has-val',(loc.wood.chep[s]||0)>0); }
+    });
+    PLASTIC_STATUS.forEach(function(s){
+      var k = s.replace(/\s+/g,'_').replace(/[^\w]/g,'');
+      var el = document.getElementById('inp_plastic_brs_'+k);
+      if (el){ el.value = loc.plastic.brs[s]||''; el.classList.toggle('has-val',(loc.plastic.brs[s]||0)>0); }
+      el = document.getElementById('inp_plastic_swwi_'+k);
+      if (el){ el.value = loc.plastic.swwi[s]||''; el.classList.toggle('has-val',(loc.plastic.swwi[s]||0)>0); }
+    });
+    if (loc.photo) {
+      var pp = document.getElementById('photoPreview');
+      if (pp){ pp.innerHTML='<img src="'+loc.photo+'" style="width:100%;height:100%;object-fit:cover;">'; pp.dataset.photo=loc.photo; }
+    }
+  }
+  _updateLiveTotal();
+  var sel = document.getElementById('selLocation');
+  if (sel && !isEdit) sel.focus();
 }
+
+function showSuccessView(saved) {
+  _formOpen    = false;
+  _formSuccess = true;
+  _editingIdx  = null;
+
+  var body = document.getElementById('step2Body');
+  if (!body) { render(); return; }
+
+  var hasLoc = locations.length > 0;
+  var locRows = locations.map(function(l, i) {
+    var wl = brandTotal(l.wood.loscam);
+    var wc = brandTotal(l.wood.chep);
+    var pb = brandTotal(l.plastic.brs);
+    var ps = brandTotal(l.plastic.swwi);
+    return '<div class="loc-item">'+
+      '<div class="loc-item-top"><span class="loc-name">'+esc(l.name)+'</span></div>'+
+      '<div class="loc-item-bot">'+
+        '<span class="loc-chip loscam">L '+wl+'</span>'+
+        '<span class="loc-chip chep">C '+wc+'</span>'+
+        '<span class="loc-chip brs">B '+pb+'</span>'+
+        '<span class="loc-chip swwi">S '+ps+'</span>'+
+        '<span class="loc-total">'+(wl+wc+pb+ps)+'</span>'+
+        '<button class="loc-act edit" onclick="showEditView('+i+')">✏️ แก้ไข</button>'+
+        '<button class="loc-act del" onclick="removeLocation('+i+')">✕</button>'+
+      '</div></div>';
+  }).join('');
+
+  body.innerHTML =
+    (hasLoc ? '<div class="loc-list">'+locRows+'</div>' : '')+
+    '<div style="background:#f0faf0;border:2px solid var(--success);border-radius:var(--rs);padding:20px;text-align:center;">'+
+      '<div style="font-size:36px;margin-bottom:8px;">✅</div>'+
+      '<div style="font-size:15px;font-weight:700;color:var(--success);margin-bottom:6px;">บันทึก "'+esc(saved.name)+'" แล้ว</div>'+
+      '<div style="display:flex;justify-content:center;gap:6px;margin:10px 0;flex-wrap:wrap;">'+
+        '<span class="loc-chip loscam">L '+saved.wl+'</span>'+
+        '<span class="loc-chip chep">C '+saved.wc+'</span>'+
+        '<span class="loc-chip brs">B '+saved.pb+'</span>'+
+        '<span class="loc-chip swwi">S '+saved.ps+'</span>'+
+        '<span style="font-size:12px;font-family:var(--mono);font-weight:700;line-height:1.8;"> | รวม '+saved.total+'</span>'+
+      '</div>'+
+      '<div style="display:flex;gap:8px;margin-top:14px;">'+
+        '<button class="btn btn-primary" onclick="showFormView()" style="flex:1;">+ เพิ่ม Location ต่อไป</button>'+
+        '<button class="btn btn-outline" onclick="showListView()" style="flex:1;">✓ เสร็จแล้ว</button>'+
+      '</div>'+
+    '</div>';
+
+  updateSubmitCard();
+}
+
+function showEditView(i) { showFormView(i); }
+
+// ── compat aliases ──
+function toggleLocForm()    { showFormView(); }
+function openNextForm()     { showFormView(); }
+function cancelEdit()       { showListView(); }
+function closeFormSuccess() { showListView(); }
 
 function openPhotoChoice() {
   document.getElementById('photoChoiceModal').classList.add('open');
@@ -1037,77 +1032,36 @@ function handlePhoto(input) {
 }
 
 function addLocation() {
-  var locName = document.getElementById('selLocation').value;
-  if (!locName) { showToast('กรุณาเลือก Location', 'error'); return; }
+  var locName = (document.getElementById('selLocation').value || '').trim();
+  if (!locName) { showToast('กรุณากรอกชื่อ Location', 'error'); return; }
   if (_editingIdx === null) {
     var dup = locations.find(function(l){ return l.name === locName; });
-    if (dup) { showToast(locName+' มีอยู่แล้ว', 'error'); return; }
+    if (dup) { showToast('"'+locName+'" มีอยู่แล้ว', 'error'); return; }
   }
   var loc = _readForm();
   if (_editingIdx !== null) {
     locations[_editingIdx] = loc;
-    _editingIdx  = null;
-    _formOpen    = false;
-    _formSuccess = false;
     saveProgress();
-    render();
-    requestAnimationFrame(function(){ requestAnimationFrame(function(){
-      window.scrollTo({ top:0, behavior:'smooth' });
-    }); });
+    showToast('บันทึกการแก้ไข "'+locName+'" ✅', 'success');
+    showListView();
   } else {
     locations.push(loc);
     saveProgress();
-    // แสดง success state แทน scroll
     var wl = brandTotal(loc.wood.loscam);
     var wc = brandTotal(loc.wood.chep);
     var pb = brandTotal(loc.plastic.brs);
     var ps = brandTotal(loc.plastic.swwi);
-    _lastSaved   = { name:loc.name, wl:wl, wc:wc, pb:pb, ps:ps, total:wl+wc+pb+ps };
-    _formOpen    = false;
-    _formSuccess = true;
-    render();
+    showSuccessView({ name:locName, wl:wl, wc:wc, pb:pb, ps:ps, total:wl+wc+pb+ps });
   }
 }
 
-function editLocation(i) {
-  _editingIdx = i;
-  _formOpen   = true;
-  render();
-  var ver = _renderVersion;
-  setTimeout(function() {
-    if (_renderVersion !== ver) return; // render ใหม่แล้ว ยกเลิก prefill
-    var loc = locations[i];
-    var sel = document.getElementById('selLocation');
-    if (sel) sel.value = loc.name;
-    WOOD_STATUS.forEach(function(s){
-      var k = s.replace(/\s+/g,'_').replace(/[^\w]/g,'');
-      var el = document.getElementById('inp_wood_loscam_'+k);
-      if (el) { el.value = loc.wood.loscam[s]||0; el.classList.toggle('has-val',(loc.wood.loscam[s]||0)>0); }
-      el = document.getElementById('inp_wood_chep_'+k);
-      if (el) { el.value = loc.wood.chep[s]||0; el.classList.toggle('has-val',(loc.wood.chep[s]||0)>0); }
-    });
-    PLASTIC_STATUS.forEach(function(s){
-      var k = s.replace(/\s+/g,'_').replace(/[^\w]/g,'');
-      var el = document.getElementById('inp_plastic_brs_'+k);
-      if (el) { el.value = loc.plastic.brs[s]||0; el.classList.toggle('has-val',(loc.plastic.brs[s]||0)>0); }
-      el = document.getElementById('inp_plastic_swwi_'+k);
-      if (el) { el.value = loc.plastic.swwi[s]||0; el.classList.toggle('has-val',(loc.plastic.swwi[s]||0)>0); }
-    });
-    if (loc.photo) {
-      var pp = document.getElementById('photoPreview');
-      if (pp) { pp.innerHTML='<img src="'+loc.photo+'" style="width:100%;height:100%;object-fit:cover;">'; pp.dataset.photo=loc.photo; }
-    }
-    _updateLiveTotal();
-    var box = document.querySelector('.add-loc-box');
-    if (box) box.scrollIntoView({ behavior:'smooth', block:'start' });
-  }, 100);
-}
+function editLocation(i) { showEditView(i); }
 
 function removeLocation(i) {
   if (_editingIdx === i) _editingIdx = null;
   locations.splice(i, 1);
   saveProgress();
-  render();
+  showListView();
 }
 
 function updateSubmitBar() { updateSubmitCard(); }
