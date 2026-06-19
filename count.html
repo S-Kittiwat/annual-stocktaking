@@ -673,7 +673,15 @@ function _bindStep2Events() {
   if (btnCancelForm) btnCancelForm.addEventListener('click', function(){ showListView(); });
 
   var btnSaveLocation = document.getElementById('btnSaveLocation');
-  if (btnSaveLocation) btnSaveLocation.addEventListener('click', addLocation);
+  if (btnSaveLocation) {
+    btnSaveLocation.addEventListener('click', function(e){
+      showToast('🔔 ปุ่มถูกกด (click event)', 'info');
+      addLocation();
+    });
+    btnSaveLocation.addEventListener('touchend', function(e){
+      showToast('👆 touchend ตรวจพบ', 'info');
+    });
+  }
 
   var btnAddNext = document.getElementById('btnAddNext');
   if (btnAddNext) btnAddNext.addEventListener('click', function(){ showFormView(); });
