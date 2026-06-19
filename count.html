@@ -84,11 +84,11 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
 .field{display:flex;flex-direction:column;gap:6px;margin-bottom:14px;}
 .field:last-child{margin-bottom:0;}
 label{font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.04em;text-transform:uppercase;}
-.input,.select{background:var(--surface);border:1.5px solid var(--border);border-radius:var(--rs);color:var(--text);font-family:var(--font);font-size:14px;padding:10px 14px;outline:none;width:100%;transition:border-color .15s,box-shadow .15s;}
+.input,.select{background:var(--surface);border:1.5px solid var(--border);border-radius:var(--rs);color:var(--text);font-family:var(--font);font-size:16px;padding:12px 14px;outline:none;width:100%;min-height:44px;transition:border-color .15s,box-shadow .15s;}
 .input:focus,.select:focus{border-color:var(--accent);box-shadow:0 0 0 3px rgba(200,155,46,.12);}
 .input::placeholder{color:var(--muted);opacity:.5;}
 .select option{background:var(--surface);}
-.btn{border:none;border-radius:var(--rs);padding:10px 18px;font-family:var(--font);font-size:13px;font-weight:600;cursor:pointer;transition:all .15s;display:flex;align-items:center;gap:6px;}
+.btn{border:none;border-radius:var(--rs);padding:12px 18px;font-family:var(--font);font-size:14px;font-weight:600;cursor:pointer;transition:all .15s;display:flex;align-items:center;justify-content:center;gap:6px;min-height:44px;touch-action:manipulation;}
 .btn:disabled{opacity:.35;cursor:not-allowed;}
 .btn-primary{background:var(--accent2);color:#1a1612;box-shadow:0 2px 8px rgba(245,200,66,.3);}
 .btn-primary:hover:not(:disabled){background:var(--accent);color:#fff;}
@@ -117,7 +117,7 @@ label{font-size:11px;font-weight:700;color:var(--muted);letter-spacing:.04em;tex
 .pallet-table td.inp-cell{text-align:center;padding:4px 8px;}
 .pallet-table tfoot td{padding:8px 14px;font-weight:700;font-size:13px;background:var(--surface2);border-top:2px solid var(--border);text-align:center;}
 .pallet-table tfoot td:first-child{text-align:left;}
-.status-input{background:var(--surface2);border:1px solid var(--border);border-radius:4px;color:#1a1612;font-family:var(--mono);font-size:13px;font-weight:600;padding:5px 6px;width:72px;text-align:center;outline:none;transition:border-color .15s;}
+.status-input{background:var(--surface2);border:1px solid var(--border);border-radius:4px;color:#1a1612;font-family:var(--mono);font-size:16px;font-weight:600;padding:10px 6px;width:64px;min-height:44px;text-align:center;outline:none;transition:border-color .15s;touch-action:manipulation;}
 .status-input:focus{border-color:var(--accent);background:#fff;}
 .status-input.has-val{background:#fffef0;border-color:var(--accent2);}
 /* ── Location chips (updated for new structure) ── */
@@ -234,14 +234,14 @@ td.brs-c   {color:#1a1612;}
 .loc-name{font-size:13px;font-weight:700;color:var(--text);flex:1;}
 .loc-item-bot{display:flex;align-items:center;gap:5px;flex-wrap:wrap;}
 .loc-total{font-size:12px;font-family:var(--mono);font-weight:700;color:var(--text2);margin-left:auto;padding:0 4px;}
-.loc-act{background:none;border:1px solid var(--border);border-radius:4px;cursor:pointer;font-size:12px;padding:2px 8px;transition:all .15s;font-family:var(--font);}
+.loc-act{background:none;border:1px solid var(--border);border-radius:4px;cursor:pointer;font-size:13px;padding:8px 12px;transition:all .15s;font-family:var(--font);min-height:36px;touch-action:manipulation;}
 .loc-act.edit{color:var(--accent);}
 .loc-act.edit:hover{background:var(--accent-bg);border-color:var(--accent);}
 .loc-act.del{color:var(--danger);}
 .loc-act.del:hover{background:var(--danger-bg);border-color:var(--danger);}
 
 /* ── Add location ── */
-.add-loc-btn{width:100%;background:var(--surface);border:1.5px dashed var(--border2);border-radius:var(--rs);padding:11px;font-family:var(--font);font-size:13px;font-weight:600;color:var(--accent);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:all .15s;}
+.add-loc-btn{width:100%;background:var(--surface);border:1.5px dashed var(--border2);border-radius:var(--rs);padding:13px;font-family:var(--font);font-size:14px;font-weight:600;color:var(--accent);cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:all .15s;min-height:44px;touch-action:manipulation;}
 .add-loc-btn:hover{background:var(--accent-bg);border-color:var(--accent);}
 .add-loc-btn.editing{background:#fff8e1;border:1.5px solid var(--accent);color:var(--accent);border-style:solid;}
 .add-loc-box{background:var(--accent-bg);border:1.5px solid var(--border2);border-radius:var(--rs);padding:16px;margin-top:8px;display:none;}
@@ -673,11 +673,9 @@ function _renderPalletTable(material, brand1cls, brand1name, brand2cls, brand2na
       '<td>'+esc(s)+'</td>'+
       '<td class="inp-cell"><input class="status-input" id="'+id1+'" type="text" inputmode="numeric" pattern="[0-9]*" value=""'+
         ' placeholder="0"'+
-        ' onkeypress="return /[0-9]/.test(event.key)"'+
         ' oninput="this.value=this.value.replace(/[^0-9]/g,\'\');this.classList.toggle(\'has-val\',this.value!==\'\'&&this.value!==\'0\');_updateLiveTotal()"></td>'+
       '<td class="inp-cell"><input class="status-input" id="'+id2+'" type="text" inputmode="numeric" pattern="[0-9]*" value=""'+
         ' placeholder="0"'+
-        ' onkeypress="return /[0-9]/.test(event.key)"'+
         ' oninput="this.value=this.value.replace(/[^0-9]/g,\'\');this.classList.toggle(\'has-val\',this.value!==\'\'&&this.value!==\'0\');_updateLiveTotal()"></td>'+
     '</tr>';
   }).join('');
@@ -886,15 +884,13 @@ function showListView() {
 }
 
 function showFormView(editIdx) {
-  _dbg('showFormView() called, editIdx='+editIdx);
   var isEdit = (editIdx !== undefined && editIdx !== null);
   _formOpen    = true;
   _formSuccess = false;
   _editingIdx  = isEdit ? editIdx : null;
 
   var body = document.getElementById('step2Body');
-  if (!body) { _dbg('❌ step2Body NOT FOUND, falling back to render()'); render(); return; }
-  _dbg('step2Body found, writing innerHTML...');
+  if (!body) { render(); return; }
 
   body.innerHTML =
     '<div style="background:'+( isEdit ? '#fff8e1' : 'var(--accent-bg)')+';border:2px solid '+(isEdit?'var(--accent)':'var(--border2)')+';border-radius:var(--rs);padding:16px;">'+
@@ -956,7 +952,6 @@ function showFormView(editIdx) {
   _updateLiveTotal();
   var sel = document.getElementById('selLocation');
   if (sel && !isEdit) sel.focus();
-  _dbg('showFormView done, selLocation found='+(!!sel)+', value="'+(sel?sel.value:'N/A')+'"');
 }
 
 function showSuccessView(saved) {
@@ -1034,49 +1029,29 @@ function handlePhoto(input) {
   reader.readAsDataURL(input.files[0]);
 }
 
-function _dbg(msg) {
-  var d = document.getElementById('dbgLog');
-  if (!d) {
-    d = document.createElement('div');
-    d.id = 'dbgLog';
-    d.style.cssText = 'position:fixed;bottom:0;left:0;right:0;max-height:160px;overflow-y:auto;background:#000;color:#0f0;font-family:monospace;font-size:10px;padding:6px;z-index:9999;opacity:.9;';
-    document.body.appendChild(d);
-  }
-  var line = document.createElement('div');
-  line.textContent = '['+new Date().toLocaleTimeString()+'] ' + msg;
-  d.appendChild(line);
-  d.scrollTop = d.scrollHeight;
-}
-
 function addLocation() {
-  _dbg('addLocation() called');
   var selEl = document.getElementById('selLocation');
-  if (!selEl) { _dbg('❌ selLocation NOT FOUND'); alert('DEBUG: selLocation element not found!'); return; }
+  if (!selEl) return;
   var locName = (selEl.value || '').trim();
-  _dbg('locName = "'+locName+'"');
-  if (!locName) { _dbg('❌ blocked: empty name'); showToast('กรุณากรอกชื่อ Location', 'error'); return; }
+  if (!locName) { showToast('กรุณากรอกชื่อ Location', 'error'); return; }
   if (_editingIdx === null) {
     var dup = locations.find(function(l){ return l.name === locName; });
-    if (dup) { _dbg('❌ blocked: duplicate "'+locName+'"'); showToast('"'+locName+'" มีอยู่แล้ว', 'error'); return; }
+    if (dup) { showToast('"'+locName+'" มีอยู่แล้ว', 'error'); return; }
   }
   var loc = _readForm();
-  _dbg('form read OK, editingIdx='+_editingIdx);
   if (_editingIdx !== null) {
     locations[_editingIdx] = loc;
     saveProgress();
-    _dbg('✅ edited & saved');
     showToast('บันทึกการแก้ไข "'+locName+'" ✅', 'success');
     showListView();
   } else {
     locations.push(loc);
     saveProgress();
-    _dbg('✅ pushed & saved, total locations='+locations.length);
     var wl = brandTotal(loc.wood.loscam);
     var wc = brandTotal(loc.wood.chep);
     var pb = brandTotal(loc.plastic.brs);
     var ps = brandTotal(loc.plastic.swwi);
     showSuccessView({ name:locName, wl:wl, wc:wc, pb:pb, ps:ps, total:wl+wc+pb+ps });
-    _dbg('✅ showSuccessView called');
   }
 }
 
