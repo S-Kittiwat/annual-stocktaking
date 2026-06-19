@@ -547,7 +547,7 @@ function renderStep2(content) {
         // ── View: List (persistent, toggle ด้วย hidden) ──
         '<div id="viewList">'+
           '<div class="loc-list" id="locListContainer"></div>'+
-          '<button class="add-loc-btn" id="btnShowForm">+ เพิ่ม Location</button>'+
+          '<button class="add-loc-btn" id="btnShowForm" onclick="showFormView()">+ เพิ่ม Location</button>'+
         '</div>'+
 
         // ── View: Form (persistent, สร้างครั้งเดียว ไม่ลบ) ──
@@ -559,13 +559,13 @@ function renderStep2(content) {
                 '<div style="font-size:13px;font-weight:700;" id="formTitle">เพิ่ม Location ใหม่</div>'+
                 '<div style="font-size:11px;color:var(--muted);" id="formSub">กรอกชื่อและยอดพาเลท</div>'+
               '</div>'+
-              '<button id="btnCancelForm" style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:8px 14px;font-family:var(--font);font-size:13px;color:var(--muted);cursor:pointer;min-height:36px;touch-action:manipulation;">✕ ยกเลิก</button>'+
+              '<button id="btnCancelForm" onclick="showListView()" style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:8px 14px;font-family:var(--font);font-size:13px;color:var(--muted);cursor:pointer;min-height:36px;touch-action:manipulation;">✕ ยกเลิก</button>'+
             '</div>'+
             '<div style="display:grid;grid-template-columns:80px 1fr;gap:10px;margin-bottom:12px;align-items:end;">'+
               '<div><label style="display:block;margin-bottom:5px;">📷 รูป</label>'+
-                '<div id="photoPreview" style="width:72px;height:72px;border:1.5px dashed var(--border2);border-radius:var(--rs);background:var(--accent-bg);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:22px;overflow:hidden;touch-action:manipulation;">📷</div>'+
-                '<input type="file" id="photoInputCamera" accept="image/*" capture="environment" style="display:none;">'+
-                '<input type="file" id="photoInputGallery" accept="image/*" style="display:none;">'+
+                '<div id="photoPreview" onclick="openPhotoChoice()" style="width:72px;height:72px;border:1.5px dashed var(--border2);border-radius:var(--rs);background:var(--accent-bg);display:flex;align-items:center;justify-content:center;cursor:pointer;font-size:22px;overflow:hidden;touch-action:manipulation;">📷</div>'+
+                '<input type="file" id="photoInputCamera" accept="image/*" capture="environment" onchange="handlePhoto(this)" style="display:none;">'+
+                '<input type="file" id="photoInputGallery" accept="image/*" onchange="handlePhoto(this)" style="display:none;">'+
               '</div>'+
               '<div class="field" style="margin-bottom:0;"><label>Location / Zone <span style="color:var(--danger);">*</span></label>'+
                 '<input class="input" id="selLocation" type="text" placeholder="เช่น Zone A, ลาน CHEP" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">'+
@@ -579,7 +579,7 @@ function renderStep2(content) {
               '<div class="material-head"><span class="material-icon">🟧</span><span class="material-label">Plastic Pallet</span><span class="material-total" id="plasticTotal">รวม 0</span></div>'+
               _renderPalletTable('plastic','brs','BRS','swwi','SWWI')+
             '</div>'+
-            '<button class="btn btn-success" id="btnSaveLocation" style="width:100%;margin-top:8px;" type="button">+ บันทึก Location นี้</button>'+
+            '<button class="btn btn-success" id="btnSaveLocation" style="width:100%;margin-top:8px;" type="button" onclick="addLocation()">+ บันทึก Location นี้</button>'+
           '</div>'+
         '</div>'+
 
@@ -591,8 +591,8 @@ function renderStep2(content) {
             '<div style="font-size:15px;font-weight:700;color:var(--success);margin-bottom:6px;" id="successTitle">บันทึกแล้ว</div>'+
             '<div style="display:flex;justify-content:center;gap:6px;margin:10px 0;flex-wrap:wrap;" id="successChips"></div>'+
             '<div style="display:flex;gap:8px;margin-top:14px;">'+
-              '<button class="btn btn-primary" id="btnAddNext" style="flex:1;" type="button">+ เพิ่ม Location ต่อไป</button>'+
-              '<button class="btn btn-outline" id="btnDoneSuccess" style="flex:1;" type="button">✓ เสร็จแล้ว</button>'+
+              '<button class="btn btn-primary" id="btnAddNext" onclick="showFormView()" style="flex:1;" type="button">+ เพิ่ม Location ต่อไป</button>'+
+              '<button class="btn btn-outline" id="btnDoneSuccess" onclick="showListView()" style="flex:1;" type="button">✓ เสร็จแล้ว</button>'+
             '</div>'+
           '</div>'+
         '</div>'+
@@ -650,9 +650,6 @@ function renderStep2(content) {
       '<div id="submitNote" style="font-size:11px;color:var(--muted);text-align:center;margin-top:4px;"></div>'+
     '</div>';
 
-  // ── Bind event listeners ครั้งเดียว (DOM ไม่ถูกลบสร้างใหม่อีก) ──
-  _bindStep2Events();
-
   // ── แสดง view เริ่มต้นที่ถูกต้อง ──
   if (_formOpen || _editingIdx !== null) {
     showFormView(_editingIdx);
@@ -665,40 +662,6 @@ function renderStep2(content) {
 }
 
 // ── Bind events ครั้งเดียวตอนสร้าง DOM — ไม่ผูกซ้ำเมื่อสลับ view ──
-function _bindStep2Events() {
-  var btnShowForm = document.getElementById('btnShowForm');
-  if (btnShowForm) btnShowForm.addEventListener('click', function(){ showFormView(); });
-
-  var btnCancelForm = document.getElementById('btnCancelForm');
-  if (btnCancelForm) btnCancelForm.addEventListener('click', function(){ showListView(); });
-
-  var btnSaveLocation = document.getElementById('btnSaveLocation');
-  if (btnSaveLocation) {
-    btnSaveLocation.addEventListener('click', function(e){
-      showToast('🔔 ปุ่มถูกกด (click event)', 'info');
-      addLocation();
-    });
-    btnSaveLocation.addEventListener('touchend', function(e){
-      showToast('👆 touchend ตรวจพบ', 'info');
-    });
-  }
-
-  var btnAddNext = document.getElementById('btnAddNext');
-  if (btnAddNext) btnAddNext.addEventListener('click', function(){ showFormView(); });
-
-  var btnDoneSuccess = document.getElementById('btnDoneSuccess');
-  if (btnDoneSuccess) btnDoneSuccess.addEventListener('click', function(){ showListView(); });
-
-  var photoPreview = document.getElementById('photoPreview');
-  if (photoPreview) photoPreview.addEventListener('click', openPhotoChoice);
-
-  var photoInputCamera = document.getElementById('photoInputCamera');
-  if (photoInputCamera) photoInputCamera.addEventListener('change', function(){ handlePhoto(this); });
-
-  var photoInputGallery = document.getElementById('photoInputGallery');
-  if (photoInputGallery) photoInputGallery.addEventListener('change', function(){ handlePhoto(this); });
-}
-
 function _chkIcon(done) {
   return done
     ? '<span style="color:var(--success);font-size:16px;">✅</span>'
