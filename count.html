@@ -943,9 +943,6 @@ function showListView() {
   viewForm.hidden     = true;
   viewSuccess.hidden  = true;
 
-  // Scroll ขึ้นด้านบนบน mobile
-  window.scrollTo({ top: 0, behavior: 'smooth' });
-
   updateSubmitCard();
 }
 
@@ -1016,18 +1013,13 @@ function showFormView(editIdx) {
   viewSuccess.hidden  = true;
 
   _updateLiveTotal();
-  // Scroll to form บน mobile
-  window.scrollTo({ top: 0, behavior: 'smooth' });
-  var formEl = document.getElementById('viewForm');
-  if (formEl) formEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
-  if (!isEdit) setTimeout(function(){ sel.focus(); }, 300);
+  if (!isEdit) sel.focus();
 }
 
 function showSuccessView(saved) {
   _formOpen    = false;
   _formSuccess = true;
   _editingIdx  = null;
-  _lastSaved   = saved;
 
   var viewList    = document.getElementById('viewList');
   var viewForm    = document.getElementById('viewForm');
@@ -1047,11 +1039,6 @@ function showSuccessView(saved) {
   viewList.hidden    = true;
   viewForm.hidden     = true;
   viewSuccess.hidden  = false;
-
-  // Scroll ขึ้นด้านบนบน mobile
-  window.scrollTo({ top: 0, behavior: 'smooth' });
-  var step2 = document.getElementById('step2Card');
-  if (step2) step2.scrollIntoView({ behavior: 'smooth', block: 'start' });
 
   updateSubmitCard();
 }
