@@ -307,13 +307,13 @@ td.brs-c   {color:#1a1612;}
   <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r);width:100%;max-width:320px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.15);">
     <div style="padding:14px 18px;border-bottom:1px solid var(--border);background:var(--surface2);font-size:13px;font-weight:600;">📷 เพิ่มรูป Location</div>
     <div style="padding:12px;display:flex;flex-direction:column;gap:8px;">
-      <button onclick="document.getElementById('photoInputCamera').click();closePhotoChoice();"
-        style="background:var(--accent-bg);border:1.5px solid var(--border2);border-radius:var(--rs);padding:14px;font-family:var(--font);font-size:14px;font-weight:600;cursor:pointer;color:var(--text);display:flex;align-items:center;gap:10px;transition:all .15s;"
+      <button onclick="closePhotoChoice();document.getElementById('photoInputCamera').click();"
+        style="background:var(--accent-bg);border:1.5px solid var(--border2);border-radius:var(--rs);padding:14px;font-family:var(--font);font-size:14px;font-weight:600;cursor:pointer;color:var(--text);display:flex;align-items:center;gap:10px;transition:all .15s;min-height:44px;touch-action:manipulation;"
         onmouseenter="this.style.borderColor='var(--accent)'" onmouseleave="this.style.borderColor='var(--border2)'">
         <span style="font-size:22px;">📸</span> ถ่ายรูปด้วยกล้อง
       </button>
-      <button onclick="document.getElementById('photoInputGallery').click();closePhotoChoice();"
-        style="background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--rs);padding:14px;font-family:var(--font);font-size:14px;font-weight:600;cursor:pointer;color:var(--text);display:flex;align-items:center;gap:10px;transition:all .15s;"
+      <button onclick="closePhotoChoice();document.getElementById('photoInputGallery').click();"
+        style="background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--rs);padding:14px;font-family:var(--font);font-size:14px;font-weight:600;cursor:pointer;color:var(--text);display:flex;align-items:center;gap:10px;transition:all .15s;min-height:44px;touch-action:manipulation;"
         onmouseenter="this.style.borderColor='var(--accent)'" onmouseleave="this.style.borderColor='var(--border)'">
         <span style="font-size:22px;">🖼️</span> เลือกจากอัลบั้ม
       </button>
@@ -976,6 +976,28 @@ function cancelEditMode() {
   _setFormMode();
   _clearForm();
   refreshLocList();
+}
+
+function openPhotoChoice() {
+  var modal = document.getElementById('photoChoiceModal');
+  if (modal) modal.classList.add('open');
+}
+
+function closePhotoChoice() {
+  var modal = document.getElementById('photoChoiceModal');
+  if (modal) modal.classList.remove('open');
+}
+
+function handlePhoto(input) {
+  if (!input.files || !input.files.length) return;
+  var reader = new FileReader();
+  reader.onload = function(e) {
+    var pp = document.getElementById('photoPreview');
+    if (!pp) return;
+    pp.innerHTML = '<img src="'+e.target.result+'" style="width:100%;height:100%;object-fit:cover;">';
+    pp.dataset.photo = e.target.result;
+  };
+  reader.readAsDataURL(input.files[0]);
 }
 
 function _showFormMsg(msg, isError) {
