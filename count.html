@@ -392,7 +392,22 @@ function fetchBookBalance(site) {
 
 // ── Auto-save helper ─────────────────────────────────────
 function saveProgress() {
-  localStorage.setItem('stockCountLocations', JSON.stringify(locations));
+  try {
+    // ── ตัด photo base64 ออกก่อน save ลง localStorage ──
+    // รูปถ่ายจากกล้องมือถือมีขนาดหลาย MB ต่อรูป ถ้าเก็บไว้ใน
+    // localStorage ตรงๆ จะเกิน quota (iOS Safari ~5MB) ทำให้
+    // setItem throw error และ "ค้าง" กลางทาง (refreshLocList ไม่ถูกเรียก)
+    var slim = locations.map(function(l) {
+      var copy = JSON.parse(JSON.stringify(l));
+      if (copy.photo) copy.photo = '__HAS_PHOTO__'; // เก็บแค่ flag ไม่เก็บข้อมูลจริง
+      return copy;
+    });
+    localStorage.setItem('stockCountLocations', JSON.stringify(slim));
+  } catch(e) {
+    console.warn('saveProgress failed (quota exceeded?):', e.message);
+    // ไม่ throw ต่อ — ให้ flow หลักทำงานต่อได้แม้ save ไม่สำเร็จ
+    showToast('⚠️ บันทึกสำรองไม่สำเร็จ (พื้นที่เก็บข้อมูลเต็ม) แต่ข้อมูลในหน้านี้ยังอยู่', 'error');
+  }
 }
 
 function loadProgress() {
@@ -908,12 +923,22 @@ function refreshLocList() {
     label.textContent = 'รายการที่บันทึกแล้ว ('+locations.length+')';
     label.style.display = locations.length ? '' : 'none';
   }
+  // ── Force repaint บน iOS Safari ──
+  // iOS Safari บางเวอร์ชันไม่ repaint innerHTML ที่เปลี่ยนถ้า element
+  // อยู่นอก viewport หรือ keyboard บังอยู่ ต้อง force reflow ด้วยมือ
+  c.style.display = 'none';
+  void c.offsetHeight; // trigger reflow
+  c.style.display = '';
 }
 
 // ── เคลียร์ฟอร์มกลับเป็นค่าว่าง — ใช้ตอนบันทึกสำเร็จหรือกด "เพิ่มใหม่" ──
 function _clearForm() {
   var sel = document.getElementById('selLocation');
-  if (sel) { sel.value = ''; sel.style.borderColor = ''; }
+  if (sel) {
+    sel.blur(); // ปิด keyboard ก่อน — ลด race condition กับ iOS repaint
+    sel.value = '';
+    sel.style.borderColor = '';
+  }
   document.querySelectorAll('#formBox .status-input').forEach(function(inp){
     inp.value = '';
     inp.classList.remove('has-val');
@@ -1033,6 +1058,7 @@ function addLocation() {
   if (_editingIdx !== null) {
     locations[_editingIdx] = loc;
     saveProgress();
+    refreshLocList();
     _showFormMsg('✅ บันทึกการแก้ไข "'+locName+'" แล้ว', false);
     _editingIdx = null;
     _setFormMode();
@@ -1040,11 +1066,11 @@ function addLocation() {
   } else {
     locations.push(loc);
     saveProgress();
+    refreshLocList();
     _showFormMsg('✅ บันทึก "'+locName+'" แล้ว — กรอก Location ถัดไปได้เลย', false);
     _clearForm();
   }
 
-  refreshLocList();
   updateSubmitCard();
 
   // เลื่อนลงไปให้เห็น location ที่เพิ่งบันทึก (อยู่ล่างสุดของ list)
