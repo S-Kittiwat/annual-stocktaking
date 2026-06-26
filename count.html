@@ -1508,20 +1508,27 @@ function printDoc() {
   '<\/script>'+
   '</body></html>';
 
-  // ── Download HTML file แทน popup ──
-  // user นำไปเปิดในคอมแล้วพิมพ์เอง → layout ถูกต้องทุก device
-  var blob = new Blob([html], { type: 'text/html;charset=utf-8' });
-  var url  = URL.createObjectURL(blob);
-  var a    = document.createElement('a');
-  var site   = (session && session.site ? session.site.replace(/[/\\:*?"<>|]/g,'_') : 'report');
-  var docNo  = DOC_NUMBER.replace(/[/\\:*?"<>|]/g,'_');
-  a.download = docNo + '_' + site + '.html';
-  document.body.appendChild(a);
-  a.click();
-  document.body.removeChild(a);
-  setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+  // ── Download HTML file ──
+  var site   = (session && session.site ? session.site.replace(/[:\/\\*?"<>|]/g,'_') : 'report');
+  var docNo  = DOC_NUMBER.replace(/[:\/\\*?"<>|]/g,'_');
+  var fname  = docNo + '_' + site + '.html';
+  var isIOS  = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
 
-  showToast('📥 ดาวน์โหลดเสร็จแล้ว — เปิดไฟล์ในคอมแล้วกด 🖨️ พิมพ์เอกสาร', 'success');
+  if (isIOS) {
+    var win = window.open('data:text/html;charset=utf-8,'+encodeURIComponent(html), '_blank');
+    if (!win) window.location.href = 'data:text/html;charset=utf-8,'+encodeURIComponent(html);
+    showToast('📥 กด Share → Save to Files แล้วเปิดในคอมเพื่อพิมพ์', 'info');
+  } else {
+    var blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+    var url  = URL.createObjectURL(blob);
+    var a    = document.createElement('a');
+    a.href = url; a.download = fname;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+    showToast('📥 ดาวน์โหลดเสร็จ — เปิดไฟล์ในคอมแล้วกด 🖨️ พิมพ์เอกสาร', 'success');
+  }
   _printed = true;
   updateSubmitCard();
 }
