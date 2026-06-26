@@ -183,6 +183,21 @@ textarea.input{resize:vertical;min-height:84px;font-size:13.5px;line-height:1.5;
 .spinner{width:15px;height:15px;border:2px solid rgba(56,189,248,.25);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;display:inline-block;vertical-align:middle;}
 @keyframes spin{to{transform:rotate(360deg);}}
 
+/* reconciliation (Actual vs System) */
+.recon-wrap table.recon{min-width:920px;}
+table.recon th,table.recon td{text-align:right;white-space:nowrap;font-size:11.5px;padding:7px 10px;}
+table.recon thead th{text-align:center;}
+table.recon th:first-child,table.recon td:first-child{text-align:left;position:sticky;left:0;background:var(--surface);z-index:2;}
+table.recon thead th:first-child{background:var(--surface2);}
+table.recon .grp{border-left:1px solid var(--border);}
+.num{font-family:var(--mono);}
+.diff-neg{background:rgba(248,113,113,.16);color:var(--danger);font-weight:600;}
+.diff-pos{background:rgba(52,211,153,.16);color:var(--success);font-weight:600;}
+.diff-zero{color:var(--muted2);}
+.recon-sum{border-left:1px solid var(--border);}
+.recon-foot td{background:var(--surface2);font-weight:700;border-top:2px solid var(--border);}
+.recon-foot td:first-child{background:var(--surface2);}
+
 @media(max-width:640px){
   .wrap{padding:16px 14px 56px;}
   .stat-grid{grid-template-columns:repeat(2,1fr);}
@@ -265,6 +280,12 @@ textarea.input{resize:vertical;min-height:84px;font-size:13.5px;line-height:1.5;
         <div class="stat-card"><div class="stat-num danger" id="statRejected">—</div><div class="stat-lbl">❌ ตีกลับ</div></div>
         <div class="stat-card"><div class="stat-num accent" id="statSites">—</div><div class="stat-lbl">🏭 Site ทั้งหมด</div></div>
       </div>
+
+      <div class="eyebrow">สถานะราย Site <span class="ehint" id="siteCountHint"></span></div>
+      <div class="table-wrap" id="siteStatusTable"><div class="empty"><span class="spinner"></span></div></div>
+
+      <div class="eyebrow">สรุปกระทบยอด — Actual vs System <span class="ehint">— ใช้เมื่อทุก Site นับเสร็จ · Diff = Actual − System</span></div>
+      <div class="table-wrap recon-wrap" id="reconTable"><div class="empty">ยังไม่มีข้อมูลการนับ</div></div>
     </div>
 
     <!-- ─── Sites ─── -->
@@ -360,6 +381,10 @@ textarea.input{resize:vertical;min-height:84px;font-size:13.5px;line-height:1.5;
    API CONTRACT (all POST, body = JSON, Content-Type text/plain):
      {action:'verifyPin', pin}                                  -> {ok}
      {action:'getAdminData'}                                    -> {round, sites, books, subs}
+       // sub = {count_id, round_id, site_id, site_name, counter_name, submitted_at,
+       //        pdf_url, status, review_comment, actual:{loscam,chep,brs,swwi}}
+       //   actual = ยอดที่นับได้จริงต่อ provider (count.html ส่งมาตอน submit) สำหรับตารางกระทบยอด
+       //   System ในตารางกระทบยอด = book outstanding (onhand + transit_out)
      {action:'saveSite', site_id?, site_name}                  -> {ok, site}
      {action:'toggleSite', site_id, is_active}                  -> {ok}
      {action:'deleteSite', site_id}                             -> {ok}
@@ -389,6 +414,13 @@ var STATUSES = [
   {key:'transit_in',  label:'ระหว่างโอนเข้า'},
   {key:'damaged',     label:'ชำรุดเสียหาย'},
   {key:'lost',        label:'สูญหาย'}
+];
+// คอลัมน์ตารางกระทบยอด — เรียงตามใบสรุป (พลาสติกก่อน แล้วไม้)
+var RECON_COLS = [
+  {key:'brs',    label:'พาเลทพลาสติก'},
+  {key:'swwi',   label:'พาเลทพลาสติก (SWWI)'},
+  {key:'loscam', label:'พาเลทไม้ล้อสแคม'},
+  {key:'chep',   label:'พาเลทไม้ Chep'}
 ];
 
 var S = { round:null, sites:[], books:{}, subs:[], tab:'dashboard', bookSite:'', rv:null };
@@ -448,15 +480,19 @@ function markSynced(){
 }
 
 /* ── Render: everything ──────────────────────────────── */
-function renderAll(){ renderDashboard(); renderSites(); renderBookSelect(); renderReview(); }
+function renderAll(){ renderDashboard(); renderSiteStatus(); renderRecon(); renderSites(); renderBookSelect(); renderReview(); }
 
 function curSubs(){ var rid = S.round ? S.round.round_id : null; return S.subs.filter(function(x){ return !rid || x.round_id===rid; }); }
 function activeSites(){ return S.sites.filter(function(s){ return s.is_active; }); }
-function siteState(site_id){
+function latestSub(site_id){
   var rows = curSubs().filter(function(x){ return x.site_id===site_id; });
-  if(!rows.length) return 'idle';
+  if(!rows.length) return null;
   rows.sort(function(a,b){ return (b.submitted_at||'').localeCompare(a.submitted_at||''); });
-  return rows[0].status; // pending | approved | rejected
+  return rows[0];
+}
+function siteState(site_id){
+  var s = latestSub(site_id);
+  return s ? s.status : 'idle'; // idle | pending | approved | rejected
 }
 
 function renderDashboard(){
@@ -488,6 +524,100 @@ function renderDashboard(){
   var badge = document.getElementById('reviewBadge');
   badge.textContent = pending;
   badge.className = 'tab-count' + (pending ? '' : ' zero');
+}
+
+/* ── Render: Site status (control tower) ─────────────── */
+function renderSiteStatus(){
+  var act = activeSites();
+  document.getElementById('siteCountHint').textContent = '— ทั้งหมด ' + act.length + ' ที่';
+  var el = document.getElementById('siteStatusTable');
+  if(!act.length){ el.innerHTML = '<div class="empty">ยังไม่มี Site — เพิ่มในแท็บ Site</div>'; return; }
+  var stMap = {
+    idle:'<span class="status-badge sb-idle">— ยังไม่นับ</span>',
+    pending:'<span class="status-badge sb-pending">⏳ รออนุมัติ</span>',
+    approved:'<span class="status-badge sb-approved">✅ อนุมัติ/ปิดงาน</span>',
+    rejected:'<span class="status-badge sb-rejected">↩ ตีกลับ</span>'
+  };
+  var rows = act.map(function(s,i){
+    var hasBook = !!S.books[s.site_id];
+    var sub = latestSub(s.site_id);
+    var bookTag = hasBook
+      ? '<span class="status-badge sb-approved">✓ ใส่แล้ว</span>'
+      : '<span class="status-badge sb-idle">— ยังไม่ใส่</span>';
+    var subTag = sub
+      ? '<span class="status-badge sb-approved">✓ ส่งแล้ว</span>'
+      : '<span class="status-badge sb-idle">— ยังไม่ส่ง</span>';
+    return '<tr>'
+      +'<td class="num" style="color:var(--muted);">'+(i+1)+'</td>'
+      +'<td style="font-weight:600;">'+esc(s.site_name)+'</td>'
+      +'<td>'+bookTag+'</td>'
+      +'<td>'+subTag+'</td>'
+      +'<td>'+stMap[siteState(s.site_id)]+'</td>'
+    +'</tr>';
+  }).join('');
+  el.innerHTML = '<table><thead><tr><th>#</th><th>Site</th><th>Book Balance</th><th>ส่งข้อมูล</th><th>สถานะปิดงาน</th></tr></thead><tbody>'+rows+'</tbody></table>';
+}
+
+/* ── Render: Actual vs System reconciliation ─────────── */
+// System = ยอดในระบบ (book) = คงเหลือ + ระหว่างโอนออก  (ยอดคงค้างในบัญชีเช่า)
+function systemOf(site_id, prov){
+  var b = S.books[site_id];
+  if(!b || !b[prov]) return 0;
+  return (b[prov].onhand||0) + (b[prov].transit_out||0);
+}
+// Actual = ยอดที่นับได้จริงต่อ provider (count.html ส่งมาในฟิลด์ actual{} ตอน submit)
+function actualOf(site_id, prov){
+  var s = latestSub(site_id);
+  if(!s || !s.actual || s.actual[prov]==null) return null;
+  return s.actual[prov];
+}
+function diffCell(d, isSum){
+  var cls = d<0 ? 'diff-neg' : d>0 ? 'diff-pos' : 'diff-zero';
+  var txt = d===0 ? '0' : (d>0?'+':'') + d.toLocaleString();
+  return '<td class="num '+cls+(isSum?' recon-sum':'')+'">'+txt+'</td>';
+}
+function renderRecon(){
+  var act = activeSites();
+  var el = document.getElementById('reconTable');
+  if(!act.length){ el.innerHTML = '<div class="empty">ยังไม่มี Site</div>'; return; }
+  var anyData = curSubs().some(function(x){ return x.actual; });
+
+  var gA={}, gS={}, gD={}, grand=0;
+  RECON_COLS.forEach(function(c){ gA[c.key]=0; gS[c.key]=0; gD[c.key]=0; });
+
+  var body = act.map(function(s){
+    var cells='', siteSum=0;
+    RECON_COLS.forEach(function(c){
+      var a = actualOf(s.site_id, c.key); var aShown = (a==null)?0:a;
+      var sys = systemOf(s.site_id, c.key);
+      var d = aShown - sys;
+      gA[c.key]+=aShown; gS[c.key]+=sys; gD[c.key]+=d; siteSum+=d;
+      cells += '<td class="num grp">'+aShown.toLocaleString()+'</td>'
+             + '<td class="num">'+sys.toLocaleString()+'</td>'
+             + diffCell(d);
+    });
+    grand += siteSum;
+    return '<tr><td style="font-weight:600;">'+esc(s.site_name)+'</td>'+cells+diffCell(siteSum,true)+'</tr>';
+  }).join('');
+
+  var h1 = '<tr><th rowspan="2">Location Name</th>'
+    + RECON_COLS.map(function(c){ return '<th colspan="3" class="grp">'+esc(c.label)+'</th>'; }).join('')
+    + '<th rowspan="2">Sum total</th></tr>';
+  var h2 = '<tr>' + RECON_COLS.map(function(){ return '<th class="grp">Actual</th><th>System</th><th>Diff</th>'; }).join('') + '</tr>';
+
+  var fCells='', fSum=0;
+  RECON_COLS.forEach(function(c){
+    fCells += '<td class="num grp">'+gA[c.key].toLocaleString()+'</td>'
+            + '<td class="num">'+gS[c.key].toLocaleString()+'</td>'
+            + diffCell(gD[c.key]);
+    fSum += gD[c.key];
+  });
+  var foot = '<tr class="recon-foot"><td>Grand Total</td>'+fCells+diffCell(fSum,true)+'</tr>';
+
+  el.innerHTML = '<table class="recon"><thead>'+h1+h2+'</thead><tbody>'+body+'</tbody><tfoot>'+foot+'</tfoot></table>';
+  if(!anyData){
+    el.insertAdjacentHTML('afterbegin','<div style="padding:9px 14px;font-size:11.5px;color:var(--muted);border-bottom:1px solid var(--border);">ℹ️ ยังไม่มี Site ที่ส่งผลการนับ — ตารางจะเติมค่าเมื่อเริ่มมีข้อมูลเข้ามา</div>');
+  }
 }
 
 /* ── Render: Sites ───────────────────────────────────── */
@@ -737,11 +867,17 @@ function seedDemo(){
     {site_id:'S3', site_name:'RDC-ขอนแก่น',  is_active:true},
     {site_id:'S4', site_name:'คลังลำพูน',     is_active:false}
   ];
-  S.books={ S3:{ loscam:{onhand:30,transit_out:0,transit_in:2,damaged:1,lost:0}, chep:{onhand:45,transit_out:0,transit_in:0,damaged:0,lost:0}, brs:{onhand:118,transit_out:5,transit_in:0,damaged:3,lost:1}, swwi:{onhand:60,transit_out:0,transit_in:0,damaged:0,lost:0} } };
+  // System = book outstanding (onhand + transit_out)
+  S.books={
+    S1:{ brs:{onhand:3981,transit_out:0,transit_in:0,damaged:0,lost:0}, swwi:{onhand:1449,transit_out:0,transit_in:0,damaged:0,lost:0}, loscam:{onhand:46004,transit_out:0,transit_in:0,damaged:0,lost:0}, chep:{onhand:8619,transit_out:0,transit_in:0,damaged:0,lost:0} },
+    S2:{ brs:{onhand:4122,transit_out:0,transit_in:0,damaged:0,lost:0}, swwi:{onhand:0,transit_out:0,transit_in:0,damaged:0,lost:0}, loscam:{onhand:5337,transit_out:0,transit_in:0,damaged:0,lost:0}, chep:{onhand:0,transit_out:0,transit_in:0,damaged:0,lost:0} },
+    S3:{ brs:{onhand:118,transit_out:5,transit_in:0,damaged:3,lost:1}, swwi:{onhand:60,transit_out:0,transit_in:0,damaged:0,lost:0}, loscam:{onhand:30,transit_out:0,transit_in:2,damaged:1,lost:0}, chep:{onhand:45,transit_out:0,transit_in:0,damaged:0,lost:0} }
+  };
+  // Actual = counted per provider (จาก count.html)
   S.subs=[
-    {count_id:'BRS-SC-2569-001', round_id:'R2569', site_id:'S1', site_name:'NDC-วังน้อย', counter_name:'สมชาย ใจดี', submitted_at:'2026-06-10T08:30:00Z', pdf_url:'#', status:'pending', review_comment:''},
-    {count_id:'BRS-SC-2569-002', round_id:'R2569', site_id:'S2', site_name:'คลังชลบุรี', counter_name:'สมหญิง มีสุข', submitted_at:'2026-06-10T09:15:00Z', pdf_url:'#', status:'pending', review_comment:''},
-    {count_id:'BRS-SC-2569-099', round_id:'R2569', site_id:'S3', site_name:'RDC-ขอนแก่น', counter_name:'อรทัย รักดี', submitted_at:'2026-06-09T14:00:00Z', pdf_url:'#', status:'approved', review_comment:'ตรวจเรียบร้อย เซ็นครบ'}
+    {count_id:'BRS-SC-2569-001', round_id:'R2569', site_id:'S1', site_name:'NDC-วังน้อย', counter_name:'สมชาย ใจดี', submitted_at:'2026-06-10T08:30:00Z', pdf_url:'#', status:'pending', review_comment:'', actual:{brs:3852,swwi:1449,loscam:47277,chep:7845}},
+    {count_id:'BRS-SC-2569-002', round_id:'R2569', site_id:'S2', site_name:'คลังชลบุรี', counter_name:'สมหญิง มีสุข', submitted_at:'2026-06-10T09:15:00Z', pdf_url:'#', status:'pending', review_comment:'', actual:{brs:4100,swwi:0,loscam:5337,chep:0}},
+    {count_id:'BRS-SC-2569-099', round_id:'R2569', site_id:'S3', site_name:'RDC-ขอนแก่น', counter_name:'อรทัย รักดี', submitted_at:'2026-06-09T14:00:00Z', pdf_url:'#', status:'approved', review_comment:'ตรวจเรียบร้อย เซ็นครบ', actual:{brs:120,swwi:60,loscam:30,chep:45}}
   ];
 }
 </script>
