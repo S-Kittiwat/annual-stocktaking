@@ -1311,11 +1311,8 @@ function printDoc() {
 
   // ── Logo HTML ──
   var logoHtml = LOGO_BASE64
-    ? '<img src="'+LOGO_BASE64+'" style="height:40px;max-width:160px;object-fit:contain;">'
-    : '<div style="display:flex;flex-direction:column;line-height:1.1;">'+
-        '<span style="font-size:18pt;font-weight:900;letter-spacing:-1px;">BRS</span>'+
-        '<span style="font-size:7pt;color:#555;">BOON RAWD SUPPLY CHAIN</span>'+
-      '</div>';
+    ? '<img src="'+LOGO_BASE64+'" style="width:100%;max-width:38mm;height:auto;object-fit:contain;">'
+    : '<div style="font-size:16pt;font-weight:900;letter-spacing:-1px;line-height:1;">BRS<br><span style="font-size:7pt;font-weight:400;color:#555;letter-spacing:0;">BOON RAWD SUPPLY CHAIN</span></div>';
 
   var html = '<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8">'+
   '<title>รายงานผลการตรวจนับสต็อกพาเลท '+DOC_YEAR+'</title>'+
@@ -1326,9 +1323,10 @@ function printDoc() {
   'body{font-family:"TH Sarabun New","Sarabun",sans-serif;font-size:11pt;color:#000;margin:0;padding:0;}'+
   '.page{width:100%;}'+
   // Header
-  '.hdr{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:2mm;}'+
-  '.hdr-meta{font-size:10.5pt;line-height:1.6;}'+
-  '.hdr-meta td:first-child{font-weight:700;white-space:nowrap;padding-right:4px;vertical-align:top;}'+
+  '.hdr{margin-bottom:3mm;}'+
+  '.hdr-logo{margin-bottom:4mm;}'+
+  '.hdr-meta{width:100%;font-size:10.5pt;line-height:1.7;border-collapse:collapse;}'+
+  '.hdr-meta td.lbl{font-weight:700;white-space:nowrap;padding-right:8px;vertical-align:top;width:22mm;padding-left:8mm;}'+
   '.hdr-meta td{vertical-align:top;}'+
   'hr{border:none;border-top:1.5px solid #000;margin:2mm 0;}'+
   '.intro{font-size:10pt;margin:1.5mm 0 2mm;line-height:1.5;}'+
@@ -1355,16 +1353,27 @@ function printDoc() {
 
   // ── Header ──
   '<div class="hdr">'+
-    '<div>'+logoHtml+'</div>'+
+    // Logo บนซ้าย
+    '<div class="hdr-logo">'+logoHtml+'</div>'+
+    // Meta table ด้านล่าง — เลขที่ซ้าย วันที่ขวา
     '<table class="hdr-meta"><tbody>'+
-      '<tr><td>เลขที่</td><td>'+DOC_NUMBER+'</td><td style="padding-left:6mm;">วันที่</td><td>'+DOC_DATE+'</td></tr>'+
-      '<tr><td>เรื่อง</td><td colspan="3">รายงานผลการตรวจนับสต็อกพาเลทไม้และพาเลทพลาสติก ประจำปี '+DOC_YEAR+'</td></tr>'+
-      '<tr><td>เรียน</td><td colspan="3">ส่วนงาน Pallet and Operation Support บจก. บุญรอด ซัพพลายเชน</td></tr>'+
-      '<tr><td style="vertical-align:top;">เอกสารแนบ</td><td colspan="3">'+
-        '1. ภาพการลงพื้นที่ตรวจนับ<br>'+
-        '2. รูปภาพหน้าแรกของระบบควบคุมพาเลท<br>'+
-        '3. รายงานสรุป ECD ยังไม่ได้รับระหว่างทาง<br>'+
-        '4. เอกสารแนบใบแจ้งหนี้</td></tr>'+
+      '<tr>'+
+        '<td class="lbl">เลขที่</td>'+
+        '<td>'+DOC_NUMBER+'</td>'+
+        '<td style="font-weight:700;white-space:nowrap;padding-right:8px;text-align:right;width:12mm;">วันที่</td>'+
+        '<td style="text-align:left;width:40mm;">'+DOC_DATE+'</td>'+
+      '</tr>'+
+      '<tr><td class="lbl">เรื่อง</td><td colspan="3">รายงานผลการตรวจนับสต็อกพาเลทไม้และพาเลทพลาสติก ประจำปี '+DOC_YEAR+'</td></tr>'+
+      '<tr><td class="lbl">เรียน</td><td colspan="3">ส่วนงาน Pallet and Operation Support บจก. บุญรอด ซัพพลายเชน</td></tr>'+
+      '<tr>'+
+        '<td class="lbl" style="vertical-align:top;">เอกสารแนบ</td>'+
+        '<td colspan="3">'+
+          '1. ภาพการลงพื้นที่ตรวจนับ<br>'+
+          '2. รูปภาพหน้าแรกของระบบควบคุมพาเลท<br>'+
+          '3. รายงานสรุป ECD ยังไม่ได้รับระหว่างทาง<br>'+
+          '4. เอกสารแนบใบแจ้งหนี้'+
+        '</td>'+
+      '</tr>'+
     '</tbody></table>'+
   '</div>'+
   '<hr>'+
