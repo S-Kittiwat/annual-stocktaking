@@ -452,12 +452,13 @@ function loadConfig() {
       render();
     })
     .catch(function() {
-      // fallback demo
-      roundInfo = { round_name:'นับสต็อก 2569', is_open:true };
-      siteList  = ['NDC-วังน้อย','คลังชลบุรี','RDC-ขอนแก่น','คลังลาดหลุมแก้ว','คลังลำไทร'];
-      siteObjs  = siteList.map(function(n){ return { site_id:'', site_name:n }; });
-      locList   = ['Zone A','Zone B','Zone C','หน้าโรงงาน','ลานจอดรถ','ใน Rack','นอก Rack'];
-      render();
+      // เชื่อม backend ไม่ได้ — ไม่ใส่ข้อมูลปลอม แสดงสถานะ error ตามจริง
+      roundInfo = { round_name:'', is_open:false };
+      siteList  = [];
+      siteObjs  = [];
+      locList   = [];
+      render(); // จะขึ้น banner "ยังไม่มีรอบการนับ — ติดต่อ Admin"
+      showToast('❌ เชื่อมต่อ backend ไม่ได้ — ตรวจสอบ stockcount_config.js (API_URL)', 'error');
     });
 }
 
