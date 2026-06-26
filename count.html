@@ -382,12 +382,13 @@ function fetchBookBalance(site) {
   fetch(API_URL + '?action=getBookBalance&site=' + encodeURIComponent(site))
     .then(function(r){ return r.json(); })
     .then(function(data) {
+      siteSubmission = data.submission || null; // ส่งแล้ว/ตีกลับ/ล็อก
       if (data.status === 'ok' && data.book) {
         bookBalance = data.book;
-        render(); // re-render เพื่ออัป comparison
       }
+      render(); // re-render เพื่ออัป comparison + แบนเนอร์สถานะ
     })
-    .catch(function(){}); // ถ้าไม่มีข้อมูลก็แสดง pending
+    .catch(function(){ render(); }); // ถ้าไม่มีข้อมูลก็แสดง pending
 }
 
 // ── Auto-save helper ─────────────────────────────────────
@@ -417,8 +418,10 @@ function loadProgress() {
   } catch(e) { locations = []; }
 }
 var siteList  = [];
+var siteObjs  = [];    // [{ site_id, site_name }] จาก backend — ใช้ map ชื่อ→id ตอน submit
+var siteSubmission = null; // ใบส่งผลของ site ที่เลือก (null / {count_id,revision,status,review_comment})
 var locList   = [];
-var roundInfo = null;  // { round_name, is_open }
+var roundInfo = null;  // { round_id, round_name, is_open, year }
 var toastTimer;
 
 // ── Init ──────────────────────────────────────────────────
@@ -429,6 +432,8 @@ window.onload = function() {
   }
   if (session) loadProgress(); // restore locations ที่ค้างไว้
   loadConfig();
+  // ดึง book + สถานะใบส่ง ของ site ที่ค้างไว้ (ให้ banner ล็อก/ตีกลับโชว์หลัง reload)
+  if (session && session.site) fetchBookBalance(session.site);
 };
 
 function loadConfig() {
@@ -436,7 +441,8 @@ function loadConfig() {
     .then(function(r){ return r.json(); })
     .then(function(data) {
       roundInfo = data.round || { round_name:'นับสต็อก', is_open:true };
-      siteList  = data.sites    || [];
+      siteList  = data.sites     || [];
+      siteObjs  = data.site_objs || siteList.map(function(n){ return { site_id:'', site_name:n }; });
       locList   = data.locations|| [];
       // โหลด book balance ถ้ามี session อยู่แล้ว
       if (session && data.book_balances) {
@@ -449,9 +455,65 @@ function loadConfig() {
       // fallback demo
       roundInfo = { round_name:'นับสต็อก 2569', is_open:true };
       siteList  = ['NDC-วังน้อย','คลังชลบุรี','RDC-ขอนแก่น','คลังลาดหลุมแก้ว','คลังลำไทร'];
+      siteObjs  = siteList.map(function(n){ return { site_id:'', site_name:n }; });
       locList   = ['Zone A','Zone B','Zone C','หน้าโรงงาน','ลานจอดรถ','ใน Rack','นอก Rack'];
       render();
     });
+}
+
+// map ชื่อ site → site_id (จาก backend) เพื่อส่งตอน submit
+function _siteIdByName(name) {
+  for (var i = 0; i < siteObjs.length; i++) {
+    if (String(siteObjs[i].site_name).trim() === String(name||'').trim()) return siteObjs[i].site_id || '';
+  }
+  return '';
+}
+
+// ประเมินสถานะใบส่งผลของ site ที่เลือก → คุมแบนเนอร์ + ปุ่ม Submit
+//   approved → ล็อก (ต้องให้ Admin เปิดแก้ไขก่อน)
+//   rejected / reopened → แก้แล้วส่งใหม่ได้ (เป็นฉบับแก้ไขครั้งถัดไป)
+//   pending → ส่งแล้ว รออนุมัติ (ส่งซ้ำจะทับฉบับเดิม)
+function _submitGate() {
+  var s = siteSubmission;
+  if (!s || !s.status) return { banner:'', bannerStyle:'', locked:false, isRevision:false };
+  var st = String(s.status);
+  if (st === 'approved') {
+    return {
+      locked:true, isRevision:false,
+      bannerStyle:'background:rgba(220,38,38,.08);border:1px solid var(--danger);color:var(--danger);',
+      banner:'🔒 Site นี้ส่งผลและ <strong>ได้รับอนุมัติแล้ว</strong> (เลขที่ '+esc(s.count_id)+' · ฉบับที่ '+s.revision+')<br>'
+            +'ต้องให้ Admin กด “เปิดแก้ไข” ก่อน จึงจะส่งใหม่ได้'
+    };
+  }
+  if (st === 'rejected' || st === 'reopened') {
+    var head = (st==='rejected') ? '↩️ ใบนี้ถูก <strong>ตีกลับ</strong>' : '🔓 Admin <strong>เปิดให้แก้ไข</strong>';
+    var cm = s.review_comment ? '<br>หมายเหตุจาก Admin: <span style="font-weight:700;">'+esc(s.review_comment)+'</span>' : '';
+    return {
+      locked:false, isRevision:true,
+      bannerStyle:'background:rgba(245,158,11,.12);border:1px solid var(--warn);color:#92400e;',
+      banner: head+' (เลขที่ '+esc(s.count_id)+')'+cm+'<br>แก้ไขแล้วส่งใหม่ได้ — จะเป็น <strong>ฉบับแก้ไขครั้งที่ '+(s.revision+1)+'</strong>'
+    };
+  }
+  // pending
+  return {
+    locked:false, isRevision:false,
+    bannerStyle:'background:var(--accent-bg);border:1px solid var(--border2);color:var(--text);',
+    banner:'⏳ Site นี้ <strong>ส่งผลแล้ว รออนุมัติ</strong> (เลขที่ '+esc(s.count_id)+' · ฉบับที่ '+s.revision+')<br>'
+          +'หากส่งซ้ำ ระบบจะ <strong>ทับฉบับเดิม</strong> (ฉบับที่ '+s.revision+')'
+  };
+}
+
+// เลขที่เอกสารบนใบพิมพ์ — ฉบับแก้ไขใช้ count_id เดิมเพื่อ match รูปกับ record
+function _docRef() {
+  var s = siteSubmission;
+  if (s && s.count_id) {
+    var rev = s.revision;
+    if (s.status === 'rejected' || s.status === 'reopened') rev = s.revision + 1;
+    return s.count_id + (rev > 1 ? ' (ฉบับแก้ไขครั้งที่ '+rev+')' : '');
+  }
+  // ฉบับใหม่ — server จะออกเลขจริงตอน Submit
+  var y = (roundInfo && roundInfo.year) ? roundInfo.year : '____';
+  return 'BRS-SC-' + y + '-(ออกเลขเมื่อ Submit)';
 }
 
 // ── Render ────────────────────────────────────────────────
@@ -478,6 +540,14 @@ function render() {
         + locations.reduce(function(s,l){return s+Number(l.chep||0)+Number(l.loscam||0)+Number(l.brs||0);},0)
         + ' ใบ) ถูกโหลดกลับมาแล้ว';
       content.insertBefore(banner, content.firstChild);
+    }
+    // แบนเนอร์สถานะใบส่งผล (ล็อก / ตีกลับ / รออนุมัติ) — ให้อยู่บนสุด
+    var sb = _submitGate();
+    if (sb.banner) {
+      var sbar = document.createElement('div');
+      sbar.style.cssText = 'border-radius:var(--rs);padding:12px 14px;margin-bottom:12px;font-size:13px;font-weight:600;line-height:1.5;'+sb.bannerStyle;
+      sbar.innerHTML = sb.banner;
+      content.insertBefore(sbar, content.firstChild);
     }
   }
 }
@@ -537,7 +607,8 @@ function confirmStep1() {
   var name = document.getElementById('inputName').value.trim();
   if (!site || !name) return;
   session = {
-    site  : site,
+    site    : site,
+    site_id : _siteIdByName(site),
     name  : name,
     round : roundInfo.round_name,
     names : {
@@ -551,7 +622,8 @@ function confirmStep1() {
   localStorage.setItem('stockCountSession', JSON.stringify(session));
   loadProgress();
   files = [];
-  // ดึง book balance ของ site นี้
+  siteSubmission = null;     // จะถูกเซ็ตใหม่จาก fetchBookBalance
+  // ดึง book balance + สถานะใบส่งของ site นี้
   fetchBookBalance(site);
   render();
 }
@@ -719,6 +791,19 @@ function updateSubmitCard() {
       : !_step3Seen ? 'กรุณาเปิดดูสรุปยอดในขั้นที่ 3 ก่อน'
       : !_printed   ? 'กรุณาพิมพ์เอกสารยืนยันก่อน'
       : 'กรุณา Upload รายงาน (พร้อมลายเซ็น) ก่อน Submit');
+
+  // ── คุมตามสถานะใบส่งผล ──
+  var gate = _submitGate();
+  if (gate.locked) {                       // approved = ล็อก ห้ามส่งทับ
+    if (btn) {
+      btn.disabled = true;
+      btn.innerHTML = '🔒 ล็อก — ต้องให้ Admin เปิดแก้ไขก่อน';
+    }
+    if (note) note.textContent = 'ใบนี้ได้รับอนุมัติแล้ว ส่งซ้ำไม่ได้';
+  } else if (ready && gate.isRevision) {   // ตีกลับ/เปิดแก้ไข → ส่งเป็นฉบับแก้ไข
+    if (btn) btn.innerHTML = '📤 ส่งฉบับแก้ไข (ครั้งที่ '+(siteSubmission.revision+1)+')';
+    if (note) note.textContent = 'ส่งแล้วจะเป็นฉบับแก้ไขครั้งที่ '+(siteSubmission.revision+1);
+  }
 }
 
 
@@ -1256,7 +1341,7 @@ function printDoc() {
   // LOGO_BASE64, DOC_NUMBER, DOC_DATE, DOC_YEAR จะถูก inject โดย Admin
   // ตอนนี้ใช้ค่า placeholder รอ Admin กำหนด
   var LOGO_BASE64 = (typeof PRINT_CONFIG !== 'undefined' && PRINT_CONFIG.logo)   || '';
-  var DOC_NUMBER  = (typeof PRINT_CONFIG !== 'undefined' && PRINT_CONFIG.docNo)  || 'PE____/___';
+  var DOC_NUMBER  = (typeof PRINT_CONFIG !== 'undefined' && PRINT_CONFIG.docNo)  || _docRef();
   var DOC_DATE    = (typeof PRINT_CONFIG !== 'undefined' && PRINT_CONFIG.date)   || '___________';
   var DOC_YEAR    = (typeof PRINT_CONFIG !== 'undefined' && PRINT_CONFIG.year)   || '____';
 
@@ -1512,16 +1597,16 @@ function printDoc() {
   '<\/script>'+
   '</body></html>';
 
+  // ── Upload HTML → GAS → แสดง link ──
+  var site  = (session && session.site ? session.site.replace(/[:\/\\*?"<>|]/g,'_') : 'report');
+  var docNo = DOC_NUMBER.replace(/[:\/\\*?"<>|]/g,'_');
+  var fname = docNo + '_' + site + '.html';
+
   // ── สร้าง html สำหรับ upload แยกต่างหาก (แทน logo base64 ด้วย text) ──
   var htmlUpload = html.replace(
     '<div class="hdr-logo">'+logoHtml+'</div>',
     '<div class="hdr-logo">'+logoHtmlUpload+'</div>'
   );
-
-  // ── Upload HTML → GAS → แสดง link ──
-  var site  = (session && session.site ? session.site.replace(/[:\/\\*?"<>|]/g,'_') : 'report');
-  var docNo = DOC_NUMBER.replace(/[:\/\\*?"<>|]/g,'_');
-  var fname = docNo + '_' + site + '.html';
 
   showToast('⏳ กำลังสร้างลิงก์เอกสาร...', 'info');
 
@@ -1643,24 +1728,28 @@ async function submitCount() {
   btn.innerHTML = '<span class="spinner"></span>กำลังส่ง...';
 
   try {
-    // upload files ก่อน
+    // upload ไฟล์ก่อน — ไฟล์แรก = รายงานที่เซ็นแล้ว ใช้เป็น pdf_url
     var fileUrls = [];
     for (var i = 0; i < files.length; i++) {
       var url = await uploadFile(files[i]);
       if (url) fileUrls.push(url);
     }
 
-    var countId = 'SC-' + new Date().toISOString().slice(0,10).replace(/-/g,'') + '-' + Math.floor(Math.random()*900+100);
     var tot = _calcTotals();
+    var tmpId = 'SC-' + new Date().toISOString().slice(0,10).replace(/-/g,'') + '-' + Math.floor(Math.random()*900+100);
 
     var payload = {
       action        : 'submitCount',
-      count_id      : countId,
       round         : session.round,
       site          : session.site,
+      site_id       : session.site_id || _siteIdByName(session.site),
       counter_name  : session.name,
       timestamp     : new Date().toISOString(),
       locations     : locations,
+      // ── contract ใหม่ ──
+      actual        : { loscam:tot.totLoscam, chep:tot.totChep, brs:tot.totBrs, swwi:tot.totSwwi },
+      pdf_url       : fileUrls[0] || '',
+      // ── เผื่อ backward-compat ──
       total_loscam  : tot.totLoscam,
       total_chep    : tot.totChep,
       total_brs     : tot.totBrs,
@@ -1680,7 +1769,9 @@ async function submitCount() {
     var data = await res.json();
     if (data.status !== 'ok') throw new Error(data.message || 'Error');
 
-    document.getElementById('successId').textContent = countId;
+    var newId = data.count_id || tmpId;
+    var revTxt = (data.revision && data.revision > 1) ? ' (ฉบับแก้ไขครั้งที่ '+data.revision+')' : '';
+    document.getElementById('successId').textContent = newId + revTxt;
     document.getElementById('successOverlay').classList.add('open');
   } catch(err) {
     showToast('ส่งไม่สำเร็จ: '+err.message, 'error');
