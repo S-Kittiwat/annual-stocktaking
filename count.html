@@ -1515,8 +1515,16 @@ function printDoc() {
   var isIOS  = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
 
   if (isIOS) {
-    var win = window.open('data:text/html;charset=utf-8,'+encodeURIComponent(html), '_blank');
-    if (!win) window.location.href = 'data:text/html;charset=utf-8,'+encodeURIComponent(html);
+    // iOS Safari ไม่รองรับ <a download> แต่รองรับ Blob URL เปิดใน tab ใหม่
+    // (data URL ยาวเกินไปเพราะมี base64 logo ทำให้ blank page)
+    var blobIOS = new Blob([html], { type: 'text/html;charset=utf-8' });
+    var urlIOS  = URL.createObjectURL(blobIOS);
+    var winIOS  = window.open(urlIOS, '_blank');
+    if (!winIOS) {
+      // popup ถูกบล็อก — navigate ใน tab เดิม
+      window.location.href = urlIOS;
+    }
+    setTimeout(function(){ URL.revokeObjectURL(urlIOS); }, 10000);
     showToast('📥 กด Share → Save to Files แล้วเปิดในคอมเพื่อพิมพ์', 'info');
   } else {
     var blob = new Blob([html], { type: 'text/html;charset=utf-8' });
