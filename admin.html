@@ -4,7 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>StockCount — Admin</title>
-<script src="config.js"></script>
+<script src="stockcount_config.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
@@ -399,7 +399,6 @@ table.recon .grp{border-left:1px solid var(--border);}
    ════════════════════════════════════════════════════════════════ */
 
 var API_URL   = (typeof STOCKCOUNT_CONFIG !== 'undefined') ? STOCKCOUNT_CONFIG.API_URL : '';
-var DEMO_MODE = !API_URL;            // no config.js -> run on local mock data
 var POLL_MS   = 12000;               // near-real-time refresh
 
 var PROVIDERS = [
@@ -432,9 +431,8 @@ function verifyPin(){
   if(!pin) return;
   var btn = document.getElementById('pinBtn'); btn.disabled = true; btn.textContent = 'กำลังตรวจสอบ…';
   setPinError('');
-  if(DEMO_MODE){
-    setTimeout(function(){ if(pin==='1234') enterApp(); else failPin(btn); }, 350);
-    return;
+  if(!API_URL){
+    setPinError('ยังไม่ได้ตั้งค่า API_URL ใน stockcount_config.js'); resetPinBtn(btn); return;
   }
   post({action:'verifyPin', pin:pin}).then(function(d){
     if(d && d.ok) enterApp(); else failPin(btn);
@@ -455,7 +453,6 @@ function enterApp(){
 
 /* ── Data load + polling ─────────────────────────────── */
 function loadData(showSpin){
-  if(DEMO_MODE){ if(!S.round) seedDemo(); renderAll(); markSynced(); return Promise.resolve(); }
   return post({action:'getAdminData'}).then(function(d){
     if(d){
       S.round = d.round || S.round;
@@ -846,7 +843,7 @@ function closeOverlay(id){ document.getElementById(id).classList.remove('open');
 
 /* ── Helpers ─────────────────────────────────────────── */
 function post(payload){
-  if(DEMO_MODE) return Promise.resolve({ok:true});
+  if(!API_URL) return Promise.reject(new Error('ยังไม่ได้ตั้งค่า API_URL ใน stockcount_config.js'));
   return fetch(API_URL,{method:'POST',redirect:'follow',headers:{'Content-Type':'text/plain'},body:JSON.stringify(payload)})
     .then(function(r){return r.json();});
 }
@@ -856,29 +853,6 @@ function toast(msg,type){
   var t=document.getElementById('toast'); t.textContent=msg;
   t.className='toast '+(type||'info')+' show';
   clearTimeout(_toastTimer); _toastTimer=setTimeout(function(){t.classList.remove('show');},3000);
-}
-
-/* ── Demo seed (only when no config.js) ──────────────── */
-function seedDemo(){
-  S.round={round_id:'R2569', year:'2569', round_name:'นับสต็อกพาเลท 2569', is_open:true};
-  S.sites=[
-    {site_id:'S1', site_name:'NDC-วังน้อย',  is_active:true},
-    {site_id:'S2', site_name:'คลังชลบุรี',    is_active:true},
-    {site_id:'S3', site_name:'RDC-ขอนแก่น',  is_active:true},
-    {site_id:'S4', site_name:'คลังลำพูน',     is_active:false}
-  ];
-  // System = book outstanding (onhand + transit_out)
-  S.books={
-    S1:{ brs:{onhand:3981,transit_out:0,transit_in:0,damaged:0,lost:0}, swwi:{onhand:1449,transit_out:0,transit_in:0,damaged:0,lost:0}, loscam:{onhand:46004,transit_out:0,transit_in:0,damaged:0,lost:0}, chep:{onhand:8619,transit_out:0,transit_in:0,damaged:0,lost:0} },
-    S2:{ brs:{onhand:4122,transit_out:0,transit_in:0,damaged:0,lost:0}, swwi:{onhand:0,transit_out:0,transit_in:0,damaged:0,lost:0}, loscam:{onhand:5337,transit_out:0,transit_in:0,damaged:0,lost:0}, chep:{onhand:0,transit_out:0,transit_in:0,damaged:0,lost:0} },
-    S3:{ brs:{onhand:118,transit_out:5,transit_in:0,damaged:3,lost:1}, swwi:{onhand:60,transit_out:0,transit_in:0,damaged:0,lost:0}, loscam:{onhand:30,transit_out:0,transit_in:2,damaged:1,lost:0}, chep:{onhand:45,transit_out:0,transit_in:0,damaged:0,lost:0} }
-  };
-  // Actual = counted per provider (จาก count.html)
-  S.subs=[
-    {count_id:'BRS-SC-2569-001', round_id:'R2569', site_id:'S1', site_name:'NDC-วังน้อย', counter_name:'สมชาย ใจดี', submitted_at:'2026-06-10T08:30:00Z', pdf_url:'#', status:'pending', review_comment:'', actual:{brs:3852,swwi:1449,loscam:47277,chep:7845}},
-    {count_id:'BRS-SC-2569-002', round_id:'R2569', site_id:'S2', site_name:'คลังชลบุรี', counter_name:'สมหญิง มีสุข', submitted_at:'2026-06-10T09:15:00Z', pdf_url:'#', status:'pending', review_comment:'', actual:{brs:4100,swwi:0,loscam:5337,chep:0}},
-    {count_id:'BRS-SC-2569-099', round_id:'R2569', site_id:'S3', site_name:'RDC-ขอนแก่น', counter_name:'อรทัย รักดี', submitted_at:'2026-06-09T14:00:00Z', pdf_url:'#', status:'approved', review_comment:'ตรวจเรียบร้อย เซ็นครบ', actual:{brs:120,swwi:60,loscam:30,chep:45}}
-  ];
 }
 </script>
 </body>
