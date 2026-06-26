@@ -152,7 +152,6 @@ table.bb thead th:first-child{background:var(--surface2);}
 .prov-loscam{color:var(--loscam);}.prov-chep{color:var(--chep);}.prov-brs{color:var(--brs);}.prov-swwi{color:var(--swwi);}
 .bb-input{background:var(--surface2);border:1px solid var(--border);border-radius:var(--rxs);color:var(--text);font-family:var(--mono);font-size:13px;padding:7px;outline:none;width:74px;text-align:center;}
 .bb-input:focus{border-color:var(--accent);background:var(--surface3);}
-.bb-total{font-family:var(--mono);font-weight:600;color:var(--muted);}
 .bb-foot td{background:var(--surface2);font-family:var(--mono);font-weight:600;border-top:1px solid var(--border);}
 .bb-hint{font-size:12px;color:var(--muted);margin-bottom:14px;display:flex;align-items:center;gap:7px;}
 .bb-status-tag{font-size:10px;font-weight:600;padding:2px 8px;border-radius:20px;}
@@ -289,7 +288,7 @@ textarea.input{resize:vertical;min-height:84px;font-size:13.5px;line-height:1.5;
         </div>
         <span class="bb-status-tag bb-unset" id="bookStatusTag" style="margin-bottom:11px;">ยังไม่ใส่</span>
       </div>
-      <div class="bb-hint">📒 หน่วย: จำนวนพาเลท · เว้นว่าง = 0</div>
+      <div class="bb-hint">📒 หน่วย: จำนวนพาเลท · เว้นว่าง = 0 · ยอดคงค้างในบัญชีเช่า = คงเหลือ + ระหว่างโอนออก</div>
       <div class="bb-grid-wrap" id="bookGridWrap"><div class="empty">เลือก Site เพื่อใส่ยอด</div></div>
       <button class="btn btn-success" id="bookSaveBtn" onclick="saveBook()" style="display:none;">💾 บันทึก Book Balance</button>
     </div>
@@ -536,17 +535,18 @@ function renderBookGrid(){
   tag.textContent = S.books[S.bookSite] ? 'ใส่ยอดแล้ว ✓' : 'ยังไม่ใส่';
   tag.className = 'bb-status-tag ' + (S.books[S.bookSite] ? 'bb-set' : 'bb-unset');
 
-  var head = '<tr><th>สถานะ \\ พาเลท</th>' + PROVIDERS.map(function(p){return '<th class="prov-head '+p.cls+'">'+p.label+'</th>';}).join('') + '<th>รวม</th></tr>';
+  var head = '<tr><th>สถานะ \\ พาเลท</th>' + PROVIDERS.map(function(p){return '<th class="prov-head '+p.cls+'">'+p.label+'</th>';}).join('') + '</tr>';
   var body = STATUSES.map(function(st){
     var cells = PROVIDERS.map(function(p){
       var v = (book[p.key] && book[p.key][st.key]!=null) ? book[p.key][st.key] : '';
       return '<td><input class="bb-input" type="number" min="0" inputmode="numeric" data-p="'+p.key+'" data-s="'+st.key+'" value="'+v+'" oninput="recalcBook()"></td>';
     }).join('');
-    return '<tr><td style="font-weight:600;">'+st.label+'</td>'+cells+'<td class="bb-total" data-rowtot="'+st.key+'">0</td></tr>';
+    return '<tr><td style="font-weight:600;">'+st.label+'</td>'+cells+'</tr>';
   }).join('');
-  var foot = '<tr class="bb-foot"><td>รวมทั้งหมด</td>'
-    + PROVIDERS.map(function(p){return '<td data-coltot="'+p.key+'">0</td>';}).join('')
-    + '<td data-grandtot>0</td></tr>';
+  // ยอดคงค้างในบัญชีเช่า = คงเหลือ + ระหว่างโอนออก (แยกต่อ provider)
+  var foot = '<tr class="bb-foot"><td title="คงเหลือ + ระหว่างโอนออก">รวมยอดคงค้างในบัญชีเช่า</td>'
+    + PROVIDERS.map(function(p){return '<td class="'+p.cls+'" data-rent="'+p.key+'">0</td>';}).join('')
+    + '</tr>';
   wrap.innerHTML = '<table class="bb"><thead>'+head+'</thead><tbody>'+body+'</tbody><tfoot>'+foot+'</tfoot></table>';
   btn.style.display='inline-flex';
   recalcBook();
@@ -554,16 +554,14 @@ function renderBookGrid(){
 function recalcBook(){
   var wrap = document.getElementById('bookGridWrap');
   var inputs = wrap.querySelectorAll('.bb-input');
-  var col = {}, row = {}, grand = 0;
-  PROVIDERS.forEach(function(p){col[p.key]=0;});
-  STATUSES.forEach(function(s){row[s.key]=0;});
-  inputs.forEach(function(i){
-    var v = Number(i.value)||0;
-    col[i.dataset.p]+=v; row[i.dataset.s]+=v; grand+=v;
+  var val = {};                                  // val[provider][status]
+  PROVIDERS.forEach(function(p){ val[p.key]={}; });
+  inputs.forEach(function(i){ val[i.dataset.p][i.dataset.s] = Number(i.value)||0; });
+  PROVIDERS.forEach(function(p){
+    var outstanding = (val[p.key].onhand||0) + (val[p.key].transit_out||0);  // ยอดคงค้างในบัญชีเช่า
+    var e = wrap.querySelector('[data-rent="'+p.key+'"]');
+    if(e) e.textContent = outstanding.toLocaleString();
   });
-  STATUSES.forEach(function(s){ var e=wrap.querySelector('[data-rowtot="'+s.key+'"]'); if(e)e.textContent=row[s.key].toLocaleString(); });
-  PROVIDERS.forEach(function(p){ var e=wrap.querySelector('[data-coltot="'+p.key+'"]'); if(e)e.textContent=col[p.key].toLocaleString(); });
-  var g=wrap.querySelector('[data-grandtot]'); if(g)g.textContent=grand.toLocaleString();
 }
 function saveBook(){
   if(!S.bookSite) return;
