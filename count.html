@@ -1525,13 +1525,29 @@ function printDoc() {
 
   showToast('⏳ กำลังสร้างลิงก์เอกสาร...', 'info');
 
+  // debug: เช็คว่า API_URL ถูกต้องไหม
+  if (!API_URL) {
+    showToast('❌ ไม่พบ API_URL — ตรวจสอบ config.js', 'error');
+    return;
+  }
+
   fetch(API_URL, {
     method: 'POST',
     redirect: 'follow',
     headers: { 'Content-Type': 'text/plain' },
     body: JSON.stringify({ action: 'uploadPrintFile', filename: fname, html: htmlUpload })
   })
-  .then(function(r){ return r.json(); })
+  .then(function(r){
+    // ตรวจสอบ response ก่อน parse JSON
+    var ct = r.headers.get('content-type') || '';
+    if (!ct.includes('json')) {
+      // GAS return HTML error — อ่าน text มาดู
+      return r.text().then(function(txt){
+        throw new Error('GAS ตอบ HTML แทน JSON: ' + txt.substring(0,120));
+      });
+    }
+    return r.json();
+  })
   .then(function(data) {
     if (data.status !== 'ok') throw new Error(data.message || 'upload failed');
     _showPrintLinkModal(data.url, fname);
