@@ -510,9 +510,14 @@ function renderStep1(content) {
           +'</select>'
         +'</div>'
         +'<div class="field">'
-          +'<label>ชื่อผู้นับสต็อก</label>'
+          +'<label>ชื่อผู้นับสต็อก (ทีมพาเลทส่วนกลาง) <span style=\"color:var(--danger);\">*</span></label>'
           +'<input class="input" id="inputName" type="text" placeholder="ชื่อ-นามสกุล" oninput="checkStep1()">'
         +'</div>'
+        +'<div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin:10px 0 6px;">ผู้ร่วมตรวจนับ (กรอกเฉพาะที่มี)</div>'
+        +'<div class="field"><label>โรงงาน/คลัง (ฝ่ายบริหาร/แผนกคลังสินค้า)</label><input class="input" id="inputAdmin" type="text" placeholder="ชื่อ-นามสกุล (ถ้ามี)"></div>'
+        +'<div class="field"><label>โรงงาน/คลัง (ฝ่ายผลิต)</label><input class="input" id="inputProduction" type="text" placeholder="ชื่อ-นามสกุล (ถ้ามี)"></div>'
+        +'<div class="field"><label>BRB-Fixed-asset Accounting</label><input class="input" id="inputFixedasset" type="text" placeholder="ชื่อ-นามสกุล (ถ้ามี)"></div>'
+        +'<div class="field"><label>สำนักงานตรวจสอบบัญชี</label><input class="input" id="inputAudit" type="text" placeholder="ชื่อ-นามสกุล (ถ้ามี)"></div>'
         +'<div id="step1Error" style="font-size:12px;color:var(--danger);display:none;margin-bottom:10px;"></div>'
         +'<button class="btn btn-primary" id="btnStep1" onclick="confirmStep1()" disabled style="width:100%;">เริ่มนับสต็อก →</button>'
       +'</div>'
@@ -531,7 +536,18 @@ function confirmStep1() {
   var site = document.getElementById('selSite').value;
   var name = document.getElementById('inputName').value.trim();
   if (!site || !name) return;
-  session = { site:site, name:name, round:roundInfo.round_name };
+  session = {
+    site  : site,
+    name  : name,
+    round : roundInfo.round_name,
+    names : {
+      pallet     : name,
+      admin      : (document.getElementById('inputAdmin')      || {value:''}).value.trim(),
+      production : (document.getElementById('inputProduction') || {value:''}).value.trim(),
+      fixedasset : (document.getElementById('inputFixedasset') || {value:''}).value.trim(),
+      audit      : (document.getElementById('inputAudit')      || {value:''}).value.trim()
+    }
+  };
   localStorage.setItem('stockCountSession', JSON.stringify(session));
   loadProgress();
   files = [];
@@ -1234,9 +1250,245 @@ function hasBook() {
   return bookBalance && (bookBalance.loscam||bookBalance.chep||bookBalance.brs||bookBalance.swwi);
 }
 function printDoc() {
-  window.print();
+  var tot = _calcTotals();
+  var d   = new Date();
+  var dateStr = d.getDate()+' '+
+    ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน',
+     'กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'][d.getMonth()]+
+    ' '+(d.getFullYear()+543);
+
+  // ── ชื่อผู้ตรวจนับจาก session (Step 1) ──
+  var sigNames = session.names || {};
+
+  // ── คำนวณ totals แยกตาม brand ──
+  function sumExcept(brandObj, excludeKeys) {
+    return Object.keys(brandObj).reduce(function(s, k) {
+      return excludeKeys.indexOf(k) === -1 ? s + (Number(brandObj[k]) || 0) : s;
+    }, 0);
+  }
+
+  var WOOD_EXCLUDE    = ['พาเลทที่ใช้ในสายการผลิต','พาเลทที่ควบคุมนอกระบบ PCS'];
+  var PLASTIC_EXCLUDE = ['พาเลทที่ใช้ในสายการผลิต','พาเลทที่ควบคุมนอกระบบ PCS',
+                         'พาเลทชำรุด โอน BRS-900 แล้ว (ตัวเอง)','พาเลทชำรุด โอน BRS-900 แล้ว (ที่อื่น)'];
+
+  function calcBrand(brandObj, excludeKeys) {
+    var counted = sumExcept(brandObj, excludeKeys);
+    return counted;
+  }
+
+  // Wood totals
+  var wL_counted = calcBrand(tot.loscam, WOOD_EXCLUDE);
+  var wC_counted = calcBrand(tot.chep,   WOOD_EXCLUDE);
+  var wL_sai     = tot.loscam['พาเลทที่ใช้ในสายการผลิต'] || 0;
+  var wC_sai     = tot.chep['พาเลทที่ใช้ในสายการผลิต']   || 0;
+  var wL_nok     = tot.loscam['พาเลทที่ควบคุมนอกระบบ PCS'] || 0;
+  var wC_nok     = tot.chep['พาเลทที่ควบคุมนอกระบบ PCS']   || 0;
+
+  // PCS book balance
+  var bL = bookBalance.loscam || {};
+  var bC = bookBalance.chep   || {};
+  var bB = bookBalance.brs    || {};
+  var bS = bookBalance.swwi   || {};
+
+  var wL_pcs = (bL['คงเหลือ']||0);
+  var wC_pcs = (bC['คงเหลือ']||0);
+  var wL_out = (bL['ระหว่างโอนออก']||0);
+  var wC_out = (bC['ระหว่างโอนออก']||0);
+  var wL_due = wL_pcs + wL_out;
+  var wC_due = wC_pcs + wC_out;
+  var wL_diff     = wL_pcs - wL_counted;
+  var wC_diff     = wC_pcs - wC_counted;
+  var wL_net      = wL_diff + wL_sai + wL_nok;
+  var wC_net      = wC_diff + wC_sai + wC_nok;
+
+  // Plastic totals
+  var pB_counted = calcBrand(tot.brs,  PLASTIC_EXCLUDE);
+  var pS_counted = calcBrand(tot.swwi, PLASTIC_EXCLUDE);
+  var pB_sai     = tot.brs['พาเลทที่ใช้ในสายการผลิต']              || 0;
+  var pS_sai     = tot.swwi['พาเลทที่ใช้ในสายการผลิต']             || 0;
+  var pB_nok     = tot.brs['พาเลทที่ควบคุมนอกระบบ PCS']            || 0;
+  var pS_nok     = tot.swwi['พาเลทที่ควบคุมนอกระบบ PCS']           || 0;
+  var pB_brs1    = tot.brs['พาเลทชำรุด โอน BRS-900 แล้ว (ตัวเอง)']  || 0;
+  var pS_brs1    = tot.swwi['พาเลทชำรุด โอน BRS-900 แล้ว (ตัวเอง)'] || 0;
+  var pB_brs2    = tot.brs['พาเลทชำรุด โอน BRS-900 แล้ว (ที่อื่น)']  || 0;
+  var pS_brs2    = tot.swwi['พาเลทชำรุด โอน BRS-900 แล้ว (ที่อื่น)'] || 0;
+
+  var pB_pcs = (bB['คงเหลือ']||0);
+  var pS_pcs = (bS['คงเหลือ']||0);
+  var pB_out = (bB['ระหว่างโอนออก']||0);
+  var pS_out = (bS['ระหว่างโอนออก']||0);
+  var pB_due = pB_pcs + pB_out;
+  var pS_due = pS_pcs + pS_out;
+  var pB_diff = pB_pcs - pB_counted;
+  var pS_diff = pS_pcs - pS_counted;
+  var pB_net  = pB_diff + pB_sai - pB_brs1 - pB_brs2 + pB_nok;
+  var pS_net  = pS_diff + pS_sai - pS_brs1 - pS_brs2 + pS_nok;
+
+  function n(v) { return (Number(v)||0).toLocaleString('th-TH'); }
+  function row(label, lv, rv, bold, indent) {
+    var s = bold ? 'font-weight:700;' : '';
+    var il = indent ? 'padding-left:'+(indent*12)+'px;' : '';
+    return '<tr><td style="'+il+s+'">'+label+'</td>'+
+      '<td style="text-align:right;white-space:nowrap;'+s+'">'+n(lv)+' Pallet</td>'+
+      '<td style="text-align:right;white-space:nowrap;'+s+'">'+n(rv)+' Pallet</td></tr>';
+  }
+
+  var html = '<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8">'+
+  '<title>รายงานผลการตรวจนับสต็อกพาเลท</title>'+
+  '<style>'+
+  '@page{size:A4 portrait;margin:15mm 15mm 15mm 20mm;}'+
+  'body{font-family:"TH Sarabun New","Sarabun",sans-serif;font-size:13pt;color:#000;margin:0;}'+
+  '.page{width:100%;max-width:180mm;}'+
+  'table{width:100%;border-collapse:collapse;font-size:12pt;}'+
+  'td,th{padding:2px 6px;vertical-align:middle;}'+
+  '.hdr-table td{padding:2px 4px;}'+
+  '.data-table{margin-bottom:8px;}'+
+  '.data-table th{background:#d9d9d9;text-align:center;font-weight:700;border:1px solid #999;}'+
+  '.data-table td{border:1px solid #bbb;}'+
+  '.data-table td:first-child{width:60%;}'+
+  '.section-label{font-weight:700;background:#f2f2f2;border:1px solid #999;}'+
+  '.two-col{display:grid;grid-template-columns:1fr 1fr;gap:8mm;margin-bottom:6mm;}'+
+  '.sig-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:4mm;margin-top:8mm;}'+
+  '.sig-box{border:1px solid #999;padding:4px 8px;min-height:55px;font-size:10pt;}'+
+  '.sig-label{font-size:9pt;color:#444;margin-bottom:2px;}'+
+  '.sig-name{font-size:10pt;font-weight:700;margin-top:32px;}'+
+  '.logo-area{display:flex;align-items:center;gap:8px;margin-bottom:4mm;}'+
+  'hr{border:none;border-top:2px solid #000;margin:4px 0;}'+
+  '@media print{'+
+    'body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}'+
+    'button{display:none!important;}'+
+  '}'+
+  '</style></head><body>'+
+  '<div class="page">'+
+
+  // ── Header ──
+  '<div class="logo-area">'+
+    '<div style="font-size:20pt;font-weight:900;letter-spacing:-1px;">BRS</div>'+
+    '<div style="font-size:9pt;color:#555;line-height:1.3;">BOON RAWD SUPPLY CHAIN</div>'+
+  '</div>'+
+  '<hr>'+
+  '<table class="hdr-table" style="margin-bottom:3mm;"><tbody>'+
+    '<tr><td style="width:12mm;font-weight:700;">เลขที่</td><td style="width:50mm;">PE'+d.getFullYear()+'/'+(String(d.getMonth()+1).padStart(3,'0'))+'</td>'+
+        '<td style="width:10mm;font-weight:700;">วันที่</td><td>'+dateStr+'</td></tr>'+
+    '<tr><td style="font-weight:700;">เรื่อง</td><td colspan="3">รายงานผลการตรวจนับสต็อกพาเลทไม้และพาเลทพลาสติก ประจำปี '+(d.getFullYear()+543)+'</td></tr>'+
+    '<tr><td style="font-weight:700;">เรียน</td><td colspan="3">ส่วนงาน Pallet and Operation Support บจก. บุญรอด ซัพพลายเชน</td></tr>'+
+    '<tr><td style="font-weight:700;">เอกสารแนบ</td>'+
+      '<td colspan="3">1. ภาพการลงพื้นที่ตรวจนับ<br>2. รูปภาพหน้าแรกของระบบควบคุมพาเลท</td></tr>'+
+  '</tbody></table>'+
+  '<hr style="margin-bottom:3mm;">'+
+
+  // ── Intro ──
+  '<p style="font-size:12pt;margin:0 0 4mm;">ตามที่ส่วนงาน Pallet Management and Operation Support ได้ดำเนินการตรวจนับสต็อกพาเลทไม้และพาเลทพลาสติก '+
+    'ประจำปี '+(d.getFullYear()+543)+' เมื่อวันที่ '+dateStr+' ณ สถานที่ตรวจนับ <strong>'+esc(session.site)+'</strong> '+
+    'คณะผู้ตรวจนับและผู้ดูแลพื้นที่ได้ทำการเข้าตรวจนับและขอสรุปผลตามตารางที่แสดงด้านล่างนี้</p>'+
+
+  // ── 2 ตาราง side by side ──
+  '<div class="two-col">'+
+
+    // ── ตาราง WOOD ──
+    '<div>'+
+      '<div style="font-weight:700;text-align:center;margin-bottom:2mm;font-size:12pt;">ตารางข้อมูลจำนวนพาเลทไม้</div>'+
+      '<table class="data-table"><thead>'+
+        '<tr><th>ข้อมูลจากระบบควบคุมพาเลท (PCS)</th><th>Loscam</th><th>Chep</th></tr>'+
+      '</thead><tbody>'+
+        row('1. คงเหลือ',           bL['คงเหลือ']||0,          bC['คงเหลือ']||0)+
+        row('2. ระหว่างโอนออก',     bL['ระหว่างโอนออก']||0,   bC['ระหว่างโอนออก']||0)+
+        row('3. ระหว่างโอนเข้า',    bL['ระหว่างโอนเข้า']||0,  bC['ระหว่างโอนเข้า']||0)+
+        row('4. ชำรุดเสียหาย',      bL['ชำรุดเสียหาย']||0,    bC['ชำรุดเสียหาย']||0)+
+        row('5. สูญหาย',            bL['สูญหาย']||0,           bC['สูญหาย']||0)+
+        '<tr><td class="section-label" colspan="3">ข้อมูลจากการตรวจนับ</td></tr>'+
+        row('พาเลทเปล่า RFI',       tot.loscam['พาเลทเปล่า RFI']||0,           tot.chep['พาเลทเปล่า RFI']||0)+
+        row('พาเลทเปล่า TBR',       tot.loscam['พาเลทเปล่า TBR']||0,           tot.chep['พาเลทเปล่า TBR']||0)+
+        row('พาเลทเปล่า BER',       tot.loscam['พาเลทเปล่า BER']||0,           tot.chep['พาเลทเปล่า BER']||0)+
+        row('พาเลทเปล่า TBC',       tot.loscam['พาเลทเปล่า TBC']||0,           tot.chep['พาเลทเปล่า TBC']||0)+
+        row('พาเลทเปล่า TBS',       tot.loscam['พาเลทเปล่า TBS']||0,           tot.chep['พาเลทเปล่า TBS']||0)+
+        row('พาเลทที่ใช้วางสินค้า', tot.loscam['พาเลทที่ใช้วางสินค้า']||0,     tot.chep['พาเลทที่ใช้วางสินค้า']||0)+
+        row('พาเลทที่ใช้ในสายการผลิต',tot.loscam['พาเลทที่ใช้ในสายการผลิต']||0,tot.chep['พาเลทที่ใช้ในสายการผลิต']||0)+
+        row('พาเลทที่ควบคุมนอกระบบ PCS',tot.loscam['พาเลทที่ควบคุมนอกระบบ PCS']||0,tot.chep['พาเลทที่ควบคุมนอกระบบ PCS']||0)+
+        '<tr><td class="section-label" colspan="3">สรุปผลการตรวจนับ</td></tr>'+
+        row('จำนวนคงเหลือบนระบบ',           wL_pcs, wC_pcs)+
+        row('บวก ระหว่างโอนออก',            wL_out, wC_out)+
+        row('รวมจำนวนยอดคงค้างในหน้าบัญชีเช่า', wL_due, wC_due, true)+
+        row('รวมจำนวนพาเลทที่ตรวจนับได้จริง',   wL_counted, wC_counted, true)+
+        row('ส่วนต่าง',                     wL_diff, wC_diff)+
+        row('บวก พาเลทที่ใช้ในสายการผลิต',  wL_sai, wC_sai, false, 1)+
+        row('บวก พาเลทที่ควบคุมนอกระบบ PCS',wL_nok, wC_nok, false, 1)+
+        row('ส่วนต่างสุทธิ',                wL_net, wC_net, true)+
+      '</tbody></table>'+
+    '</div>'+
+
+    // ── ตาราง PLASTIC ──
+    '<div>'+
+      '<div style="font-weight:700;text-align:center;margin-bottom:2mm;font-size:12pt;">ตารางข้อมูลจำนวนพาเลทพลาสติก</div>'+
+      '<table class="data-table"><thead>'+
+        '<tr><th>ข้อมูลจากระบบควบคุมพาเลท (PCS)</th><th>BRS</th><th>SWWI</th></tr>'+
+      '</thead><tbody>'+
+        row('1. คงเหลือ',           bB['คงเหลือ']||0,         bS['คงเหลือ']||0)+
+        row('2. ระหว่างโอนออก',     bB['ระหว่างโอนออก']||0,  bS['ระหว่างโอนออก']||0)+
+        row('3. ระหว่างโอนเข้า',    bB['ระหว่างโอนเข้า']||0, bS['ระหว่างโอนเข้า']||0)+
+        row('4. ชำรุดเสียหาย',      bB['ชำรุดเสียหาย']||0,   bS['ชำรุดเสียหาย']||0)+
+        row('5. สูญหาย',            bB['สูญหาย']||0,          bS['สูญหาย']||0)+
+        '<tr><td class="section-label" colspan="3">ข้อมูลจากการตรวจนับ</td></tr>'+
+        row('พาเลทเปล่า RFI',                              tot.brs['พาเลทเปล่า RFI']||0,   tot.swwi['พาเลทเปล่า RFI']||0)+
+        row('พาเลทเปล่า TBS',                              tot.brs['พาเลทเปล่า TBS']||0,   tot.swwi['พาเลทเปล่า TBS']||0)+
+        row('พาเลทที่ใช้วางสินค้า',                        tot.brs['พาเลทที่ใช้วางสินค้า']||0,tot.swwi['พาเลทที่ใช้วางสินค้า']||0)+
+        row('พาเลทที่ใช้ในสายการผลิต',                     tot.brs['พาเลทที่ใช้ในสายการผลิต']||0,tot.swwi['พาเลทที่ใช้ในสายการผลิต']||0)+
+        row('พาเลทชำรุด รออนุมัติโอนเข้า BRS-900',         tot.brs['พาเลทชำรุด รออนุมัติโอนเข้า BRS-900']||0,tot.swwi['พาเลทชำรุด รออนุมัติโอนเข้า BRS-900']||0)+
+        row('พาเลทชำรุด โอน BRS-900 แล้ว (ตัวเอง)',        tot.brs['พาเลทชำรุด โอน BRS-900 แล้ว (ตัวเอง)']||0,tot.swwi['พาเลทชำรุด โอน BRS-900 แล้ว (ตัวเอง)']||0)+
+        row('พาเลทชำรุด โอน BRS-900 แล้ว (ที่อื่น)',       tot.brs['พาเลทชำรุด โอน BRS-900 แล้ว (ที่อื่น)']||0,tot.swwi['พาเลทชำรุด โอน BRS-900 แล้ว (ที่อื่น)']||0)+
+        row('พาเลทที่ควบคุมนอกระบบ PCS',                   tot.brs['พาเลทที่ควบคุมนอกระบบ PCS']||0,tot.swwi['พาเลทที่ควบคุมนอกระบบ PCS']||0)+
+        '<tr><td class="section-label" colspan="3">สรุปผลการตรวจนับ</td></tr>'+
+        row('จำนวนคงเหลือบนระบบ',           pB_pcs, pS_pcs)+
+        row('บวก ระหว่างโอนออก',            pB_out, pS_out)+
+        row('รวมจำนวนยอดคงค้างในหน้าบัญชีเช่า', pB_due, pS_due, true)+
+        row('รวมจำนวนพาเลทที่ตรวจนับได้จริง',   pB_counted, pS_counted, true)+
+        row('ส่วนต่าง',                     pB_diff, pS_diff)+
+        row('บวก พาเลทที่ใช้ในสายการผลิต',  pB_sai,  pS_sai,  false, 1)+
+        row('หัก พาเลทชำรุด โอน BRS-900 แล้ว (ตัวเอง)', -pB_brs1, -pS_brs1, false, 1)+
+        row('หัก พาเลทชำรุด โอน BRS-900 แล้ว (ที่อื่น)', -pB_brs2, -pS_brs2, false, 1)+
+        row('บวก พาเลทที่ควบคุมนอกระบบ PCS',pB_nok,  pS_nok,  false, 1)+
+        row('ส่วนต่างสุทธิ',                pB_net,  pS_net,  true)+
+      '</tbody></table>'+
+    '</div>'+
+  '</div>'+
+
+  // ── ลายเซ็น 5 ช่อง ──
+  '<div class="sig-grid">'+
+    _sigBox('ลายเซ็นผู้ตรวจนับจาก<br>ทีมพาเลทส่วนกลาง',                          sigNames['pallet'])+
+    _sigBox('ลายเซ็นผู้ตรวจนับจาก<br>โรงงาน/คลัง (ฝ่ายบริหาร/แผนกคลังสินค้า)',  sigNames['admin'])+
+    _sigBox('ลายเซ็นผู้ตรวจนับจาก<br>โรงงาน/คลัง (ฝ่ายผลิต)',                    sigNames['production'])+
+    _sigBox('ลายเซ็นผู้ตรวจนับจาก<br>BRB-Fixed-asset Accounting',                sigNames['fixedasset'])+
+    _sigBox('ลายเซ็นผู้ตรวจนับจาก<br>สำนักงานตรวจสอบบัญชี',                      sigNames['audit'])+
+    '<div></div>'+
+  '</div>'+
+
+  // ── Footer ──
+  '<hr style="margin-top:8mm;">'+
+  '<div style="font-size:9pt;color:#666;">'+
+    'บริษัท บุญรอด ซัพพลายเชน จำกัด | 999 ถนนสามเสน แขวงนครไชยศรี เขตดุสิต กรุงเทพมหานคร 10300 | โทร +66 2242-4000'+
+  '</div>'+
+  '</div>'+
+
+  '<script>window.onload=function(){window.print();}<\/script>'+
+  '</body></html>';
+
+  var win = window.open('','_blank');
+  if (win) {
+    win.document.write(html);
+    win.document.close();
+  } else {
+    showToast('⚠️ กรุณาอนุญาต Pop-up สำหรับหน้านี้', 'error');
+  }
+
   _printed = true;
   updateSubmitCard();
+}
+
+function _sigBox(label, name) {
+  return '<div class="sig-box">'+
+    '<div class="sig-label">'+label+'</div>'+
+    '<div class="sig-name">'+(name ? esc(name) : '')+'</div>'+
+  '</div>';
 }
 function _renderFileList() {
   return files.map(function(f,i){
