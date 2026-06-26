@@ -1508,9 +1508,20 @@ function printDoc() {
   '<\/script>'+
   '</body></html>';
 
-  var win = window.open('','_blank');
-  if (win) { win.document.write(html); win.document.close(); }
-  else { showToast('⚠️ กรุณาอนุญาต Pop-up สำหรับหน้านี้', 'error'); }
+  // ── Download HTML file แทน popup ──
+  // user นำไปเปิดในคอมแล้วพิมพ์เอง → layout ถูกต้องทุก device
+  var blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+  var url  = URL.createObjectURL(blob);
+  var a    = document.createElement('a');
+  var site   = (session && session.site ? session.site.replace(/[/\\:*?"<>|]/g,'_') : 'report');
+  var docNo  = DOC_NUMBER.replace(/[/\\:*?"<>|]/g,'_');
+  a.download = docNo + '_' + site + '.html';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+
+  showToast('📥 ดาวน์โหลดเสร็จแล้ว — เปิดไฟล์ในคอมแล้วกด 🖨️ พิมพ์เอกสาร', 'success');
   _printed = true;
   updateSubmitCard();
 }
