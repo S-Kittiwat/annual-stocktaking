@@ -1319,12 +1319,15 @@ function printDoc() {
   '<style>'+
   // ── Print-first CSS: A4 หน้าเดียว ──
   '@page{size:A4 portrait;margin:12mm 10mm 10mm 14mm;}'+
+  // ซ่อน browser default header/footer (วันที่, ชื่อ title, page number)
+  // วิธีเดียวที่ทำงานกับ Chrome/Safari คือ margin top/bottom = 0 หรือ ซ่อนผ่าน print settings
+  // แต่บอก user ให้ uncheck "Headers and footers" ใน print dialog
   '*{box-sizing:border-box;}'+
   'body{font-family:"TH Sarabun New","Sarabun",sans-serif;font-size:11pt;color:#000;margin:0;padding:0;}'+
   '.page{width:100%;}'+
   // Header
-  '.hdr{margin-bottom:3mm;}'+
-  '.hdr-logo{margin-bottom:4mm;}'+
+  '.hdr{margin-bottom:1mm;}'+
+  '.hdr-logo{margin-bottom:1mm;}'+
   '.hdr-meta{width:100%;font-size:10.5pt;line-height:1.7;border-collapse:collapse;}'+
   '.hdr-meta td.lbl{font-weight:700;white-space:nowrap;padding-right:8px;vertical-align:top;width:22mm;padding-left:8mm;}'+
   '.hdr-meta td{vertical-align:top;}'+
@@ -1459,7 +1462,14 @@ function printDoc() {
     'บริษัท บุญรอด ซัพพลายเชน จำกัด | 999 ถนนสามเสน แขวงนครไชยศรี เขตดุสิต กรุงเทพมหานคร 10300 | โทร +66 2242-4000 | เลขประจำตัวผู้เสียภาษี 0105561113924'+
   '</div>'+
   '</div>'+
-  '<script>window.onload=function(){window.print();}<\/script>'+
+  '<script>window.onload=function(){'+
+    // แจ้ง user ให้ปิด header/footer ใน print dialog
+    'var tip=document.createElement("div");'+
+    'tip.style.cssText="position:fixed;top:0;left:0;right:0;background:#fffbcc;border-bottom:2px solid #f5c842;padding:8px 16px;font-size:11pt;font-family:sans-serif;z-index:9999;text-align:center;";'+
+    'tip.innerHTML="💡 ก่อนพิมพ์: ไปที่ <b>More settings → Headers and footers</b> แล้ว <b>ปิด</b> เพื่อลบวันที่และหมายเลขหน้าออก";'+
+    'document.body.insertBefore(tip,document.body.firstChild);'+
+    'setTimeout(function(){window.print();tip.remove();},800);'+
+  '}<\/script>'+
   '</body></html>';
 
   var win = window.open('','_blank');
