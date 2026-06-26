@@ -2,105 +2,195 @@
 <html lang="th">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>StockCount — Admin</title>
 <script src="config.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
-:root{--bg:#0f172a;--surface:#1e293b;--surface2:#263348;--border:#334155;--accent:#38bdf8;--success:#34d399;--warn:#fbbf24;--danger:#f87171;--text:#f1f5f9;--muted:#94a3b8;--chep:#38bdf8;--loscam:#a78bfa;--brs:#34d399;--font:'IBM Plex Sans Thai',sans-serif;--mono:'IBM Plex Mono',monospace;--r:12px;--rs:8px;}
+:root{
+  --bg:#0f172a;--surface:#1e293b;--surface2:#263348;--surface3:#2f3e57;--border:#334155;
+  --accent:#38bdf8;--success:#34d399;--warn:#fbbf24;--danger:#f87171;
+  --text:#f1f5f9;--muted:#94a3b8;--muted2:#64748b;
+  --loscam:#a78bfa;--chep:#38bdf8;--brs:#34d399;--swwi:#f472b6;
+  --font:'IBM Plex Sans Thai',sans-serif;--mono:'IBM Plex Mono',monospace;
+  --r:12px;--rs:8px;--rxs:6px;
+}
 *{box-sizing:border-box;margin:0;padding:0;}
-body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:100vh;font-size:15px;}
-.topnav{height:52px;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 20px;position:sticky;top:0;z-index:200;}
-.nav-brand{display:flex;align-items:center;gap:10px;margin-right:20px;text-decoration:none;}
+body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:100vh;font-size:15px;-webkit-font-smoothing:antialiased;}
+button{font-family:var(--font);}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important;}}
+
+/* ── Top nav ─────────────────────────────────────────── */
+.topnav{height:52px;background:var(--surface);border-bottom:1px solid var(--border);display:flex;align-items:center;padding:0 16px;position:sticky;top:0;z-index:200;gap:12px;}
+.nav-brand{display:flex;align-items:center;gap:10px;text-decoration:none;}
 .nav-brand-icon{width:32px;height:32px;background:var(--warn);border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;}
-.nav-brand-name{font-size:14px;font-weight:700;color:var(--text);}
+.nav-brand-name{font-size:14px;font-weight:700;color:var(--text);line-height:1.1;}
 .nav-brand-sub{font-size:10px;color:var(--muted);}
 .nav-right{margin-left:auto;display:flex;align-items:center;gap:10px;}
-.badge-admin{background:rgba(251,191,36,.15);border:1px solid rgba(251,191,36,.3);color:var(--warn);font-size:11px;font-weight:600;padding:2px 10px;border-radius:20px;}
-.btn-back{background:none;border:1px solid var(--border);color:var(--muted);border-radius:var(--rs);padding:5px 12px;font-family:var(--font);font-size:11px;cursor:pointer;text-decoration:none;}
-.btn-back:hover{border-color:var(--accent);color:var(--accent);}
-/* PIN */
-.pin-wrap{min-height:calc(100vh - 52px);display:flex;align-items:center;justify-content:center;padding:24px;}
-.pin-box{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:32px;width:100%;max-width:360px;text-align:center;}
-.pin-icon{font-size:40px;margin-bottom:12px;}
-.pin-title{font-size:18px;font-weight:700;margin-bottom:4px;}
-.pin-sub{font-size:12px;color:var(--muted);margin-bottom:20px;}
-.pin-input{background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--rs);color:var(--text);font-family:var(--mono);font-size:22px;padding:12px;outline:none;width:100%;text-align:center;letter-spacing:.3em;margin-bottom:12px;}
-.pin-input:focus{border-color:var(--accent);}
-.btn{border:none;border-radius:var(--rs);padding:10px 18px;font-family:var(--font);font-size:13px;font-weight:600;cursor:pointer;transition:opacity .15s;display:inline-flex;align-items:center;gap:6px;}
+.sync-pill{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted);font-family:var(--mono);}
+.sync-dot{width:7px;height:7px;border-radius:50%;background:var(--success);box-shadow:0 0 0 0 rgba(52,211,153,.5);}
+.sync-dot.live{animation:pulse 2s infinite;}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(52,211,153,.45);}70%{box-shadow:0 0 0 6px rgba(52,211,153,0);}100%{box-shadow:0 0 0 0 rgba(52,211,153,0);}}
+.badge-admin{background:rgba(251,191,36,.15);border:1px solid rgba(251,191,36,.3);color:var(--warn);font-size:11px;font-weight:600;padding:2px 10px;border-radius:20px;white-space:nowrap;}
+
+/* ── Buttons ─────────────────────────────────────────── */
+.btn{border:none;border-radius:var(--rs);padding:9px 16px;font-size:13px;font-weight:600;cursor:pointer;transition:opacity .15s,border-color .15s;display:inline-flex;align-items:center;justify-content:center;gap:6px;white-space:nowrap;}
 .btn:disabled{opacity:.35;cursor:not-allowed;}
+.btn:hover:not(:disabled){opacity:.9;}
 .btn-primary{background:var(--accent);color:#0f172a;}
 .btn-success{background:var(--success);color:#0f172a;}
 .btn-danger{background:var(--danger);color:#fff;}
-.btn-outline{background:none;border:1px solid var(--border);color:var(--text);}
 .btn-warn{background:var(--warn);color:#0f172a;}
-.pin-error{font-size:12px;color:var(--danger);margin-top:8px;display:none;}
-/* Content */
-.admin-wrap{padding:20px 24px 40px;max-width:1000px;margin:0 auto;}
-.section-title{font-size:12px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.08em;margin-bottom:12px;display:flex;align-items:center;gap:8px;}
-.section-title::after{content:'';flex:1;height:1px;background:var(--border);}
-/* Round card */
-.round-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:20px;margin-bottom:20px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;}
+.btn-outline{background:none;border:1px solid var(--border);color:var(--text);}
+.btn-outline:hover:not(:disabled){border-color:var(--accent);color:var(--accent);opacity:1;}
+.btn-ghost{background:none;color:var(--muted);padding:6px 10px;}
+.btn-ghost:hover:not(:disabled){color:var(--text);opacity:1;}
+.btn-sm{padding:5px 11px;font-size:11.5px;border-radius:var(--rxs);font-weight:600;cursor:pointer;border:1px solid transparent;}
+.btn-sm-open{background:var(--surface2);color:var(--accent);border-color:var(--border);}
+.btn-sm-open:hover{border-color:var(--accent);}
+.btn-sm-approve{background:rgba(52,211,153,.14);color:var(--success);border-color:rgba(52,211,153,.3);}
+.btn-sm-reject{background:rgba(248,113,113,.1);color:var(--danger);border-color:rgba(248,113,113,.3);}
+
+/* ── PIN ─────────────────────────────────────────────── */
+.pin-wrap{min-height:calc(100vh - 52px);display:flex;align-items:center;justify-content:center;padding:24px;}
+.pin-box{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:34px 30px;width:100%;max-width:360px;text-align:center;}
+.pin-icon{font-size:40px;margin-bottom:14px;}
+.pin-title{font-size:18px;font-weight:700;margin-bottom:4px;}
+.pin-sub{font-size:12px;color:var(--muted);margin-bottom:22px;}
+.pin-input{background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--rs);color:var(--text);font-family:var(--mono);font-size:22px;padding:13px;outline:none;width:100%;text-align:center;letter-spacing:.35em;margin-bottom:12px;}
+.pin-input:focus{border-color:var(--accent);}
+.pin-error{font-size:12px;color:var(--danger);margin-top:10px;min-height:16px;}
+
+/* ── Tabs ────────────────────────────────────────────── */
+.tabbar{background:var(--surface);border-bottom:1px solid var(--border);display:flex;padding:0 8px;position:sticky;top:52px;z-index:150;overflow-x:auto;}
+.tab{background:none;border:none;color:var(--muted);font-size:13.5px;font-weight:600;padding:13px 16px;cursor:pointer;position:relative;white-space:nowrap;display:flex;align-items:center;gap:7px;}
+.tab:hover{color:var(--text);}
+.tab.active{color:var(--accent);}
+.tab.active::after{content:'';position:absolute;left:12px;right:12px;bottom:-1px;height:2px;background:var(--accent);border-radius:2px;}
+.tab-count{background:var(--warn);color:#0f172a;font-size:10px;font-weight:700;font-family:var(--mono);min-width:18px;height:18px;border-radius:9px;display:inline-flex;align-items:center;justify-content:center;padding:0 5px;}
+.tab-count.zero{background:var(--surface3);color:var(--muted);}
+
+/* ── Layout ──────────────────────────────────────────── */
+.wrap{padding:22px 24px 56px;max-width:1080px;margin:0 auto;}
+.panel{display:none;}
+.panel.active{display:block;animation:fade .2s ease;}
+@keyframes fade{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:none;}}
+.eyebrow{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.09em;margin-bottom:12px;display:flex;align-items:center;gap:10px;}
+.eyebrow::after{content:'';flex:1;height:1px;background:var(--border);}
+.eyebrow .ehint{font-weight:400;text-transform:none;letter-spacing:0;color:var(--muted2);}
+
+/* ── Cards ───────────────────────────────────────────── */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:18px 20px;margin-bottom:18px;}
+.round-card{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:14px;}
+.round-meta{display:flex;align-items:center;gap:14px;}
+.round-year{font-family:var(--mono);font-size:30px;font-weight:600;color:var(--accent);line-height:1;}
 .round-name{font-size:16px;font-weight:700;}
-.round-status-open{color:var(--success);font-size:12px;font-weight:600;}
-.round-status-closed{color:var(--muted);font-size:12px;font-weight:600;}
+.round-state{font-size:12px;font-weight:600;margin-top:3px;display:inline-flex;align-items:center;gap:5px;}
+.round-state.open{color:var(--success);}
+.round-state.closed{color:var(--muted);}
 .round-actions{display:flex;gap:8px;flex-wrap:wrap;}
-/* Stats */
-.stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:20px;}
-.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--rs);padding:14px;text-align:center;}
-.stat-num{font-size:24px;font-weight:700;font-family:var(--mono);}
-.stat-num.warn{color:var(--warn);}
-.stat-num.success{color:var(--success);}
-.stat-num.danger{color:var(--danger);}
-.stat-lbl{font-size:11px;color:var(--muted);margin-top:3px;}
-/* Table */
-.table-wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;margin-bottom:20px;}
-table{width:100%;border-collapse:collapse;}
-th{background:var(--surface2);padding:9px 14px;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;text-align:left;border-bottom:1px solid var(--border);}
-td{padding:10px 14px;font-size:12px;border-bottom:1px solid var(--border);vertical-align:middle;}
+
+/* progress */
+.prog-wrap{margin-top:4px;}
+.prog-head{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:8px;}
+.prog-label{font-size:13px;color:var(--muted);}
+.prog-num{font-family:var(--mono);font-size:13px;}
+.prog-num b{color:var(--success);font-size:16px;}
+.prog-bar{height:9px;background:var(--surface2);border-radius:6px;overflow:hidden;}
+.prog-fill{height:100%;background:linear-gradient(90deg,var(--success),#6ee7b7);border-radius:6px;transition:width .4s ease;}
+
+/* stats */
+.stat-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:18px;}
+.stat-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--rs);padding:15px;text-align:center;}
+.stat-num{font-size:26px;font-weight:700;font-family:var(--mono);line-height:1;}
+.stat-num.warn{color:var(--warn);}.stat-num.success{color:var(--success);}.stat-num.danger{color:var(--danger);}.stat-num.accent{color:var(--accent);}
+.stat-lbl{font-size:11px;color:var(--muted);margin-top:6px;}
+
+/* ── Tables ──────────────────────────────────────────── */
+.table-wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;overflow-x:auto;margin-bottom:18px;}
+table{width:100%;border-collapse:collapse;min-width:600px;}
+th{background:var(--surface2);padding:10px 14px;font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;text-align:left;border-bottom:1px solid var(--border);white-space:nowrap;}
+td{padding:11px 14px;font-size:12.5px;border-bottom:1px solid var(--border);vertical-align:middle;}
 tr:last-child td{border-bottom:none;}
-tr:hover td{background:rgba(255,255,255,.01);}
+tbody tr:hover td{background:rgba(255,255,255,.012);}
 .mono{font-family:var(--mono);}
-.status-badge{font-size:10px;font-weight:600;padding:2px 8px;border-radius:20px;white-space:nowrap;}
-.sb-pending {background:rgba(251,191,36,.12);border:1px solid rgba(251,191,36,.3);color:var(--warn);}
+.cid{font-family:var(--mono);font-size:10.5px;color:var(--accent);}
+.empty{padding:36px;text-align:center;color:var(--muted);font-size:13px;}
+
+.status-badge{font-size:10px;font-weight:600;padding:3px 9px;border-radius:20px;white-space:nowrap;display:inline-flex;align-items:center;gap:4px;}
+.sb-pending{background:rgba(251,191,36,.12);border:1px solid rgba(251,191,36,.3);color:var(--warn);}
 .sb-approved{background:rgba(52,211,153,.12);border:1px solid rgba(52,211,153,.3);color:var(--success);}
 .sb-rejected{background:rgba(248,113,113,.12);border:1px solid rgba(248,113,113,.3);color:var(--danger);}
-.action-btns{display:flex;gap:6px;}
-.btn-sm{padding:4px 10px;font-size:11px;border-radius:6px;border:none;font-family:var(--font);font-weight:600;cursor:pointer;}
-.btn-sm-approve{background:rgba(52,211,153,.15);color:var(--success);border:1px solid rgba(52,211,153,.3);}
-.btn-sm-reject {background:rgba(248,113,113,.1); color:var(--danger); border:1px solid rgba(248,113,113,.3);}
-.btn-sm-view   {background:var(--surface2);color:var(--text);border:1px solid var(--border);}
-.num-chep  {color:var(--chep);font-family:var(--mono);font-weight:600;}
-.num-loscam{color:var(--loscam);font-family:var(--mono);font-weight:600;}
-.num-brs   {color:var(--brs);font-family:var(--mono);font-weight:600;}
-/* Book balance modal */
-.overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:500;display:none;align-items:center;justify-content:center;padding:20px;}
+.sb-idle{background:var(--surface2);border:1px solid var(--border);color:var(--muted);}
+.sb-locked{background:rgba(167,139,250,.12);border:1px solid rgba(167,139,250,.3);color:var(--loscam);}
+.action-btns{display:flex;gap:6px;flex-wrap:wrap;}
+
+/* ── Sites ───────────────────────────────────────────── */
+.add-row{display:flex;gap:10px;margin-bottom:16px;flex-wrap:wrap;}
+.add-row .input{flex:1;min-width:200px;}
+.input{background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--rs);color:var(--text);font-family:var(--font);font-size:14px;padding:10px 13px;outline:none;width:100%;}
+.input:focus{border-color:var(--accent);}
+.input.mono{font-family:var(--mono);}
+.toggle{position:relative;width:38px;height:21px;border-radius:11px;background:var(--surface3);border:1px solid var(--border);cursor:pointer;transition:background .15s;flex-shrink:0;}
+.toggle.on{background:var(--success);border-color:var(--success);}
+.toggle::after{content:'';position:absolute;top:2px;left:2px;width:15px;height:15px;border-radius:50%;background:#fff;transition:transform .15s;}
+.toggle.on::after{transform:translateX(17px);}
+
+/* ── Book Balance ────────────────────────────────────── */
+.bb-controls{display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap;margin-bottom:16px;}
+.field{display:flex;flex-direction:column;gap:6px;}
+.field label{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.04em;}
+.select{background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--rs);color:var(--text);font-family:var(--font);font-size:14px;padding:10px 13px;outline:none;min-width:240px;cursor:pointer;}
+.select:focus{border-color:var(--accent);}
+.bb-grid-wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;overflow-x:auto;margin-bottom:16px;}
+table.bb{min-width:560px;}
+table.bb th,table.bb td{text-align:center;}
+table.bb th:first-child,table.bb td:first-child{text-align:left;position:sticky;left:0;background:var(--surface);z-index:2;}
+table.bb thead th:first-child{background:var(--surface2);}
+.prov-head{font-family:var(--font);font-size:11px;font-weight:700;text-transform:none;letter-spacing:0;}
+.prov-loscam{color:var(--loscam);}.prov-chep{color:var(--chep);}.prov-brs{color:var(--brs);}.prov-swwi{color:var(--swwi);}
+.bb-input{background:var(--surface2);border:1px solid var(--border);border-radius:var(--rxs);color:var(--text);font-family:var(--mono);font-size:13px;padding:7px;outline:none;width:74px;text-align:center;}
+.bb-input:focus{border-color:var(--accent);background:var(--surface3);}
+.bb-total{font-family:var(--mono);font-weight:600;color:var(--muted);}
+.bb-foot td{background:var(--surface2);font-family:var(--mono);font-weight:600;border-top:1px solid var(--border);}
+.bb-hint{font-size:12px;color:var(--muted);margin-bottom:14px;display:flex;align-items:center;gap:7px;}
+.bb-status-tag{font-size:10px;font-weight:600;padding:2px 8px;border-radius:20px;}
+.bb-set{background:rgba(52,211,153,.12);color:var(--success);border:1px solid rgba(52,211,153,.3);}
+.bb-unset{background:var(--surface2);color:var(--muted);border:1px solid var(--border);}
+
+/* ── Modal ───────────────────────────────────────────── */
+.overlay{position:fixed;inset:0;background:rgba(2,6,23,.78);z-index:500;display:none;align-items:center;justify-content:center;padding:20px;backdrop-filter:blur(2px);}
 .overlay.open{display:flex;}
-.modal-box{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);width:100%;max-width:480px;overflow:hidden;}
-.modal-head{padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:var(--surface2);}
-.modal-title{font-size:14px;font-weight:600;}
-.modal-close{background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;line-height:1;}
-.modal-body{padding:16px 18px;display:flex;flex-direction:column;gap:12px;}
-.modal-foot{padding:12px 18px;border-top:1px solid var(--border);display:flex;gap:8px;}
-.field label{font-size:11px;font-weight:600;color:var(--muted);letter-spacing:.04em;text-transform:uppercase;display:block;margin-bottom:5px;}
-.field .input{background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--rs);color:var(--text);font-family:var(--mono);font-size:16px;padding:9px 12px;outline:none;width:100%;text-align:center;}
-.field .input:focus{border-color:var(--accent);}
-.book-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;}
-.var-display{background:var(--surface2);border-radius:var(--rs);padding:10px;text-align:center;}
-.var-label{font-size:10px;color:var(--muted);margin-bottom:4px;}
-.var-num{font-size:16px;font-weight:700;font-family:var(--mono);}
-.var-num.pos{color:var(--success);}
-.var-num.neg{color:var(--danger);}
-.var-num.zero{color:var(--muted);}
-/* spinner */
-.spinner{width:14px;height:14px;border:2px solid rgba(56,189,248,.3);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;display:inline-block;vertical-align:middle;}
-@keyframes spin{to{transform:rotate(360deg);}}
-.toast{position:fixed;top:68px;left:50%;transform:translateX(-50%) translateY(-60px);background:var(--surface);border:1px solid var(--border);border-radius:var(--rs);padding:10px 18px;font-size:13px;transition:transform .3s;z-index:999;white-space:nowrap;box-shadow:0 8px 24px rgba(0,0,0,.4);}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);width:100%;max-width:440px;overflow:hidden;animation:pop .18s ease;}
+@keyframes pop{from{opacity:0;transform:scale(.97);}to{opacity:1;transform:none;}}
+.modal-head{padding:15px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:var(--surface2);}
+.modal-title{font-size:14px;font-weight:700;}
+.modal-close{background:none;border:none;color:var(--muted);font-size:22px;cursor:pointer;line-height:1;}
+.modal-close:hover{color:var(--text);}
+.modal-body{padding:18px;display:flex;flex-direction:column;gap:14px;}
+.modal-foot{padding:14px 18px;border-top:1px solid var(--border);display:flex;gap:10px;}
+textarea.input{resize:vertical;min-height:84px;font-size:13.5px;line-height:1.5;}
+.modal-note{font-size:12.5px;color:var(--muted);line-height:1.55;}
+.modal-note b{color:var(--text);}
+
+/* ── Toast ───────────────────────────────────────────── */
+.toast{position:fixed;top:64px;left:50%;transform:translateX(-50%) translateY(-70px);background:var(--surface);border:1px solid var(--border);border-radius:var(--rs);padding:11px 18px;font-size:13px;font-weight:600;transition:transform .3s cubic-bezier(.2,.8,.2,1);z-index:999;box-shadow:0 12px 30px rgba(0,0,0,.45);}
 .toast.show{transform:translateX(-50%) translateY(0);}
-.toast.success{border-color:rgba(52,211,153,.4);color:var(--success);}
-.toast.error{border-color:rgba(248,113,113,.4);color:var(--danger);}
-@media(max-width:600px){.stat-grid{grid-template-columns:repeat(2,1fr);}.admin-wrap{padding:14px 14px 40px;}}
+.toast.success{border-color:rgba(52,211,153,.45);color:var(--success);}
+.toast.error{border-color:rgba(248,113,113,.45);color:var(--danger);}
+.toast.info{border-color:rgba(56,189,248,.45);color:var(--accent);}
+
+.spinner{width:15px;height:15px;border:2px solid rgba(56,189,248,.25);border-top-color:var(--accent);border-radius:50%;animation:spin .7s linear infinite;display:inline-block;vertical-align:middle;}
+@keyframes spin{to{transform:rotate(360deg);}}
+
+@media(max-width:640px){
+  .wrap{padding:16px 14px 56px;}
+  .stat-grid{grid-template-columns:repeat(2,1fr);}
+  .round-card{flex-direction:column;align-items:flex-start;}
+  .round-actions{width:100%;}
+  .round-actions .btn{flex:1;}
+}
 </style>
 </head>
 <body>
@@ -111,95 +201,152 @@ tr:hover td{background:rgba(255,255,255,.01);}
     <div><div class="nav-brand-name">StockCount</div><div class="nav-brand-sub">Admin Panel</div></div>
   </a>
   <div class="nav-right">
+    <div class="sync-pill" id="syncPill" style="display:none;">
+      <span class="sync-dot live" id="syncDot"></span><span id="syncText">ซิงค์…</span>
+    </div>
     <span class="badge-admin">⚙️ Admin</span>
-    <a class="btn-back" href="count.html">← หน้านับ</a>
   </div>
 </nav>
 
-<!-- PIN Screen -->
+<!-- ════ PIN ════ -->
 <div id="pinScreen" class="pin-wrap">
   <div class="pin-box">
     <div class="pin-icon">🔐</div>
-    <div class="pin-title">Admin Access</div>
-    <div class="pin-sub">กรอก PIN เพื่อเข้าใช้งาน Admin Panel</div>
-    <input class="pin-input" id="pinInput" type="password" maxlength="6" placeholder="••••"
-      onkeydown="if(event.key==='Enter')verifyPin()">
-    <button class="btn btn-primary" onclick="verifyPin()" style="width:100%;">เข้าสู่ระบบ</button>
-    <div class="pin-error" id="pinError">PIN ไม่ถูกต้อง กรุณาลองใหม่</div>
+    <div class="pin-title">เข้าสู่ Admin</div>
+    <div class="pin-sub">กรอก PIN เพื่อจัดการรอบนับสต็อกพาเลท</div>
+    <input class="pin-input" id="pinInput" type="password" inputmode="numeric" maxlength="8" placeholder="••••"
+      onkeydown="if(event.key==='Enter')verifyPin()" autocomplete="off">
+    <button class="btn btn-primary" onclick="verifyPin()" style="width:100%;" id="pinBtn">เข้าสู่ระบบ</button>
+    <div class="pin-error" id="pinError"></div>
   </div>
 </div>
 
-<!-- Admin Content -->
-<div id="adminContent" style="display:none;">
-  <div class="admin-wrap">
+<!-- ════ APP ════ -->
+<div id="app" style="display:none;">
+  <div class="tabbar">
+    <button class="tab active" data-tab="dashboard" onclick="switchTab('dashboard')">📊 ภาพรวม</button>
+    <button class="tab" data-tab="sites" onclick="switchTab('sites')">🏭 Site</button>
+    <button class="tab" data-tab="book" onclick="switchTab('book')">📒 Book Balance</button>
+    <button class="tab" data-tab="review" onclick="switchTab('review')">✅ ตรวจสอบ <span class="tab-count zero" id="reviewBadge">0</span></button>
+  </div>
 
-    <!-- Section: Round -->
-    <div class="section-title">รอบการนับปัจจุบัน</div>
-    <div class="round-card">
-      <div>
-        <div class="round-name" id="roundName">—</div>
-        <div id="roundStatus" class="round-status-open">● เปิดอยู่</div>
+  <div class="wrap">
+
+    <!-- ─── Dashboard ─── -->
+    <div class="panel active" id="panel-dashboard">
+      <div class="eyebrow">รอบการนับปัจจุบัน</div>
+      <div class="card round-card">
+        <div class="round-meta">
+          <div class="round-year" id="roundYear">—</div>
+          <div>
+            <div class="round-name" id="roundName">—</div>
+            <div class="round-state open" id="roundState">● เปิดรับการนับ</div>
+          </div>
+        </div>
+        <div class="round-actions">
+          <button class="btn btn-outline" onclick="openNewRound()">+ เปิดรอบใหม่</button>
+          <button class="btn btn-warn" id="btnToggleRound" onclick="toggleRound()">⏸ ปิดรอบ</button>
+        </div>
       </div>
-      <div class="round-actions">
-        <button class="btn btn-outline" onclick="openNewRoundModal()">+ เปิดรอบใหม่</button>
-        <button class="btn btn-warn" id="btnToggleRound" onclick="toggleRound()">⏸ ปิดรอบ</button>
+
+      <div class="card">
+        <div class="prog-wrap">
+          <div class="prog-head">
+            <span class="prog-label">ความคืบหน้า — Site ที่อนุมัติแล้ว</span>
+            <span class="prog-num"><b id="progDone">0</b> / <span id="progTotal">0</span></span>
+          </div>
+          <div class="prog-bar"><div class="prog-fill" id="progFill" style="width:0%;"></div></div>
+        </div>
+      </div>
+
+      <div class="eyebrow">สรุปสถานะ</div>
+      <div class="stat-grid">
+        <div class="stat-card"><div class="stat-num warn" id="statPending">—</div><div class="stat-lbl">⏳ รออนุมัติ</div></div>
+        <div class="stat-card"><div class="stat-num success" id="statApproved">—</div><div class="stat-lbl">✅ อนุมัติแล้ว</div></div>
+        <div class="stat-card"><div class="stat-num danger" id="statRejected">—</div><div class="stat-lbl">❌ ตีกลับ</div></div>
+        <div class="stat-card"><div class="stat-num accent" id="statSites">—</div><div class="stat-lbl">🏭 Site ทั้งหมด</div></div>
       </div>
     </div>
 
-    <!-- Section: Stats -->
-    <div class="section-title">สรุปภาพรวม</div>
-    <div class="stat-grid">
-      <div class="stat-card"><div class="stat-num warn" id="statPending">—</div><div class="stat-lbl">⏳ รออนุมัติ</div></div>
-      <div class="stat-card"><div class="stat-num success" id="statApproved">—</div><div class="stat-lbl">✅ อนุมัติแล้ว</div></div>
-      <div class="stat-card"><div class="stat-num danger" id="statRejected">—</div><div class="stat-lbl">❌ Reject</div></div>
-      <div class="stat-card"><div class="stat-num" id="statSites">—</div><div class="stat-lbl">🏭 Site ทั้งหมด</div></div>
+    <!-- ─── Sites ─── -->
+    <div class="panel" id="panel-sites">
+      <div class="eyebrow">เพิ่ม Site <span class="ehint">— Site ที่เปิดใช้งานจะไปแสดงให้ผู้นับเลือกในขั้นที่ 1</span></div>
+      <div class="add-row">
+        <input class="input" id="newSiteName" placeholder="ชื่อ Site เช่น NDC-วังน้อย" onkeydown="if(event.key==='Enter')addSite()">
+        <button class="btn btn-primary" onclick="addSite()">+ เพิ่ม Site</button>
+      </div>
+      <div class="eyebrow">รายการ Site</div>
+      <div class="table-wrap" id="sitesTable"><div class="empty"><span class="spinner"></span></div></div>
     </div>
 
-    <!-- Section: Pending Approval -->
-    <div class="section-title">รอการอนุมัติ</div>
-    <div class="table-wrap" id="pendingTable">
-      <div style="padding:32px;text-align:center;color:var(--muted);"><span class="spinner"></span> กำลังโหลด...</div>
+    <!-- ─── Book Balance ─── -->
+    <div class="panel" id="panel-book">
+      <div class="eyebrow">ยอดในระบบ (Book Balance) <span class="ehint">— ใส่ยอดล่วงหน้า ระบบนำไปคำนวณ Variance ให้ผู้นับตอนสรุปผล</span></div>
+      <div class="bb-controls">
+        <div class="field">
+          <label>เลือก Site</label>
+          <select class="select" id="bookSiteSelect" onchange="onBookSiteChange()"></select>
+        </div>
+        <span class="bb-status-tag bb-unset" id="bookStatusTag" style="margin-bottom:11px;">ยังไม่ใส่</span>
+      </div>
+      <div class="bb-hint">📒 หน่วย: จำนวนพาเลท · เว้นว่าง = 0</div>
+      <div class="bb-grid-wrap" id="bookGridWrap"><div class="empty">เลือก Site เพื่อใส่ยอด</div></div>
+      <button class="btn btn-success" id="bookSaveBtn" onclick="saveBook()" style="display:none;">💾 บันทึก Book Balance</button>
     </div>
 
-    <!-- Section: All Results -->
-    <div class="section-title">ผลการนับทั้งหมด</div>
-    <div class="table-wrap" id="allTable">
-      <div style="padding:32px;text-align:center;color:var(--muted);"><span class="spinner"></span> กำลังโหลด...</div>
+    <!-- ─── Review ─── -->
+    <div class="panel" id="panel-review">
+      <div class="eyebrow">รอการอนุมัติ</div>
+      <div class="table-wrap" id="pendingTable"><div class="empty"><span class="spinner"></span></div></div>
+      <div class="eyebrow">ผลการนับทั้งหมด</div>
+      <div class="table-wrap" id="allTable"><div class="empty"><span class="spinner"></span></div></div>
     </div>
 
   </div>
 </div>
 
-<!-- Book Balance Modal -->
-<div class="overlay" id="bookModal">
-  <div class="modal-box">
+<!-- ════ Review modal (approve / reject) ════ -->
+<div class="overlay" id="reviewModal">
+  <div class="modal">
     <div class="modal-head">
-      <div class="modal-title">📊 ใส่ Book Balance — <span id="bookSiteName">—</span></div>
-      <button class="modal-close" onclick="closeBookModal()">×</button>
+      <div class="modal-title" id="rvTitle">ตรวจสอบ</div>
+      <button class="modal-close" onclick="closeReview()">×</button>
     </div>
     <div class="modal-body">
-      <div style="font-size:12px;color:var(--muted);">Physical count ที่นับได้</div>
-      <div class="book-grid">
-        <div class="var-display"><div class="var-label">CHEP</div><div class="var-num" id="physChep">—</div></div>
-        <div class="var-display"><div class="var-label">LOSCAM</div><div class="var-num" id="physLoscam">—</div></div>
-        <div class="var-display"><div class="var-label">BRS</div><div class="var-num" id="physBrs">—</div></div>
-      </div>
-      <div style="font-size:12px;color:var(--muted);">Book Balance (จากระบบ)</div>
-      <div class="book-grid">
-        <div class="field"><label style="color:var(--chep);">CHEP</label><input class="input" id="bookChep" type="number" min="0" placeholder="0" oninput="calcVar()"></div>
-        <div class="field"><label style="color:var(--loscam);">LOSCAM</label><input class="input" id="bookLoscam" type="number" min="0" placeholder="0" oninput="calcVar()"></div>
-        <div class="field"><label style="color:var(--brs);">BRS</label><input class="input" id="bookBrs" type="number" min="0" placeholder="0" oninput="calcVar()"></div>
-      </div>
-      <div style="font-size:12px;color:var(--muted);">Variance (Physical − Book)</div>
-      <div class="book-grid">
-        <div class="var-display"><div class="var-label">CHEP</div><div class="var-num zero" id="varChep">—</div></div>
-        <div class="var-display"><div class="var-label">LOSCAM</div><div class="var-num zero" id="varLoscam">—</div></div>
-        <div class="var-display"><div class="var-label">BRS</div><div class="var-num zero" id="varBrs">—</div></div>
+      <div class="modal-note" id="rvNote"></div>
+      <div class="field" style="gap:8px;">
+        <label id="rvCommentLabel">คอมเมนต์</label>
+        <textarea class="input" id="rvComment" placeholder=""></textarea>
       </div>
     </div>
     <div class="modal-foot">
-      <button class="btn btn-outline" onclick="closeBookModal()" style="flex:1;">ยกเลิก</button>
-      <button class="btn btn-success" onclick="saveBookBalance()" style="flex:2;">💾 บันทึก Book Balance</button>
+      <button class="btn btn-outline" onclick="closeReview()" style="flex:1;">ยกเลิก</button>
+      <button class="btn" id="rvConfirm" onclick="confirmReview()" style="flex:2;"></button>
+    </div>
+  </div>
+</div>
+
+<!-- ════ New round modal ════ -->
+<div class="overlay" id="roundModal">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="modal-title">เปิดรอบนับใหม่</div>
+      <button class="modal-close" onclick="closeRoundModal()">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-note">เปิดรอบใหม่จะ <b>เก็บรอบปัจจุบันเข้าคลัง (archive)</b> และเริ่มนับใหม่ทั้งหมด ผลการนับเดิมยังเรียกดูได้</div>
+      <div class="field" style="gap:8px;">
+        <label>ปี (พ.ศ.)</label>
+        <input class="input mono" id="newRoundYear" type="number" placeholder="2570">
+      </div>
+      <div class="field" style="gap:8px;">
+        <label>ชื่อรอบ</label>
+        <input class="input" id="newRoundName" placeholder="นับสต็อกพาเลท 2570">
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-outline" onclick="closeRoundModal()" style="flex:1;">ยกเลิก</button>
+      <button class="btn btn-primary" onclick="confirmNewRound()" style="flex:2;">เปิดรอบ</button>
     </div>
   </div>
 </div>
@@ -207,252 +354,397 @@ tr:hover td{background:rgba(255,255,255,.01);}
 <div id="toast" class="toast"></div>
 
 <script>
-var API_URL = (typeof STOCKCOUNT_CONFIG !== 'undefined') ? STOCKCOUNT_CONFIG.API_URL : '';
-var _authed    = false;
-var _counts    = [];
-var _roundInfo = null;
-var _bookTarget= null;
-var toastTimer;
+/* ════════════════════════════════════════════════════════════════
+   StockCount Admin — frontend
+   Backend: Google Apps Script (separate project) + Google Sheets
 
-// ── PIN ───────────────────────────────────────────────────
-function verifyPin() {
+   API CONTRACT (all POST, body = JSON, Content-Type text/plain):
+     {action:'verifyPin', pin}                                  -> {ok}
+     {action:'getAdminData'}                                    -> {round, sites, books, subs}
+     {action:'saveSite', site_id?, site_name}                  -> {ok, site}
+     {action:'toggleSite', site_id, is_active}                  -> {ok}
+     {action:'deleteSite', site_id}                             -> {ok}
+     {action:'newRound', year, round_name}                      -> {ok, round}
+     {action:'toggleRound', is_open}                            -> {ok}
+     {action:'saveBookBalance', site_id, book}                  -> {ok}   // book[provider][status]
+     {action:'reviewSubmission', count_id, status, comment}     -> {ok}   // status: approved|rejected
+
+   ⚠ BACKEND must wrap every write in LockService.getScriptLock()
+     (getAdminData polling + concurrent admins can race on Sheet writes).
+   ⚠ PIN is sent in POST body (not query string) to keep it out of GAS logs.
+   ════════════════════════════════════════════════════════════════ */
+
+var API_URL   = (typeof STOCKCOUNT_CONFIG !== 'undefined') ? STOCKCOUNT_CONFIG.API_URL : '';
+var DEMO_MODE = !API_URL;            // no config.js -> run on local mock data
+var POLL_MS   = 12000;               // near-real-time refresh
+
+var PROVIDERS = [
+  {key:'loscam', label:'LOSCAM', cls:'prov-loscam'},
+  {key:'chep',   label:'CHEP',   cls:'prov-chep'},
+  {key:'brs',    label:'BRS',    cls:'prov-brs'},
+  {key:'swwi',   label:'SWWI',   cls:'prov-swwi'}
+];
+var STATUSES = [
+  {key:'onhand',      label:'คงเหลือ'},
+  {key:'transit_out', label:'ระหว่างโอนออก'},
+  {key:'transit_in',  label:'ระหว่างโอนเข้า'},
+  {key:'damaged',     label:'ชำรุดเสียหาย'},
+  {key:'lost',        label:'สูญหาย'}
+];
+
+var S = { round:null, sites:[], books:{}, subs:[], tab:'dashboard', bookSite:'', rv:null };
+var _pollTimer = null, _modalOpen = false, _toastTimer = null;
+
+/* ── PIN ─────────────────────────────────────────────── */
+function verifyPin(){
   var pin = document.getElementById('pinInput').value.trim();
-  if (!pin) return;
-  fetch(API_URL+'?action=verifyPin&pin='+encodeURIComponent(pin))
-    .then(function(r){ return r.json(); })
-    .then(function(data) {
-      if (data.ok) {
-        _authed = true;
-        document.getElementById('pinScreen').style.display = 'none';
-        document.getElementById('adminContent').style.display = 'block';
-        loadAdminData();
-      } else {
-        document.getElementById('pinError').style.display = 'block';
-        document.getElementById('pinInput').value = '';
-      }
-    })
-    .catch(function() {
-      // demo mode — accept "1234"
-      if (pin === '1234') {
-        _authed = true;
-        document.getElementById('pinScreen').style.display = 'none';
-        document.getElementById('adminContent').style.display = 'block';
-        loadAdminData();
-      } else {
-        document.getElementById('pinError').style.display = 'block';
-        document.getElementById('pinInput').value = '';
-      }
-    });
+  if(!pin) return;
+  var btn = document.getElementById('pinBtn'); btn.disabled = true; btn.textContent = 'กำลังตรวจสอบ…';
+  setPinError('');
+  if(DEMO_MODE){
+    setTimeout(function(){ if(pin==='1234') enterApp(); else failPin(btn); }, 350);
+    return;
+  }
+  post({action:'verifyPin', pin:pin}).then(function(d){
+    if(d && d.ok) enterApp(); else failPin(btn);
+  }).catch(function(){
+    setPinError('เชื่อมต่อระบบไม่ได้ ลองใหม่อีกครั้ง'); resetPinBtn(btn);
+  });
+}
+function failPin(btn){ setPinError('PIN ไม่ถูกต้อง'); document.getElementById('pinInput').value=''; resetPinBtn(btn); }
+function resetPinBtn(btn){ btn.disabled=false; btn.textContent='เข้าสู่ระบบ'; }
+function setPinError(m){ document.getElementById('pinError').textContent = m; }
+function enterApp(){
+  document.getElementById('pinScreen').style.display='none';
+  document.getElementById('app').style.display='block';
+  document.getElementById('syncPill').style.display='flex';
+  loadData(true);
+  startPolling();
 }
 
-// ── Load Data ─────────────────────────────────────────────
-function loadAdminData() {
-  fetch(API_URL+'?action=getAdminData')
-    .then(function(r){ return r.json(); })
-    .then(function(data) {
-      _counts    = data.counts    || [];
-      _roundInfo = data.round     || { round_name:'นับสต็อก 2569', is_open:true };
-      renderAdmin();
-    })
-    .catch(function() {
-      // demo
-      _roundInfo = { round_name:'นับสต็อก 2569', is_open:true };
-      _counts = [
-        {count_id:'SC-20260610-001',round:'นับสต็อก 2569',site:'NDC-วังน้อย',counter_name:'สมชาย ใจดี',timestamp:'2026-06-10T08:30:00Z',total_chep:165,total_loscam:115,total_brs:350,book_chep:160,book_loscam:120,book_brs:345,status:'pending',file_urls:[]},
-        {count_id:'SC-20260610-002',round:'นับสต็อก 2569',site:'คลังชลบุรี',counter_name:'สมหญิง มีสุข',timestamp:'2026-06-10T09:15:00Z',total_chep:80,total_loscam:60,total_brs:200,book_chep:0,book_loscam:0,book_brs:0,status:'pending',file_urls:[]},
-        {count_id:'SC-20260609-099',round:'นับสต็อก 2569',site:'RDC-ขอนแก่น',counter_name:'อรทัย รักดี',timestamp:'2026-06-09T14:00:00Z',total_chep:45,total_loscam:30,total_brs:120,book_chep:45,book_loscam:32,book_brs:118,status:'approved',file_urls:[]}
-      ];
-      renderAdmin();
-    });
+/* ── Data load + polling ─────────────────────────────── */
+function loadData(showSpin){
+  if(DEMO_MODE){ if(!S.round) seedDemo(); renderAll(); markSynced(); return Promise.resolve(); }
+  return post({action:'getAdminData'}).then(function(d){
+    if(d){
+      S.round = d.round || S.round;
+      S.sites = d.sites || [];
+      S.books = d.books || {};
+      S.subs  = d.subs  || [];
+    }
+    renderAll(); markSynced();
+  }).catch(function(){ document.getElementById('syncText').textContent='ออฟไลน์'; });
+}
+function startPolling(){
+  if(_pollTimer) clearInterval(_pollTimer);
+  _pollTimer = setInterval(function(){
+    if(_modalOpen) return;                 // don't clobber input mid-edit
+    if(S.tab==='book' && S.bookSite) return; // don't wipe book entry in progress
+    loadData(false);
+  }, POLL_MS);
+}
+function markSynced(){
+  var t = new Date();
+  document.getElementById('syncText').textContent = 'ซิงค์ ' + pad(t.getHours())+':'+pad(t.getMinutes())+':'+pad(t.getSeconds());
 }
 
-function renderAdmin() {
-  // round
-  var r = _roundInfo;
-  document.getElementById('roundName').textContent = r.round_name;
-  document.getElementById('roundStatus').textContent = r.is_open ? '● เปิดอยู่' : '● ปิดแล้ว';
-  document.getElementById('roundStatus').className = r.is_open ? 'round-status-open' : 'round-status-closed';
+/* ── Render: everything ──────────────────────────────── */
+function renderAll(){ renderDashboard(); renderSites(); renderBookSelect(); renderReview(); }
+
+function curSubs(){ var rid = S.round ? S.round.round_id : null; return S.subs.filter(function(x){ return !rid || x.round_id===rid; }); }
+function activeSites(){ return S.sites.filter(function(s){ return s.is_active; }); }
+function siteState(site_id){
+  var rows = curSubs().filter(function(x){ return x.site_id===site_id; });
+  if(!rows.length) return 'idle';
+  rows.sort(function(a,b){ return (b.submitted_at||'').localeCompare(a.submitted_at||''); });
+  return rows[0].status; // pending | approved | rejected
+}
+
+function renderDashboard(){
+  var r = S.round || {};
+  document.getElementById('roundYear').textContent  = r.year || '—';
+  document.getElementById('roundName').textContent  = r.round_name || '—';
+  var st = document.getElementById('roundState');
+  st.textContent = r.is_open ? '● เปิดรับการนับ' : '● ปิดรอบแล้ว';
+  st.className = 'round-state ' + (r.is_open ? 'open' : 'closed');
   document.getElementById('btnToggleRound').textContent = r.is_open ? '⏸ ปิดรอบ' : '▶ เปิดรอบ';
 
-  // stats
-  var pending  = _counts.filter(function(c){ return c.status==='pending'; }).length;
-  var approved = _counts.filter(function(c){ return c.status==='approved'; }).length;
-  var rejected = _counts.filter(function(c){ return c.status==='rejected'; }).length;
-  var sites    = new Set(_counts.map(function(c){ return c.site; })).size;
+  var subs = curSubs();
+  var pending  = subs.filter(function(c){return c.status==='pending';}).length;
+  var approved = subs.filter(function(c){return c.status==='approved';}).length;
+  var rejected = subs.filter(function(c){return c.status==='rejected';}).length;
   document.getElementById('statPending').textContent  = pending;
   document.getElementById('statApproved').textContent = approved;
   document.getElementById('statRejected').textContent = rejected;
-  document.getElementById('statSites').textContent    = sites;
+  document.getElementById('statSites').textContent    = activeSites().length;
 
-  // pending table
-  var pendingCounts = _counts.filter(function(c){ return c.status==='pending'; });
-  renderTable('pendingTable', pendingCounts, true);
-  renderTable('allTable', _counts, false);
+  // progress = active sites approved / active sites
+  var act = activeSites();
+  var done = act.filter(function(s){ return siteState(s.site_id)==='approved'; }).length;
+  var total = act.length;
+  document.getElementById('progDone').textContent  = done;
+  document.getElementById('progTotal').textContent = total;
+  document.getElementById('progFill').style.width  = (total ? Math.round(done/total*100) : 0) + '%';
+
+  var badge = document.getElementById('reviewBadge');
+  badge.textContent = pending;
+  badge.className = 'tab-count' + (pending ? '' : ' zero');
 }
 
-function renderTable(elId, counts, isPending) {
-  var el = document.getElementById(elId);
-  if (!counts.length) {
-    el.innerHTML = '<div style="padding:32px;text-align:center;color:var(--muted);">'+(isPending?'ไม่มีรายการรออนุมัติ ✅':'ยังไม่มีข้อมูล')+'</div>';
-    return;
-  }
-  var rows = counts.map(function(c) {
-    var dt = c.timestamp ? new Date(c.timestamp).toLocaleString('th-TH',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}) : '—';
-    var varChep   = c.book_chep   ? (c.total_chep   - c.book_chep)   : null;
-    var varLoscam = c.book_loscam ? (c.total_loscam - c.book_loscam) : null;
-    var varBrs    = c.book_brs    ? (c.total_brs    - c.book_brs)    : null;
-    function varStr(v) {
-      if (v === null) return '<span style="color:var(--muted);">—</span>';
-      var cls = v>0?'success':v<0?'danger':'muted';
-      return '<span style="color:var(--'+cls+');">'+(v>0?'+':'')+v+'</span>';
-    }
-    var statusBadge = {pending:'<span class="status-badge sb-pending">⏳ รออนุมัติ</span>',approved:'<span class="status-badge sb-approved">✅ อนุมัติ</span>',rejected:'<span class="status-badge sb-rejected">❌ Reject</span>'}[c.status]||c.status;
-    var actionBtns = '';
-    if (c.status === 'pending') {
-      actionBtns = '<div class="action-btns">'
-        +'<button class="btn-sm btn-sm-approve" onclick="approveCount(\''+esc(c.count_id)+'\')">✅ อนุมัติ</button>'
-        +'<button class="btn-sm btn-sm-reject"  onclick="rejectCount(\''+esc(c.count_id)+'\')">❌ Reject</button>'
-        +'<button class="btn-sm btn-sm-view"    onclick="openBookModal(\''+esc(c.count_id)+'\')">📊 Book</button>'
-        +'</div>';
-    } else {
-      actionBtns = '<button class="btn-sm btn-sm-view" onclick="openBookModal(\''+esc(c.count_id)+'\')">📊 Book</button>';
-    }
+/* ── Render: Sites ───────────────────────────────────── */
+function renderSites(){
+  var el = document.getElementById('sitesTable');
+  if(!S.sites.length){ el.innerHTML = '<div class="empty">ยังไม่มี Site — เพิ่ม Site แรกด้านบน</div>'; return; }
+  var rows = S.sites.map(function(s){
+    var stt = siteState(s.site_id);
+    var stMap = {
+      idle:'<span class="status-badge sb-idle">— ยังไม่นับ</span>',
+      pending:'<span class="status-badge sb-pending">⏳ รออนุมัติ</span>',
+      approved:'<span class="status-badge sb-locked">🔒 อนุมัติ/ล็อค</span>',
+      rejected:'<span class="status-badge sb-rejected">↩ ตีกลับ</span>'
+    };
     return '<tr>'
-      +'<td class="mono" style="color:var(--accent);font-size:10px;">'+esc(c.count_id)+'</td>'
-      +'<td style="font-weight:600;">'+esc(c.site)+'</td>'
-      +'<td style="font-size:11px;">'+esc(c.counter_name)+'</td>'
-      +'<td class="mono" style="font-size:10px;">'+dt+'</td>'
-      +'<td class="num-chep">'+c.total_chep+'</td>'
-      +'<td class="num-loscam">'+c.total_loscam+'</td>'
-      +'<td class="num-brs">'+c.total_brs+'</td>'
-      +'<td>'+varStr(varChep)+'</td>'
-      +'<td>'+varStr(varLoscam)+'</td>'
-      +'<td>'+varStr(varBrs)+'</td>'
-      +'<td>'+statusBadge+'</td>'
-      +'<td>'+actionBtns+'</td>'
+      +'<td style="font-weight:600;">'+esc(s.site_name)+'</td>'
+      +'<td>'+stMap[stt]+'</td>'
+      +'<td><div class="toggle '+(s.is_active?'on':'')+'" onclick="toggleSite(\''+esc(s.site_id)+'\')" title="เปิด/ปิดการใช้งาน"></div></td>'
+      +'<td><button class="btn-sm btn-sm-reject" onclick="deleteSite(\''+esc(s.site_id)+'\')">ลบ</button></td>'
     +'</tr>';
   }).join('');
-
-  el.innerHTML = '<table><thead><tr>'
-    +'<th>ID</th><th>Site</th><th>ผู้นับ</th><th>วันที่</th>'
-    +'<th style="color:var(--chep);">CHEP</th>'
-    +'<th style="color:var(--loscam);">LOSCAM</th>'
-    +'<th style="color:var(--brs);">BRS</th>'
-    +'<th>±CHEP</th><th>±LOSCAM</th><th>±BRS</th>'
-    +'<th>สถานะ</th><th>จัดการ</th>'
-    +'</tr></thead><tbody>'+rows+'</tbody></table>';
+  el.innerHTML = '<table><thead><tr><th>ชื่อ Site</th><th>สถานะการนับ</th><th>ใช้งาน</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>';
 }
 
-// ── Approve / Reject ──────────────────────────────────────
-async function approveCount(countId) {
-  if (!confirm('อนุมัติ '+countId+' ?')) return;
-  await postAction({ action:'updateStatus', count_id:countId, status:'approved' });
-  var c = _counts.find(function(x){ return x.count_id===countId; });
-  if (c) c.status = 'approved';
-  renderAdmin();
-  showToast('✅ อนุมัติแล้ว', 'success');
+/* ── Render: Book Balance ────────────────────────────── */
+function renderBookSelect(){
+  var sel = document.getElementById('bookSiteSelect');
+  var act = activeSites();
+  var prev = S.bookSite;
+  sel.innerHTML = '<option value="">— เลือก Site —</option>' + act.map(function(s){
+    var has = S.books[s.site_id] ? ' ✓' : '';
+    return '<option value="'+esc(s.site_id)+'">'+esc(s.site_name)+has+'</option>';
+  }).join('');
+  if(prev && act.some(function(s){return s.site_id===prev;})) sel.value = prev;
+  else { S.bookSite=''; renderBookGrid(); }
 }
+function onBookSiteChange(){ S.bookSite = document.getElementById('bookSiteSelect').value; renderBookGrid(); }
+function renderBookGrid(){
+  var wrap = document.getElementById('bookGridWrap');
+  var btn  = document.getElementById('bookSaveBtn');
+  var tag  = document.getElementById('bookStatusTag');
+  if(!S.bookSite){ wrap.innerHTML='<div class="empty">เลือก Site เพื่อใส่ยอด</div>'; btn.style.display='none'; tag.style.display='none'; return; }
+  var book = S.books[S.bookSite] || {};
+  tag.style.display='inline-block';
+  tag.textContent = S.books[S.bookSite] ? 'ใส่ยอดแล้ว ✓' : 'ยังไม่ใส่';
+  tag.className = 'bb-status-tag ' + (S.books[S.bookSite] ? 'bb-set' : 'bb-unset');
 
-async function rejectCount(countId) {
-  var note = prompt('เหตุผลที่ Reject (ถ้ามี):');
-  if (note === null) return;
-  await postAction({ action:'updateStatus', count_id:countId, status:'rejected', note:note });
-  var c = _counts.find(function(x){ return x.count_id===countId; });
-  if (c) c.status = 'rejected';
-  renderAdmin();
-  showToast('❌ Reject แล้ว', 'error');
+  var head = '<tr><th>สถานะ \\ พาเลท</th>' + PROVIDERS.map(function(p){return '<th class="prov-head '+p.cls+'">'+p.label+'</th>';}).join('') + '<th>รวม</th></tr>';
+  var body = STATUSES.map(function(st){
+    var cells = PROVIDERS.map(function(p){
+      var v = (book[p.key] && book[p.key][st.key]!=null) ? book[p.key][st.key] : '';
+      return '<td><input class="bb-input" type="number" min="0" inputmode="numeric" data-p="'+p.key+'" data-s="'+st.key+'" value="'+v+'" oninput="recalcBook()"></td>';
+    }).join('');
+    return '<tr><td style="font-weight:600;">'+st.label+'</td>'+cells+'<td class="bb-total" data-rowtot="'+st.key+'">0</td></tr>';
+  }).join('');
+  var foot = '<tr class="bb-foot"><td>รวมทั้งหมด</td>'
+    + PROVIDERS.map(function(p){return '<td data-coltot="'+p.key+'">0</td>';}).join('')
+    + '<td data-grandtot>0</td></tr>';
+  wrap.innerHTML = '<table class="bb"><thead>'+head+'</thead><tbody>'+body+'</tbody><tfoot>'+foot+'</tfoot></table>';
+  btn.style.display='inline-flex';
+  recalcBook();
 }
-
-// ── Book Balance Modal ────────────────────────────────────
-function openBookModal(countId) {
-  var c = _counts.find(function(x){ return x.count_id===countId; });
-  if (!c) return;
-  _bookTarget = c;
-  document.getElementById('bookSiteName').textContent   = c.site;
-  document.getElementById('physChep').textContent       = c.total_chep;
-  document.getElementById('physLoscam').textContent     = c.total_loscam;
-  document.getElementById('physBrs').textContent        = c.total_brs;
-  document.getElementById('bookChep').value             = c.book_chep   || '';
-  document.getElementById('bookLoscam').value           = c.book_loscam || '';
-  document.getElementById('bookBrs').value              = c.book_brs    || '';
-  calcVar();
-  document.getElementById('bookModal').classList.add('open');
-}
-
-function closeBookModal() {
-  document.getElementById('bookModal').classList.remove('open');
-  _bookTarget = null;
-}
-
-function calcVar() {
-  if (!_bookTarget) return;
-  function setVar(elId, physical, bookVal) {
-    var book = Number(bookVal) || 0;
-    var v    = physical - book;
-    var el   = document.getElementById(elId);
-    el.textContent = book ? (v>0?'+':'')+v : '—';
-    el.className   = 'var-num ' + (book===0?'zero':v>0?'pos':v<0?'neg':'zero');
-  }
-  setVar('varChep',   _bookTarget.total_chep,   document.getElementById('bookChep').value);
-  setVar('varLoscam', _bookTarget.total_loscam, document.getElementById('bookLoscam').value);
-  setVar('varBrs',    _bookTarget.total_brs,    document.getElementById('bookBrs').value);
-}
-
-async function saveBookBalance() {
-  if (!_bookTarget) return;
-  var chep   = Number(document.getElementById('bookChep').value)   || 0;
-  var loscam = Number(document.getElementById('bookLoscam').value) || 0;
-  var brs    = Number(document.getElementById('bookBrs').value)    || 0;
-  await postAction({ action:'updateBook', count_id:_bookTarget.count_id, book_chep:chep, book_loscam:loscam, book_brs:brs });
-  _bookTarget.book_chep   = chep;
-  _bookTarget.book_loscam = loscam;
-  _bookTarget.book_brs    = brs;
-  closeBookModal();
-  renderAdmin();
-  showToast('💾 บันทึก Book Balance แล้ว', 'success');
-}
-
-// ── Toggle Round ──────────────────────────────────────────
-async function toggleRound() {
-  var newState = !_roundInfo.is_open;
-  var msg = newState ? 'เปิดรอบการนับ?' : 'ปิดรอบการนับ? ผู้นับจะไม่สามารถ submit ได้อีก';
-  if (!confirm(msg)) return;
-  await postAction({ action:'toggleRound', is_open:newState });
-  _roundInfo.is_open = newState;
-  renderAdmin();
-  showToast(newState ? '▶ เปิดรอบแล้ว' : '⏸ ปิดรอบแล้ว', 'info');
-}
-
-function openNewRoundModal() {
-  var name = prompt('ชื่อรอบการนับใหม่:', 'นับสต็อก 2570');
-  if (!name) return;
-  postAction({ action:'newRound', round_name:name }).then(function() {
-    _roundInfo.round_name = name;
-    _roundInfo.is_open    = true;
-    renderAdmin();
-    showToast('+ เปิดรอบ "'+name+'" แล้ว', 'success');
+function recalcBook(){
+  var wrap = document.getElementById('bookGridWrap');
+  var inputs = wrap.querySelectorAll('.bb-input');
+  var col = {}, row = {}, grand = 0;
+  PROVIDERS.forEach(function(p){col[p.key]=0;});
+  STATUSES.forEach(function(s){row[s.key]=0;});
+  inputs.forEach(function(i){
+    var v = Number(i.value)||0;
+    col[i.dataset.p]+=v; row[i.dataset.s]+=v; grand+=v;
   });
+  STATUSES.forEach(function(s){ var e=wrap.querySelector('[data-rowtot="'+s.key+'"]'); if(e)e.textContent=row[s.key].toLocaleString(); });
+  PROVIDERS.forEach(function(p){ var e=wrap.querySelector('[data-coltot="'+p.key+'"]'); if(e)e.textContent=col[p.key].toLocaleString(); });
+  var g=wrap.querySelector('[data-grandtot]'); if(g)g.textContent=grand.toLocaleString();
+}
+function saveBook(){
+  if(!S.bookSite) return;
+  var book = {};
+  PROVIDERS.forEach(function(p){ book[p.key]={}; STATUSES.forEach(function(s){ book[p.key][s.key]=0; }); });
+  document.getElementById('bookGridWrap').querySelectorAll('.bb-input').forEach(function(i){
+    book[i.dataset.p][i.dataset.s] = Number(i.value)||0;
+  });
+  var site = S.bookSite;
+  var btn = document.getElementById('bookSaveBtn'); btn.disabled=true; btn.textContent='กำลังบันทึก…';
+  post({action:'saveBookBalance', site_id:site, book:book}).then(function(){
+    S.books[site] = book;
+    btn.disabled=false; btn.innerHTML='💾 บันทึก Book Balance';
+    renderBookSelect(); renderBookGrid();
+    toast('💾 บันทึก Book Balance แล้ว','success');
+  }).catch(function(){ btn.disabled=false; btn.innerHTML='💾 บันทึก Book Balance'; toast('บันทึกไม่สำเร็จ','error'); });
 }
 
-// ── Helper ────────────────────────────────────────────────
-async function postAction(payload) {
-  try {
-    var res = await fetch(API_URL, {
-      method:'POST', redirect:'follow',
-      headers:{'Content-Type':'text/plain'},
-      body: JSON.stringify(payload)
-    });
-    return await res.json();
-  } catch(e) { return { status:'ok' }; }
+/* ── Render: Review ──────────────────────────────────── */
+function renderReview(){
+  var subs = curSubs();
+  renderSubTable('pendingTable', subs.filter(function(c){return c.status==='pending';}), true);
+  renderSubTable('allTable', subs.slice().sort(function(a,b){return (b.submitted_at||'').localeCompare(a.submitted_at||'');}), false);
+}
+function renderSubTable(elId, list, isPending){
+  var el = document.getElementById(elId);
+  if(!list.length){ el.innerHTML = '<div class="empty">'+(isPending?'ไม่มีรายการรออนุมัติ ✅':'ยังไม่มีผลการนับ')+'</div>'; return; }
+  var rows = list.map(function(c){
+    var dt = c.submitted_at ? new Date(c.submitted_at).toLocaleString('th-TH',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}) : '—';
+    var sb = {pending:'<span class="status-badge sb-pending">⏳ รออนุมัติ</span>',approved:'<span class="status-badge sb-approved">✅ อนุมัติ</span>',rejected:'<span class="status-badge sb-rejected">❌ ตีกลับ</span>'}[c.status]||esc(c.status);
+    var pdf = c.pdf_url
+      ? '<a class="btn-sm btn-sm-open" href="'+esc(c.pdf_url)+'" target="_blank" rel="noopener">📄 เปิด PDF</a>'
+      : '<span class="status-badge sb-idle">ไม่มีไฟล์</span>';
+    var act = '';
+    if(c.status==='pending'){
+      act = '<button class="btn-sm btn-sm-approve" onclick="openReview(\''+esc(c.count_id)+'\',\'approved\')">✅ อนุมัติ</button>'
+          + '<button class="btn-sm btn-sm-reject" onclick="openReview(\''+esc(c.count_id)+'\',\'rejected\')">❌ ตีกลับ</button>';
+    } else if(c.review_comment){
+      act = '<span style="font-size:11px;color:var(--muted);" title="'+esc(c.review_comment)+'">💬 มีคอมเมนต์</span>';
+    }
+    return '<tr>'
+      +'<td class="cid">'+esc(c.count_id)+'</td>'
+      +'<td style="font-weight:600;">'+esc(c.site_name)+'</td>'
+      +'<td style="font-size:11.5px;">'+esc(c.counter_name)+'</td>'
+      +'<td class="mono" style="font-size:10.5px;color:var(--muted);">'+dt+'</td>'
+      +'<td>'+pdf+'</td>'
+      +'<td>'+sb+'</td>'
+      +'<td><div class="action-btns">'+act+'</div></td>'
+    +'</tr>';
+  }).join('');
+  el.innerHTML = '<table><thead><tr><th>Count ID</th><th>Site</th><th>ผู้นับ</th><th>ส่งเมื่อ</th><th>ใบเซ็น</th><th>สถานะ</th><th>จัดการ</th></tr></thead><tbody>'+rows+'</tbody></table>';
 }
 
-function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); }
-function showToast(msg, type) {
-  var t = document.getElementById('toast');
-  t.textContent = msg;
-  t.className = 'toast '+(type||'info')+' show';
-  clearTimeout(toastTimer);
-  toastTimer = setTimeout(function(){ t.classList.remove('show'); }, 3000);
+/* ── Review modal ────────────────────────────────────── */
+function openReview(countId, decision){
+  var c = curSubs().find(function(x){return x.count_id===countId;});
+  if(!c) return;
+  S.rv = {countId:countId, decision:decision};
+  var approve = decision==='approved';
+  document.getElementById('rvTitle').textContent = approve ? 'อนุมัติผลการนับ' : 'ตีกลับให้แก้ไข';
+  document.getElementById('rvNote').innerHTML = (approve
+      ? 'อนุมัติ <b>'+esc(c.site_name)+'</b> — ผู้นับจะเห็นว่า <b>เสร็จสิ้น</b> และ Site นี้จะถูกล็อค ส่งซ้ำไม่ได้'
+      : 'ตีกลับ <b>'+esc(c.site_name)+'</b> — ผู้นับจะเห็นว่าต้องแก้ไขแล้วส่งใหม่ <b>โปรดระบุสิ่งที่ต้องแก้</b>')
+    + '<br><span class="mono" style="font-size:11px;color:var(--muted);">'+esc(c.count_id)+'</span>';
+  document.getElementById('rvCommentLabel').textContent = approve ? 'คอมเมนต์ (ถ้ามี)' : 'สิ่งที่ต้องแก้ไข (จำเป็น)';
+  var ta = document.getElementById('rvComment');
+  ta.value=''; ta.placeholder = approve ? 'เช่น ตรวจสอบเรียบร้อย เซ็นครบ' : 'เช่น ลายเซ็นพยานไม่ครบ / ใบเบลอ ถ่ายใหม่';
+  var cf = document.getElementById('rvConfirm');
+  cf.textContent = approve ? '✅ ยืนยันอนุมัติ' : '❌ ยืนยันตีกลับ';
+  cf.className = 'btn ' + (approve ? 'btn-success' : 'btn-danger');
+  openOverlay('reviewModal');
+}
+function confirmReview(){
+  if(!S.rv) return;
+  var comment = document.getElementById('rvComment').value.trim();
+  if(S.rv.decision==='rejected' && !comment){ toast('กรุณาระบุสิ่งที่ต้องแก้ไข','error'); return; }
+  var countId=S.rv.countId, decision=S.rv.decision;
+  var cf=document.getElementById('rvConfirm'); cf.disabled=true;
+  post({action:'reviewSubmission', count_id:countId, status:decision, comment:comment}).then(function(){
+    var c = S.subs.find(function(x){return x.count_id===countId;});
+    if(c){ c.status=decision; c.review_comment=comment; }
+    cf.disabled=false; closeReview(); renderAll();
+    toast(decision==='approved'?'✅ อนุมัติแล้ว':'❌ ตีกลับให้แก้ไขแล้ว', decision==='approved'?'success':'error');
+  }).catch(function(){ cf.disabled=false; toast('ทำรายการไม่สำเร็จ','error'); });
+}
+function closeReview(){ S.rv=null; closeOverlay('reviewModal'); }
+
+/* ── Sites actions ───────────────────────────────────── */
+function addSite(){
+  var inp=document.getElementById('newSiteName'); var name=inp.value.trim();
+  if(!name){ toast('กรอกชื่อ Site ก่อน','error'); return; }
+  post({action:'saveSite', site_name:name}).then(function(d){
+    var site = (d&&d.site) ? d.site : {site_id:'S'+Date.now(), site_name:name, is_active:true};
+    S.sites.push(site); inp.value=''; renderAll();
+    toast('+ เพิ่ม "'+name+'" แล้ว','success');
+  }).catch(function(){ toast('เพิ่ม Site ไม่สำเร็จ','error'); });
+}
+function toggleSite(id){
+  var s=S.sites.find(function(x){return x.site_id===id;}); if(!s) return;
+  var next=!s.is_active;
+  post({action:'toggleSite', site_id:id, is_active:next}).then(function(){
+    s.is_active=next; renderAll();
+  }).catch(function(){ toast('เปลี่ยนสถานะไม่สำเร็จ','error'); });
+}
+function deleteSite(id){
+  var s=S.sites.find(function(x){return x.site_id===id;}); if(!s) return;
+  if(siteState(id)!=='idle'){ toast('Site นี้มีผลการนับแล้ว ลบไม่ได้ — ปิดการใช้งานแทน','error'); return; }
+  if(!confirm('ลบ Site "'+s.site_name+'" ?')) return;
+  post({action:'deleteSite', site_id:id}).then(function(){
+    S.sites=S.sites.filter(function(x){return x.site_id!==id;}); renderAll();
+    toast('ลบ Site แล้ว','info');
+  }).catch(function(){ toast('ลบไม่สำเร็จ','error'); });
+}
+
+/* ── Round actions ───────────────────────────────────── */
+function toggleRound(){
+  var open=S.round&&S.round.is_open;
+  var msg=open?'ปิดรอบการนับ? ผู้นับจะ submit ไม่ได้อีก':'เปิดรอบการนับให้ผู้นับ submit ได้?';
+  if(!confirm(msg)) return;
+  var next=!open;
+  post({action:'toggleRound', is_open:next}).then(function(){
+    if(S.round) S.round.is_open=next; renderAll();
+    toast(next?'▶ เปิดรอบแล้ว':'⏸ ปิดรอบแล้ว','info');
+  }).catch(function(){ toast('เปลี่ยนสถานะรอบไม่สำเร็จ','error'); });
+}
+function openNewRound(){
+  var y=(S.round&&S.round.year)?(Number(S.round.year)+1):'';
+  document.getElementById('newRoundYear').value=y;
+  document.getElementById('newRoundName').value=y?('นับสต็อกพาเลท '+y):'';
+  openOverlay('roundModal');
+}
+function closeRoundModal(){ closeOverlay('roundModal'); }
+function confirmNewRound(){
+  var year=document.getElementById('newRoundYear').value.trim();
+  var name=document.getElementById('newRoundName').value.trim();
+  if(!year||!name){ toast('กรอกปีและชื่อรอบ','error'); return; }
+  post({action:'newRound', year:year, round_name:name}).then(function(d){
+    var rnd=(d&&d.round)?d.round:{round_id:'R'+year, year:year, round_name:name, is_open:true};
+    S.round=rnd; closeRoundModal(); renderAll();
+    toast('+ เปิดรอบ '+year+' แล้ว','success');
+  }).catch(function(){ toast('เปิดรอบไม่สำเร็จ','error'); });
+}
+
+/* ── Tabs / overlay ──────────────────────────────────── */
+function switchTab(name){
+  S.tab=name;
+  document.querySelectorAll('.tab').forEach(function(t){ t.classList.toggle('active', t.dataset.tab===name); });
+  document.querySelectorAll('.panel').forEach(function(p){ p.classList.toggle('active', p.id==='panel-'+name); });
+}
+function openOverlay(id){ _modalOpen=true; document.getElementById(id).classList.add('open'); }
+function closeOverlay(id){ document.getElementById(id).classList.remove('open'); _modalOpen=false; }
+
+/* ── Helpers ─────────────────────────────────────────── */
+function post(payload){
+  if(DEMO_MODE) return Promise.resolve({ok:true});
+  return fetch(API_URL,{method:'POST',redirect:'follow',headers:{'Content-Type':'text/plain'},body:JSON.stringify(payload)})
+    .then(function(r){return r.json();});
+}
+function esc(s){ return String(s==null?'':s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;'); }
+function pad(n){ return n<10?'0'+n:''+n; }
+function toast(msg,type){
+  var t=document.getElementById('toast'); t.textContent=msg;
+  t.className='toast '+(type||'info')+' show';
+  clearTimeout(_toastTimer); _toastTimer=setTimeout(function(){t.classList.remove('show');},3000);
+}
+
+/* ── Demo seed (only when no config.js) ──────────────── */
+function seedDemo(){
+  S.round={round_id:'R2569', year:'2569', round_name:'นับสต็อกพาเลท 2569', is_open:true};
+  S.sites=[
+    {site_id:'S1', site_name:'NDC-วังน้อย',  is_active:true},
+    {site_id:'S2', site_name:'คลังชลบุรี',    is_active:true},
+    {site_id:'S3', site_name:'RDC-ขอนแก่น',  is_active:true},
+    {site_id:'S4', site_name:'คลังลำพูน',     is_active:false}
+  ];
+  S.books={ S3:{ loscam:{onhand:30,transit_out:0,transit_in:2,damaged:1,lost:0}, chep:{onhand:45,transit_out:0,transit_in:0,damaged:0,lost:0}, brs:{onhand:118,transit_out:5,transit_in:0,damaged:3,lost:1}, swwi:{onhand:60,transit_out:0,transit_in:0,damaged:0,lost:0} } };
+  S.subs=[
+    {count_id:'BRS-SC-2569-001', round_id:'R2569', site_id:'S1', site_name:'NDC-วังน้อย', counter_name:'สมชาย ใจดี', submitted_at:'2026-06-10T08:30:00Z', pdf_url:'#', status:'pending', review_comment:''},
+    {count_id:'BRS-SC-2569-002', round_id:'R2569', site_id:'S2', site_name:'คลังชลบุรี', counter_name:'สมหญิง มีสุข', submitted_at:'2026-06-10T09:15:00Z', pdf_url:'#', status:'pending', review_comment:''},
+    {count_id:'BRS-SC-2569-099', round_id:'R2569', site_id:'S3', site_name:'RDC-ขอนแก่น', counter_name:'อรทัย รักดี', submitted_at:'2026-06-09T14:00:00Z', pdf_url:'#', status:'approved', review_comment:'ตรวจเรียบร้อย เซ็นครบ'}
+  ];
 }
 </script>
 </body>
