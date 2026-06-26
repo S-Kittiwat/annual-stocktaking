@@ -1316,15 +1316,29 @@ function printDoc() {
 
   var html = '<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8">'+
   '<title>รายงานผลการตรวจนับสต็อกพาเลท '+DOC_YEAR+'</title>'+
+  '<meta name="viewport" content="width=device-width,initial-scale=1">'+
   '<style>'+
-  // ── Print-first CSS: A4 หน้าเดียว ──
-  '@page{size:A4 portrait;margin:12mm 10mm 10mm 14mm;}'+
-  // ซ่อน browser default header/footer (วันที่, ชื่อ title, page number)
-  // วิธีเดียวที่ทำงานกับ Chrome/Safari คือ margin top/bottom = 0 หรือ ซ่อนผ่าน print settings
-  // แต่บอก user ให้ uncheck "Headers and footers" ใน print dialog
+  '@page{size:A4 portrait;margin:0;}'+
   '*{box-sizing:border-box;}'+
-  'body{font-family:"TH Sarabun New","Sarabun",sans-serif;font-size:11pt;color:#000;margin:0;padding:0;}'+
-  '.page{width:100%;}'+
+  'html,body{margin:0;padding:0;background:#fff;}'+
+  // ── Screen view: แสดง A4 จำลองบนหน้าจอ ──
+  'body{display:flex;flex-direction:column;align-items:center;padding:8px;background:#e0e0e0;min-height:100vh;}'+
+  '.page-wrap{background:#fff;box-shadow:0 2px 12px rgba(0,0,0,.2);}'+
+  '.page{'+
+    'width:210mm;min-height:297mm;'+
+    'padding:12mm 10mm 10mm 14mm;'+
+    'font-family:"TH Sarabun New","Sarabun",sans-serif;font-size:11pt;color:#000;'+
+  '}'+
+  // ── Print: scale ให้พอดี A4 เสมอ ──
+  '@media print{'+
+    'html,body{background:#fff;display:block;padding:0;}'+
+    '.no-print{display:none!important;}'+
+    '.page-wrap{box-shadow:none;width:100%;display:block;}'+
+    '.page{'+
+      'width:210mm;padding:12mm 10mm 10mm 14mm;'+
+      'transform-origin:top left;'+
+    '}'+
+  '}'+
   // Header
   '.hdr{margin-bottom:1mm;}'+
   '.hdr-logo{margin-bottom:1mm;}'+
@@ -1352,7 +1366,12 @@ function printDoc() {
   '.footer{font-size:8pt;color:#666;border-top:1px solid #ccc;padding-top:2mm;margin-top:2mm;}'+
   // Print-safe
   '@media print{button{display:none!important;} body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}'+
-  '</style></head><body><div class="page">'+
+  '</style></head><body>'+
+  // ── ปุ่มพิมพ์ (ซ่อนตอน print) ──
+  '<div class="no-print" style="width:210mm;margin:0 auto 8px;display:flex;gap:8px;align-items:center;">'+
+    '<button onclick="doPrint()" style="background:#2e7d32;color:#fff;border:none;border-radius:6px;padding:8px 20px;font-size:13pt;font-family:sans-serif;cursor:pointer;font-weight:700;">🖨️ พิมพ์เอกสาร</button>'+
+  '</div>'+
+  '<div class="page-wrap"><div class="page" id="docPage">'+
 
   // ── Header ──
   '<div class="hdr">'+
@@ -1461,15 +1480,32 @@ function printDoc() {
   '<div class="footer">'+
     'บริษัท บุญรอด ซัพพลายเชน จำกัด | 999 ถนนสามเสน แขวงนครไชยศรี เขตดุสิต กรุงเทพมหานคร 10300 | โทร +66 2242-4000 | เลขประจำตัวผู้เสียภาษี 0105561113924'+
   '</div>'+
-  '</div>'+
-  '<script>window.onload=function(){'+
-    // แจ้ง user ให้ปิด header/footer ใน print dialog
-    'var tip=document.createElement("div");'+
-    'tip.style.cssText="position:fixed;top:0;left:0;right:0;background:#fffbcc;border-bottom:2px solid #f5c842;padding:8px 16px;font-size:11pt;font-family:sans-serif;z-index:9999;text-align:center;";'+
-    'tip.innerHTML="💡 ก่อนพิมพ์: ไปที่ <b>More settings → Headers and footers</b> แล้ว <b>ปิด</b> เพื่อลบวันที่และหมายเลขหน้าออก";'+
-    'document.body.insertBefore(tip,document.body.firstChild);'+
-    'setTimeout(function(){window.print();tip.remove();},800);'+
-  '}<\/script>'+
+  '</div></div></div>'+  // .page #docPage, .page-wrap, body
+  '<script>'+
+  // ── Auto-scale สำหรับ iOS Safari และทุก browser ──
+  // วัดขนาด page จริง แล้ว scale ให้พอดีกับ printable area
+  'function doPrint(){'+
+    'var page=document.getElementById("docPage");'+
+    // A4 printable width ที่ margin 0 = 210mm = ~794px at 96dpi
+    // แต่ iOS Safari print viewport ต่างกัน ใช้ window.innerWidth แทน
+    'var A4_W_PT=793.7;'+ // 210mm in points (1mm = 3.7795px)
+    'var actualW=page.offsetWidth;'+
+    'var scale=Math.min(1, A4_W_PT/actualW);'+
+    'page.style.transformOrigin="top left";'+
+    'page.style.transform="scale("+scale+")";'+
+    'page.style.width=(100/scale)+"%";'+
+    'setTimeout(function(){'+
+      'window.print();'+
+      // reset หลังพิมพ์
+      'setTimeout(function(){'+
+        'page.style.transform="";'+
+        'page.style.width="";'+
+      '},500);'+
+    '},300);'+
+  '}'+
+  // เปิดหน้าแสดงผลก่อน ไม่ auto-print ทันที ให้ user กดปุ่มเอง
+  // (iOS Safari ต้องการ user gesture สำหรับ window.print())
+  '<\/script>'+
   '</body></html>';
 
   var win = window.open('','_blank');
