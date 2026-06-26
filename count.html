@@ -1314,6 +1314,10 @@ function printDoc() {
     ? '<img src="'+LOGO_BASE64+'" style="width:100%;max-width:38mm;height:auto;object-fit:contain;">'
     : '<div style="font-size:16pt;font-weight:900;letter-spacing:-1px;line-height:1;">BRS<br><span style="font-size:7pt;font-weight:400;color:#555;letter-spacing:0;">BOON RAWD SUPPLY CHAIN</span></div>';
 
+  // ── สร้าง logo HTML สำหรับ upload version (ไม่มี base64 — ลดขนาด payload) ──
+  // ใช้ text fallback แทนเพื่อให้ GAS รับได้ (~32KB limit บน postData)
+  var logoHtmlUpload = '<div style="font-size:16pt;font-weight:900;letter-spacing:-1px;line-height:1;">BRS<br><span style="font-size:7pt;font-weight:400;color:#555;letter-spacing:0;">BOON RAWD SUPPLY CHAIN</span></div>';
+
   var html = '<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8">'+
   '<title>รายงานผลการตรวจนับสต็อกพาเลท '+DOC_YEAR+'</title>'+
   '<meta name="viewport" content="width=device-width,initial-scale=1">'+
@@ -1508,6 +1512,12 @@ function printDoc() {
   '<\/script>'+
   '</body></html>';
 
+  // ── สร้าง html สำหรับ upload แยกต่างหาก (แทน logo base64 ด้วย text) ──
+  var htmlUpload = html.replace(
+    '<div class="hdr-logo">'+logoHtml+'</div>',
+    '<div class="hdr-logo">'+logoHtmlUpload+'</div>'
+  );
+
   // ── Upload HTML → GAS → แสดง link ──
   var site  = (session && session.site ? session.site.replace(/[:\/\\*?"<>|]/g,'_') : 'report');
   var docNo = DOC_NUMBER.replace(/[:\/\\*?"<>|]/g,'_');
@@ -1519,7 +1529,7 @@ function printDoc() {
     method: 'POST',
     redirect: 'follow',
     headers: { 'Content-Type': 'text/plain' },
-    body: JSON.stringify({ action: 'uploadPrintFile', filename: fname, html: html })
+    body: JSON.stringify({ action: 'uploadPrintFile', filename: fname, html: htmlUpload })
   })
   .then(function(r){ return r.json(); })
   .then(function(data) {
