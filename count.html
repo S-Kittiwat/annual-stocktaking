@@ -298,7 +298,8 @@ td.brs-c   {color:#1a1612;}
     <div class="overlay-title">ส่งผลการนับสำเร็จ</div>
     <div class="overlay-sub">ข้อมูลถูกบันทึกแล้ว รอ Admin ตรวจสอบและอนุมัติ<br>ท่านจะได้รับการแจ้งเตือนเมื่อได้รับการอนุมัติ</div>
     <div class="overlay-id" id="successId">SC-—</div>
-    <button class="btn btn-outline" onclick="resetSession()" style="width:100%;">🔄 นับ Site อื่น</button>
+    <button class="btn btn-success" onclick="closeSuccess()" style="width:100%;">ปิด</button>
+    <div style="font-size:11px;color:var(--muted);margin-top:8px;">รอ Admin ตรวจสอบก่อน จึงจะนับ Site อื่นได้</div>
   </div>
 </div>
 
@@ -531,6 +532,9 @@ function render() {
 
   if (!session) {
     renderStep1(content);
+  } else if (siteSubmission && (siteSubmission.status === 'approved' || siteSubmission.status === 'pending')) {
+    // ส่งแล้ว (รออนุมัติ) หรืออนุมัติแล้ว → ล็อกทั้งหน้า ห้ามแก้/นับซ้ำ
+    _renderLockScreen(content, siteSubmission.status);
   } else {
     renderStep2(content);
     // แสดง banner ถ้ามีข้อมูลค้างอยู่
@@ -542,7 +546,7 @@ function render() {
         + ' ใบ) ถูกโหลดกลับมาแล้ว';
       content.insertBefore(banner, content.firstChild);
     }
-    // แบนเนอร์สถานะใบส่งผล (ล็อก / ตีกลับ / รออนุมัติ) — ให้อยู่บนสุด
+    // แบนเนอร์สถานะใบส่งผล (ตีกลับ/เปิดแก้ไข) — ให้อยู่บนสุด
     var sb = _submitGate();
     if (sb.banner) {
       var sbar = document.createElement('div');
@@ -551,6 +555,44 @@ function render() {
       content.insertBefore(sbar, content.firstChild);
     }
   }
+}
+
+// หน้าจอล็อกหลังส่งผล — pending (รออนุมัติ) / approved (อนุมัติแล้ว)
+function _renderLockScreen(content, status) {
+  var s = siteSubmission || {};
+  var idTxt = (s.count_id || '') + (s.revision > 1 ? ' · ฉบับที่ ' + s.revision : ' · ฉบับที่ 1');
+  var html = '';
+  if (status === 'approved') {
+    // ── ข้อ 6: บล็อกการนับซ้ำหลังอนุมัติ ──
+    html =
+      '<div style="border:1px solid var(--danger);background:rgba(220,38,38,.06);border-radius:var(--rl);padding:28px 22px;text-align:center;margin-top:8px;">'+
+        '<div style="font-size:44px;line-height:1;margin-bottom:12px;">🔒</div>'+
+        '<div style="font-size:17px;font-weight:800;color:var(--danger);margin-bottom:10px;">Site นี้ส่งผลและได้รับอนุมัติแล้ว</div>'+
+        '<div style="font-size:14px;color:var(--text);line-height:1.6;">เลขที่ <strong>'+esc(s.count_id||'')+'</strong> · ฉบับที่ '+(s.revision||1)+'<br>'+
+          'ต้องให้ Admin กด <strong>“เปิดแก้ไข”</strong> ก่อน จึงจะส่งใหม่ได้</div>'+
+        '<div style="display:flex;gap:8px;margin-top:20px;">'+
+          '<button class="btn btn-outline" onclick="recheckStatus()" style="flex:1;">🔄 ตรวจสอบสถานะ</button>'+
+          '<button class="btn btn-outline" onclick="resetSession()" style="flex:1;">← เลือก Site อื่น</button>'+
+        '</div>'+
+      '</div>';
+  } else {
+    // ── ข้อ 5: ส่งแล้ว รออนุมัติ — ล็อก ไม่ให้ไปนับ site อื่น ──
+    html =
+      '<div style="border:1px solid var(--warn);background:rgba(245,158,11,.08);border-radius:var(--rl);padding:28px 22px;text-align:center;margin-top:8px;">'+
+        '<div style="font-size:44px;line-height:1;margin-bottom:12px;">⏳</div>'+
+        '<div style="font-size:17px;font-weight:800;color:#92400e;margin-bottom:10px;">ส่งผลการนับแล้ว — รอ Admin ตรวจสอบ/อนุมัติ</div>'+
+        '<div style="font-size:14px;color:var(--text);line-height:1.6;">เลขที่ <strong>'+esc(s.count_id||'')+'</strong> · ฉบับที่ '+(s.revision||1)+'<br>'+
+          'ระหว่างนี้ยังแก้ไขหรือเริ่มนับ Site อื่นไม่ได้ จนกว่า Admin จะอนุมัติหรือตีกลับ</div>'+
+        '<button class="btn btn-outline" onclick="recheckStatus()" style="width:100%;margin-top:20px;">🔄 ตรวจสอบสถานะอีกครั้ง</button>'+
+        '<div style="font-size:11px;color:var(--muted);margin-top:8px;">ถ้า Admin ตีกลับ จะกลับมาแก้ไขแล้วส่งใหม่ได้</div>'+
+      '</div>';
+  }
+  content.innerHTML = html;
+}
+
+// ดึงสถานะ site เดิมซ้ำ (ไม่ออกไปไหน) — ใช้บนหน้าจอล็อก
+function recheckStatus() {
+  if (session && session.site) { showToast('กำลังตรวจสอบสถานะ...', 'info'); fetchBookBalance(session.site); }
 }
 
 // ── Step 1: เลือก Site + ชื่อ ─────────────────────────────
@@ -684,6 +726,7 @@ function renderStep2(content) {
         // ── รายการ Location ที่บันทึกแล้ว — แสดงด้านล่างฟอร์มเสมอ ──
         '<div id="savedSectionLabel" style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;'+(hasLoc?'':'display:none;')+'">รายการที่บันทึกแล้ว ('+locations.length+')</div>'+
         '<div class="loc-list" id="locListContainer"></div>'+
+        '<button class="btn btn-success" id="btnGoStep3" type="button" onclick="goStep3()" style="width:100%;margin-top:12px;'+(hasLoc?'':'display:none;')+'">✓ จบการนับ — ไปขั้นที่ 3: ดูสรุปยอด ▾</button>'+
 
       '</div>'+
     '</div>'+
@@ -763,6 +806,15 @@ function updateSubmitCard() {
   var hasLoc  = locations.length > 0;
   var hasFile = files.length > 0;
   var ready   = hasLoc && _step3Seen && _printed && hasFile;
+
+  // ปลดล็อกขั้น 3/4 + ปุ่มไปขั้น 3 ทันทีที่มี Location (กันต้อง refresh)
+  var goBtn = document.getElementById('btnGoStep3');
+  if (goBtn) goBtn.style.display = hasLoc ? '' : 'none';
+  var s3c = document.getElementById('step3Card'), s4c = document.getElementById('step4Card');
+  if (s3c) { s3c.classList.toggle('locked', !hasLoc); s3c.classList.toggle('active', hasLoc); }
+  if (s4c) { s4c.classList.toggle('locked', !hasLoc); s4c.classList.toggle('active', hasLoc); }
+  var s3toggle = document.getElementById('step3Toggle');
+  if (s3toggle && hasLoc && !s3toggle.textContent.trim()) s3toggle.textContent = '▸ แสดง';
 
   card.style.display = 'flex';
   card.classList.toggle('ready', ready);
@@ -977,11 +1029,19 @@ function _renderStatusTable(tot) {
   '</table>';
 }
 
+function _buildStep3Body() {
+  var tot = _calcTotals();
+  return _renderSummary(tot) + _renderComparison(tot) +
+    '<button class="btn-print" onclick="printDoc()">🖨️ พิมพ์เอกสารยืนยัน</button>';
+}
+
 function toggleStep3() {
   var body   = document.getElementById('step3Body');
   var toggle = document.getElementById('step3Toggle');
   if (!body) return;
+  if (locations.length === 0) { showToast('กรุณาบันทึกอย่างน้อย 1 Location ก่อน', 'warn'); return; }
   var hidden = body.style.display === 'none';
+  if (hidden) body.innerHTML = _buildStep3Body(); // สร้างสรุปใหม่จากยอดล่าสุดทุกครั้งที่เปิด
   body.style.display = hidden ? '' : 'none';
   if (toggle) {
     toggle.textContent = hidden ? '▾ ซ่อน' : '▸ แสดง';
@@ -991,6 +1051,17 @@ function toggleStep3() {
     _step3Seen = true;
     updateSubmitCard();
   }
+}
+
+// ปุ่ม "ไปขั้นที่ 3" — ปลดล็อก + เปิดสรุป + เลื่อนไปหา
+function goStep3() {
+  if (locations.length === 0) { showToast('กรุณาบันทึกอย่างน้อย 1 Location ก่อน', 'warn'); return; }
+  var s3 = document.getElementById('step3Card'), s4 = document.getElementById('step4Card');
+  if (s3) { s3.classList.remove('locked'); s3.classList.add('active'); }
+  if (s4) { s4.classList.remove('locked'); s4.classList.add('active'); }
+  var body = document.getElementById('step3Body');
+  if (body && body.style.display === 'none') toggleStep3(); // เปิด (จะ populate ให้)
+  if (s3) setTimeout(function(){ s3.scrollIntoView({ behavior:'smooth', block:'start' }); }, 60);
 }
 
 // ============================================================
@@ -1636,7 +1707,9 @@ function printDoc() {
   })
   .then(function(data) {
     if (data.status !== 'ok') throw new Error(data.message || 'upload failed');
-    _showPrintLinkModal(data.url, fname);
+    // ใช้ ?action=viewPrint&id= ให้ GAS render เป็นหน้าเว็บจริง (แทนลิงก์ Drive ที่โชว์เป็น text)
+    var viewUrl = data.fileId ? (API_URL + '?action=viewPrint&id=' + data.fileId) : data.url;
+    _showPrintLinkModal(viewUrl, fname);
     _printed = true;
     updateSubmitCard();
   })
@@ -1772,6 +1845,8 @@ async function submitCount() {
 
     var newId = data.count_id || tmpId;
     var revTxt = (data.revision && data.revision > 1) ? ' (ฉบับแก้ไขครั้งที่ '+data.revision+')' : '';
+    // ตั้งสถานะเป็น pending ทันที → ปิด overlay แล้วจะเข้าหน้าจอล็อก "รออนุมัติ" (ข้อ 5)
+    siteSubmission = { count_id: newId, revision: data.revision || 1, status: 'pending', review_comment: '' };
     document.getElementById('successId').textContent = newId + revTxt;
     document.getElementById('successOverlay').classList.add('open');
   } catch(err) {
@@ -1805,8 +1880,16 @@ function resetSession() {
   session = null;
   locations = [];
   files = [];
+  siteSubmission = null;
   document.getElementById('successOverlay').classList.remove('open');
   render();
+}
+
+// ปิด overlay หลัง submit — คงยอดที่นับไว้ (เผื่อ Admin ตีกลับจะได้แก้ต่อ) แต่ล็อกหน้า "รออนุมัติ"
+function closeSuccess() {
+  _printed = false; // ถ้าถูกตีกลับแล้วส่งใหม่ ต้องพิมพ์เอกสารใหม่ (เลขฉบับแก้ไข)
+  document.getElementById('successOverlay').classList.remove('open');
+  render(); // siteSubmission = pending → เข้าหน้าจอล็อก (ข้อ 5)
 }
 
 function esc(s){ return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/"/g,'&quot;'); }
