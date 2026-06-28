@@ -444,6 +444,7 @@ function failPin(btn){ setPinError('PIN ไม่ถูกต้อง'); docume
 function resetPinBtn(btn){ btn.disabled=false; btn.textContent='เข้าสู่ระบบ'; }
 function setPinError(m){ document.getElementById('pinError').textContent = m; }
 function enterApp(){
+  try { sessionStorage.setItem('sc_admin_auth','1'); } catch(e){}
   document.getElementById('pinScreen').style.display='none';
   document.getElementById('app').style.display='block';
   document.getElementById('syncPill').style.display='flex';
@@ -854,6 +855,14 @@ function toast(msg,type){
   t.className='toast '+(type||'info')+' show';
   clearTimeout(_toastTimer); _toastTimer=setTimeout(function(){t.classList.remove('show');},3000);
 }
+
+/* ── คง login ไว้ข้ามการ refresh (ล้างเมื่อปิดแท็บ) ── */
+function logout(){ try{ sessionStorage.removeItem('sc_admin_auth'); }catch(e){} location.reload(); }
+(function(){
+  try {
+    if (sessionStorage.getItem('sc_admin_auth') === '1' && API_URL) { enterApp(); }
+  } catch(e){}
+})();
 </script>
 </body>
 </html>
