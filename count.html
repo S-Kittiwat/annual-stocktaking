@@ -1059,22 +1059,19 @@ function _countBlock(title, statuses, h1, h2, b1, b2, c1, c2, tot, t1, t2, tAll)
     var x = tot[b1][s]||0, y = tot[b2][s]||0;
     return '<tr><td>'+esc(s)+'</td>'+
       '<td class="r" style="color:'+c1+';">'+x+'</td>'+
-      '<td class="r" style="color:'+c2+';">'+y+'</td>'+
-      '<td class="r">'+(x+y)+'</td></tr>';
+      '<td class="r" style="color:'+c2+';">'+y+'</td></tr>';
   }).join('');
   return _s3title(title)+
   '<table class="status-sum-table">'+
     '<thead><tr><th>รายการ (นับจริง)</th>'+
       '<th class="r" style="color:'+c1+';">'+h1+'</th>'+
-      '<th class="r" style="color:'+c2+';">'+h2+'</th>'+
-      '<th class="r">รวม</th></tr></thead>'+
+      '<th class="r" style="color:'+c2+';">'+h2+'</th></tr></thead>'+
     '<tbody>'+rows+'</tbody>'+
     '<tfoot>'+
-      '<tr class="bold-row"><td>รวม</td><td class="r">'+t1+'</td><td class="r">'+t2+'</td><td class="r">'+tAll+'</td></tr>'+
+      '<tr class="bold-row"><td>รวม</td><td class="r">'+t1+'</td><td class="r">'+t2+'</td></tr>'+
       '<tr class="bold-row" style="background:var(--accent-bg);"><td>± Variance (นับจริง − คงเหลือ)</td>'+
         '<td class="r">'+_varCell(t1, _onhand(b1))+'</td>'+
-        '<td class="r">'+_varCell(t2, _onhand(b2))+'</td>'+
-        '<td class="r"></td></tr>'+
+        '<td class="r">'+_varCell(t2, _onhand(b2))+'</td></tr>'+
     '</tfoot>'+
   '</table>';
 }
@@ -1587,7 +1584,7 @@ function printDoc() {
   '.hdr-meta td.lbl{font-weight:700;white-space:nowrap;padding-right:8px;vertical-align:top;width:22mm;padding-left:8mm;}'+
   '.hdr-meta td{vertical-align:top;}'+
   'hr{border:none;border-top:1.5px solid #000;margin:2mm 0;}'+
-  '.intro{font-size:10pt;margin:1.5mm 0 2mm;line-height:1.5;}'+
+  '.intro{font-size:9pt;margin:1.5mm 0 2mm;line-height:1.5;}'+
   // 2-column tables
   '.two-col{display:grid;grid-template-columns:1fr 1fr;gap:4mm;margin-bottom:3mm;}'+
   '.tbl-title{font-weight:700;text-align:center;font-size:10pt;margin-bottom:1mm;}'+
@@ -1817,20 +1814,20 @@ function _showPrintLinkModal(url, fname) {
     '<div style="background:#fff;border-radius:12px;padding:24px;width:100%;max-width:480px;box-shadow:0 20px 60px rgba(0,0,0,.2);">'+
       '<div style="font-size:32px;text-align:center;margin-bottom:8px;">📄</div>'+
       '<div style="font-size:15px;font-weight:700;text-align:center;margin-bottom:4px;">เอกสารพร้อมแล้ว</div>'+
-      '<div style="font-size:12px;color:#666;text-align:center;margin-bottom:16px;">กดลิงก์เพื่อโหลดไฟล์ HTML → เปิดในเบราว์เซอร์เพื่อพิมพ์</div>'+
+      '<div style="font-size:12px;color:#666;text-align:center;line-height:1.6;margin-bottom:14px;">📱➜💻 <b>ใช้มือถือ:</b> กด “Copy Link” แล้วส่งลิงก์ไปเปิดที่<b>คอม</b><br>กดลิงก์ที่คอม → ไฟล์ HTML จะถูกดาวน์โหลด → เปิดแล้วสั่งพิมพ์ออกมาเซ็น</div>'+
       '<div style="background:#f3f0e8;border:1.5px solid #d4c99a;border-radius:8px;padding:10px 12px;font-size:12px;font-family:monospace;word-break:break-all;margin-bottom:12px;color:#1a1612;" id="printLinkText">'+url+'</div>'+
       '<div style="display:flex;gap:8px;">'+
         '<button id="btnCopyLink" style="flex:1;background:#f5c842;border:none;border-radius:8px;padding:12px;font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer;min-height:44px;">📋 Copy Link</button>'+
+        '<button id="btnOpenLink" style="flex:1;background:#1e293b;border:none;border-radius:8px;padding:12px;font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer;min-height:44px;color:#fff;">🔗 Open Link</button>'+
         '<button id="btnCloseModal" style="flex:1;background:#f3f0e8;border:1.5px solid #d4c99a;border-radius:8px;padding:12px;font-family:var(--font);font-size:14px;font-weight:600;cursor:pointer;min-height:44px;">ปิด</button>'+
       '</div>'+
-      '<button id="btnNativePrint" style="width:100%;margin-top:8px;background:#fff;border:1.5px solid #1e293b;border-radius:8px;padding:11px;font-family:var(--font);font-size:13px;font-weight:600;cursor:pointer;min-height:44px;color:#1e293b;">🖨️ เปิดพิมพ์ในเบราว์เซอร์ (คมชัดสุด / Save as PDF)</button>'+
-      '<div style="font-size:11px;color:#888;text-align:center;margin-top:10px;">ไฟล์: '+fname+'</div>'+
+      '<div style="font-size:11px;color:#888;text-align:center;margin-top:10px;line-height:1.5;">'+
+        '<b>Copy Link</b> = คัดลอกไปส่งต่อ · <b>Open Link</b> = เปิด/โหลดไฟล์เลย<br>ไฟล์: '+fname+'</div>'+
     '</div>';
   document.body.appendChild(modal);
   document.getElementById('btnCopyLink').addEventListener('click', function(){ _copyPrintLink(url); });
   document.getElementById('btnCloseModal').addEventListener('click', function(){ modal.remove(); });
-  var np = document.getElementById('btnNativePrint');
-  if (np) np.addEventListener('click', function(){ _openPrintWindow(); });
+  document.getElementById('btnOpenLink').addEventListener('click', function(){ window.open(url, '_blank'); });
 }
 
 function _copyPrintLink(url) {
