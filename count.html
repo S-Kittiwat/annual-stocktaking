@@ -385,6 +385,7 @@ function fetchBookBalance(site) {
     .then(function(r){ return r.json(); })
     .then(function(data) {
       siteSubmission = data.submission || null; // ส่งแล้ว/ตีกลับ/ล็อก
+      siteDocNo = data.doc_no || '';            // เลขที่เอกสารของ site นี้ (Admin)
       if (data.status === 'ok' && data.book) {
         bookBalance = data.book;
       }
@@ -422,6 +423,7 @@ function loadProgress() {
 var siteList  = [];
 var siteObjs  = [];    // [{ site_id, site_name }] จาก backend — ใช้ map ชื่อ→id ตอน submit
 var siteSubmission = null; // ใบส่งผลของ site ที่เลือก (null / {count_id,revision,status,review_comment})
+var docDate = '', docYear = '', siteDocNo = ''; // ข้อมูลหัวเอกสารจาก Admin (ข้อ 6)
 var locList   = [];
 var BRS_LOGO_DEFAULT = "data:image/png;base64,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"; // โลโก้ BRS ฝังในตัว (ใช้บนเอกสารพิมพ์)
 var roundInfo = null;  // { round_id, round_name, is_open, year }
@@ -447,6 +449,8 @@ function loadConfig() {
       siteList  = data.sites     || [];
       siteObjs  = data.site_objs || siteList.map(function(n){ return { site_id:'', site_name:n }; });
       locList   = data.locations|| [];
+      docDate   = data.doc_date || '';     // วันที่ของรอบ (Admin)
+      docYear   = data.doc_year || (data.round ? data.round.year : '') || '';
       // โหลด book balance ถ้ามี session อยู่แล้ว
       if (session && data.book_balances) {
         var bb = data.book_balances[session.site];
@@ -686,12 +690,13 @@ function renderStep2(content) {
   content.innerHTML =
     // ── Step 2: ฟอร์มกรอก + รายการ — ไม่มี view switching อีกต่อไป ──
     '<div class="card active" id="step2Card">'+
-      '<div class="card-head">'+
+      '<div class="card-head" style="cursor:pointer;" onclick="toggleStep2()" id="step2Head">'+
         '<span class="step-badge active">ขั้นที่ 2</span>'+
         '<span class="card-title" id="formCardTitle">เพิ่ม Location ใหม่</span>'+
         '<span class="card-hint">'+esc(session.site)+' · '+esc(session.round)+'</span>'+
+        '<span id="step2Toggle" style="margin-left:auto;font-size:13px;color:var(--accent);font-weight:600;"></span>'+
       '</div>'+
-      '<div class="card-body">'+
+      '<div class="card-body" id="step2Body">'+
 
         // ── ฟอร์มกรอก — อยู่บนสุดตลอดเวลา ไม่ถูกซ่อน ไม่ถูกสลับ ──
         '<div id="formBox" style="border-radius:var(--rs);padding:16px;background:var(--accent-bg);border:2px solid var(--border2);margin-bottom:16px;">'+
@@ -739,13 +744,7 @@ function renderStep2(content) {
         '<span class="card-title">สรุปยอดนับ &amp; เทียบ Book</span>'+
         '<span id="step3Toggle" style="margin-left:auto;font-size:13px;color:var(--accent);font-weight:600;">'+(hasLoc?'▸ แสดง':'')+'</span>'+
       '</div>'+
-      '<div class="card-body" id="step3Body" style="display:none;">'+
-        (hasLoc ? _renderSummary(tot) : '')+
-        (hasLoc ? _renderComparison(tot) : '')+
-        (hasLoc ?
-          '<button class="btn-print" onclick="printDoc()">🖨️ พิมพ์เอกสารยืนยัน</button>'
-        : '')+
-      '</div>'+
+      '<div class="card-body" id="step3Body" style="display:none;"></div>'+
     '</div>'+
 
     // ── Step 4: Upload ──
@@ -1007,33 +1006,87 @@ function _renderStatusTable(tot) {
       '<td class="r">'+tot.totChep+'</td>'+
       '<td class="r">'+tot.totWood+'</td>'+
     '</tr></tfoot>'+
-  '</table>'+
-  '<table class="status-sum-table" style="margin-top:10px;">'+
-    '<thead><tr>'+
-      '<th>🟧 Plastic Pallet</th>'+
-      '<th class="r" style="color:var(--brs);">BRS</th>'+
-      '<th class="r" style="color:#2e7d32;">SWWI</th>'+
-      '<th class="r">รวม</th>'+
-    '</tr></thead>'+
-    '<tbody>'+plasticRows+'</tbody>'+
+  '</table>';
+}
+
+// ===== ขั้นที่ 3: ตัวช่วยอ่านค่า Book =====
+function _bookHas() {
+  return bookBalance && (bookBalance.loscam||bookBalance.chep||bookBalance.brs||bookBalance.swwi);
+}
+function _bk(brand, f) {
+  if (!bookBalance || !bookBalance[brand] || bookBalance[brand][f] === undefined) return null;
+  return Number(bookBalance[brand][f]) || 0;
+}
+function _onhand(brand) { return _bk(brand, 'คงเหลือ'); }              // คงเหลืออย่างเดียว
+function _due(brand) {                                                  // คงเหลือ + ระหว่างโอนออก
+  var a = _bk(brand,'คงเหลือ'), b = _bk(brand,'ระหว่างโอนออก');
+  if (a === null && b === null) return null;
+  return (a||0) + (b||0);
+}
+function _cellV(v) { return v === null ? '<span style="color:var(--muted);">—</span>' : v; }
+function _varCell(phys, base) {
+  if (base === null) return '<span style="color:var(--muted);">—</span>';
+  var v = phys - base, col = v>0?'var(--success)':v<0?'var(--danger)':'var(--muted)';
+  return '<span style="color:'+col+';font-weight:700;">'+(v>0?'+':'')+v+'</span>';
+}
+function _s3title(t) {
+  return '<div style="font-size:12.5px;font-weight:800;margin:18px 0 6px;color:var(--text);">'+t+'</div>';
+}
+
+// บล็อก "จำนวนในระบบ" (PCS) — ตัด "รวมทั้งหมด" ออก ใส่ "รวมยอดคงค้างในบัญชีเช่า" แทน
+function _sysBlock(title, h1, h2, b1, b2, c1, c2) {
+  var rows = PCS_BOOK_FIELDS.map(function(f){
+    return '<tr><td>'+esc(f)+'</td>'+
+      '<td class="r" style="color:'+c1+';">'+_cellV(_bk(b1,f))+'</td>'+
+      '<td class="r" style="color:'+c2+';">'+_cellV(_bk(b2,f))+'</td></tr>';
+  }).join('');
+  return _s3title(title)+
+  '<table class="status-sum-table">'+
+    '<thead><tr><th>รายการ (ระบบ PCS)</th>'+
+      '<th class="r" style="color:'+c1+';">'+h1+'</th>'+
+      '<th class="r" style="color:'+c2+';">'+h2+'</th></tr></thead>'+
+    '<tbody>'+rows+'</tbody>'+
+    '<tfoot><tr class="bold-row" style="background:var(--accent-bg);">'+
+      '<td>รวมยอดคงค้างในบัญชีเช่า <span style="font-weight:400;font-size:10px;color:var(--muted);">(คงเหลือ + ระหว่างโอนออก)</span></td>'+
+      '<td class="r">'+_cellV(_due(b1))+'</td>'+
+      '<td class="r">'+_cellV(_due(b2))+'</td></tr></tfoot>'+
+  '</table>';
+}
+
+// บล็อก "จำนวนนับจริง" + Variance (นับจริง − คงเหลือ)
+function _countBlock(title, statuses, h1, h2, b1, b2, c1, c2, tot, t1, t2, tAll) {
+  var rows = statuses.map(function(s){
+    var x = tot[b1][s]||0, y = tot[b2][s]||0;
+    return '<tr><td>'+esc(s)+'</td>'+
+      '<td class="r" style="color:'+c1+';">'+x+'</td>'+
+      '<td class="r" style="color:'+c2+';">'+y+'</td>'+
+      '<td class="r">'+(x+y)+'</td></tr>';
+  }).join('');
+  return _s3title(title)+
+  '<table class="status-sum-table">'+
+    '<thead><tr><th>รายการ (นับจริง)</th>'+
+      '<th class="r" style="color:'+c1+';">'+h1+'</th>'+
+      '<th class="r" style="color:'+c2+';">'+h2+'</th>'+
+      '<th class="r">รวม</th></tr></thead>'+
+    '<tbody>'+rows+'</tbody>'+
     '<tfoot>'+
-      '<tr class="bold-row"><td>รวม Plastic</td>'+
-        '<td class="r">'+tot.totBrs+'</td>'+
-        '<td class="r">'+tot.totSwwi+'</td>'+
-        '<td class="r">'+tot.totPlastic+'</td>'+
-      '</tr>'+
-      '<tr class="bold-row" style="background:var(--accent-bg);">'+
-        '<td><b>รวมทั้งหมด</b></td>'+
-        '<td class="r" colspan="2"></td>'+
-        '<td class="r"><b>'+tot.grand+'</b></td>'+
-      '</tr>'+
+      '<tr class="bold-row"><td>รวม</td><td class="r">'+t1+'</td><td class="r">'+t2+'</td><td class="r">'+tAll+'</td></tr>'+
+      '<tr class="bold-row" style="background:var(--accent-bg);"><td>± Variance (นับจริง − คงเหลือ)</td>'+
+        '<td class="r">'+_varCell(t1, _onhand(b1))+'</td>'+
+        '<td class="r">'+_varCell(t2, _onhand(b2))+'</td>'+
+        '<td class="r"></td></tr>'+
     '</tfoot>'+
   '</table>';
 }
 
 function _buildStep3Body() {
   var tot = _calcTotals();
-  return _renderSummary(tot) + _renderComparison(tot) +
+  var pend = _bookHas() ? '' : '<div class="book-pending">⏳ Admin ยังไม่ได้ใส่ข้อมูลจากระบบ PCS สำหรับ '+esc(session.site)+'</div>';
+  return pend +
+    _sysBlock('① จำนวนในระบบ — พาเลทไม้ 🪵', 'LOSCAM','CHEP','loscam','chep','var(--loscam)','var(--chep)') +
+    _countBlock('② จำนวนนับจริง — พาเลทไม้ 🪵', WOOD_STATUS, 'LOSCAM','CHEP','loscam','chep','var(--loscam)','var(--chep)', tot, tot.totLoscam, tot.totChep, tot.totWood) +
+    _sysBlock('③ จำนวนในระบบ — พาเลทพลาสติก 🟧', 'BRS','SWWI','brs','swwi','var(--brs)','#2e7d32') +
+    _countBlock('④ จำนวนนับจริง — พาเลทพลาสติก 🟧', PLASTIC_STATUS, 'BRS','SWWI','brs','swwi','var(--brs)','#2e7d32', tot, tot.totBrs, tot.totSwwi, tot.totPlastic) +
     '<button class="btn-print" onclick="printDoc()">🖨️ พิมพ์เอกสารยืนยัน</button>';
 }
 
@@ -1055,9 +1108,25 @@ function toggleStep3() {
   }
 }
 
-// ปุ่ม "ไปขั้นที่ 3" — ปลดล็อก + เปิดสรุป + เลื่อนไปหา
+// พับ/ขยายขั้นที่ 2 (ฟอร์มนับ)
+function toggleStep2() {
+  var body = document.getElementById('step2Body');
+  var tog  = document.getElementById('step2Toggle');
+  if (!body) return;
+  var hidden = body.style.display === 'none';
+  body.style.display = hidden ? '' : 'none';
+  if (tog) tog.textContent = hidden ? '' : '▸ กลับไปแก้การนับ';
+}
+
+// ปุ่ม "ไปขั้นที่ 3" — พับขั้น 2 + ปลดล็อก + เปิดสรุป + เลื่อนไปหา
 function goStep3() {
   if (locations.length === 0) { showToast('กรุณาบันทึกอย่างน้อย 1 Location ก่อน', 'warn'); return; }
+  // ข้อ 1: พับซ่อนขั้นที่ 2
+  var s2body = document.getElementById('step2Body');
+  var s2tog  = document.getElementById('step2Toggle');
+  if (s2body) s2body.style.display = 'none';
+  if (s2tog)  s2tog.textContent = '▸ กลับไปแก้การนับ';
+
   var s3 = document.getElementById('step3Card'), s4 = document.getElementById('step4Card');
   if (s3) { s3.classList.remove('locked'); s3.classList.add('active'); }
   if (s4) { s4.classList.remove('locked'); s4.classList.add('active'); }
@@ -1167,6 +1236,9 @@ function editLocation(i) {
   _editingIdx = i;
   _fillFormFromLocation(i);
   refreshLocList();
+  var b2 = document.getElementById('step2Body'); // ขยายขั้น 2 คืน ถ้าถูกพับ
+  if (b2) b2.style.display = '';
+  var t2 = document.getElementById('step2Toggle'); if (t2) t2.textContent = '';
   var card = document.getElementById('step2Card');
   if (card) card.scrollIntoView({ behavior:'smooth', block:'start' });
 }
@@ -1415,9 +1487,10 @@ function printDoc() {
   // LOGO_BASE64, DOC_NUMBER, DOC_DATE, DOC_YEAR จะถูก inject โดย Admin
   // ตอนนี้ใช้ค่า placeholder รอ Admin กำหนด
   var LOGO_BASE64 = (typeof PRINT_CONFIG !== 'undefined' && PRINT_CONFIG.logo)   || BRS_LOGO_DEFAULT;
-  var DOC_NUMBER  = (typeof PRINT_CONFIG !== 'undefined' && PRINT_CONFIG.docNo)  || _docRef();
-  var DOC_DATE    = (typeof PRINT_CONFIG !== 'undefined' && PRINT_CONFIG.date)   || '___________';
-  var DOC_YEAR    = (typeof PRINT_CONFIG !== 'undefined' && PRINT_CONFIG.year)   || '____';
+  // ── ข้อมูลหัวเอกสารจาก Admin (เลขที่=ต่อ site, วันที่/ปี=ต่อรอบ) ──
+  var DOC_NUMBER  = siteDocNo || (typeof PRINT_CONFIG !== 'undefined' && PRINT_CONFIG.docNo) || _docRef();
+  var DOC_DATE    = docDate   || (typeof PRINT_CONFIG !== 'undefined' && PRINT_CONFIG.date)  || '___________';
+  var DOC_YEAR    = docYear   || (typeof PRINT_CONFIG !== 'undefined' && PRINT_CONFIG.year)  || (roundInfo && roundInfo.year) || '____';
 
   // ── ฟอนต์เอกสาร PDF — เปลี่ยนได้ที่นี่ (ใช้ฟอนต์ไทยของ Google Docs) ──
   // ตัวเลือก: 'Sarabun'(ทางการ) 'Kanit' 'Prompt' 'Mitr' 'Maitree' 'Niramit' 'Bai Jamjuree' 'Chonburi' 'Pridi'
@@ -1510,7 +1583,7 @@ function printDoc() {
   // Header
   '.hdr{margin-bottom:1mm;}'+
   '.hdr-logo{margin-bottom:1mm;}'+
-  '.hdr-meta{width:100%;font-size:10.5pt;line-height:1.7;border-collapse:collapse;}'+
+  '.hdr-meta{width:100%;font-size:9pt;line-height:1.55;border-collapse:collapse;}'+
   '.hdr-meta td.lbl{font-weight:700;white-space:nowrap;padding-right:8px;vertical-align:top;width:22mm;padding-left:8mm;}'+
   '.hdr-meta td{vertical-align:top;}'+
   'hr{border:none;border-top:1.5px solid #000;margin:2mm 0;}'+
