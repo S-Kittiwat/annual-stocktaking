@@ -1707,9 +1707,8 @@ function printDoc() {
   })
   .then(function(data) {
     if (data.status !== 'ok') throw new Error(data.message || 'upload failed');
-    // ใช้ ?action=viewPrint&id= ให้ GAS render เป็นหน้าเว็บจริง (แทนลิงก์ Drive ที่โชว์เป็น text)
-    var viewUrl = data.fileId ? (API_URL + '?action=viewPrint&id=' + data.fileId) : data.url;
-    _showPrintLinkModal(viewUrl, fname);
+    // เอกสารเป็น PDF แล้ว — ลิงก์ Drive เปิดดูได้ทุกเบราว์เซอร์/มือถือ หน้าตาเหมือนกันทุกเครื่อง
+    _showPrintLinkModal(data.url, fname.replace(/\.html?$/i, '.pdf'));
     _printed = true;
     updateSubmitCard();
   })
