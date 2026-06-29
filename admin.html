@@ -302,6 +302,11 @@ table.recon .grp{border-left:1px solid var(--border);}
     <!-- ─── Book Balance ─── -->
     <div class="panel" id="panel-book">
       <div class="eyebrow">ยอดในระบบ (Book Balance) <span class="ehint">— ใส่ยอดล่วงหน้า ระบบนำไปคำนวณ Variance ให้ผู้นับตอนสรุปผล</span></div>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;align-items:flex-end;margin-bottom:14px;padding:12px 14px;background:rgba(0,0,0,.03);border:1px solid var(--border,#e2e2e2);border-radius:8px;">
+        <div class="field" style="margin:0;"><label>📅 วันที่เอกสาร (ใช้ทั้งรอบ)</label><input class="input" id="docDateInput" placeholder="เช่น 30 มิถุนายน 2569" style="min-width:180px;"></div>
+        <div class="field" style="margin:0;"><label>ปี พ.ศ. (ใช้ทั้งรอบ)</label><input class="input" id="docYearInput" placeholder="2569" style="width:100px;"></div>
+        <button class="btn btn-success" onclick="saveDocMeta()" style="white-space:nowrap;">💾 บันทึกวันที่/ปี</button>
+      </div>
       <div class="bb-controls">
         <div class="field">
           <label>เลือก Site</label>
@@ -422,7 +427,7 @@ var RECON_COLS = [
   {key:'chep',   label:'พาเลทไม้ Chep'}
 ];
 
-var S = { round:null, sites:[], books:{}, subs:[], tab:'dashboard', bookSite:'', rv:null };
+var S = { round:null, sites:[], books:{}, subs:[], tab:'dashboard', bookSite:'', rv:null, docnos:{}, docMeta:{} };
 var _pollTimer = null, _modalOpen = false, _toastTimer = null;
 
 /* ── PIN ─────────────────────────────────────────────── */
@@ -460,6 +465,11 @@ function loadData(showSpin){
       S.sites = d.sites || [];
       S.books = d.books || {};
       S.subs  = d.subs  || [];
+      S.docnos  = d.docnos  || {};
+      S.docMeta = d.docMeta || {};
+      var _dd=document.getElementById('docDateInput'), _dy=document.getElementById('docYearInput');
+      if(_dd) _dd.value = S.docMeta.doc_date || '';
+      if(_dy) _dy.value = S.docMeta.doc_year || '';
     }
     renderAll(); markSynced();
   }).catch(function(){ document.getElementById('syncText').textContent='ออฟไลน์'; });
@@ -675,7 +685,10 @@ function renderBookGrid(){
   var foot = '<tr class="bb-foot"><td title="คงเหลือ + ระหว่างโอนออก">รวมยอดคงค้างในบัญชีเช่า</td>'
     + PROVIDERS.map(function(p){return '<td class="'+p.cls+'" data-rent="'+p.key+'">0</td>';}).join('')
     + '</tr>';
-  wrap.innerHTML = '<table class="bb"><thead>'+head+'</thead><tbody>'+body+'</tbody><tfoot>'+foot+'</tfoot></table>';
+  var _docNo = (S.docnos && S.docnos[S.bookSite]) || '';
+  var docNoField = '<div class="field" style="margin-bottom:12px;"><label>📄 เลขที่เอกสาร (เฉพาะ Site นี้)</label>'
+    + '<input class="input" id="docNoInput" value="'+String(_docNo).replace(/"/g,'&quot;')+'" placeholder="เช่น PE-2569-001" style="max-width:240px;"></div>';
+  wrap.innerHTML = docNoField + '<table class="bb"><thead>'+head+'</thead><tbody>'+body+'</tbody><tfoot>'+foot+'</tfoot></table>';
   btn.style.display='inline-flex';
   recalcBook();
 }
@@ -699,13 +712,27 @@ function saveBook(){
     book[i.dataset.p][i.dataset.s] = Number(i.value)||0;
   });
   var site = S.bookSite;
+  var docNoEl = document.getElementById('docNoInput');
+  var docNo = docNoEl ? docNoEl.value.trim() : '';
   var btn = document.getElementById('bookSaveBtn'); btn.disabled=true; btn.textContent='กำลังบันทึก…';
-  post({action:'saveBookBalance', site_id:site, book:book}).then(function(){
+  post({action:'saveBookBalance', site_id:site, book:book, doc_no:docNo}).then(function(){
     S.books[site] = book;
+    if(!S.docnos) S.docnos={};
+    S.docnos[site] = docNo;
     btn.disabled=false; btn.innerHTML='💾 บันทึก Book Balance';
     renderBookSelect(); renderBookGrid();
-    toast('💾 บันทึก Book Balance แล้ว','success');
+    toast('💾 บันทึก Book Balance + เลขที่เอกสารแล้ว','success');
   }).catch(function(){ btn.disabled=false; btn.innerHTML='💾 บันทึก Book Balance'; toast('บันทึกไม่สำเร็จ','error'); });
+}
+
+// ข้อ 6: บันทึกวันที่/ปีของรอบ (ใช้ทั้งรอบ)
+function saveDocMeta(){
+  var dd = document.getElementById('docDateInput'), dy = document.getElementById('docYearInput');
+  var doc_date = dd ? dd.value.trim() : '', doc_year = dy ? dy.value.trim() : '';
+  post({action:'saveDocMeta', doc_date:doc_date, doc_year:doc_year}).then(function(){
+    S.docMeta = { doc_date:doc_date, doc_year:doc_year };
+    toast('💾 บันทึกวันที่/ปีของรอบแล้ว','success');
+  }).catch(function(){ toast('บันทึกไม่สำเร็จ','error'); });
 }
 
 /* ── Render: Review ──────────────────────────────────── */
