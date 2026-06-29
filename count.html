@@ -8,7 +8,6 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <style>
 @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap');
 
@@ -1692,69 +1691,14 @@ function printDoc() {
     showToast('❌ ไม่พบ API_URL — ตรวจสอบ stockcount_config.js', 'error');
     return;
   }
-  // เก็บ html ไว้ใช้กับปุ่ม "พิมพ์ในเบราว์เซอร์" (คุณภาพสูงสุด native)
+  // เก็บ html ไว้ใช้กับปุ่ม "พิมพ์ในเบราว์เซอร์"
   _lastPrintHtml = html;
-  _lastPrintName = fname.replace(/\.html?$/i, '.pdf');
+  _lastPrintName = fname;
 
-  // render PDF ในเบราว์เซอร์ (หน้าตาตรงกับ HTML) แล้วอัปเก็บเป็นลิงก์
-  _renderPdfAndUpload(html, _lastPrintName);
-}
-
-// ── สร้าง PDF ฝั่ง browser ด้วย html2pdf → อัป base64 ไป GAS ──
-var _lastPrintHtml = '', _lastPrintName = 'document.pdf';
-function _renderPdfAndUpload(html, fname) {
-  if (typeof html2pdf === 'undefined') {
-    showToast('โหลดตัวสร้าง PDF ไม่ได้ — เปิดพิมพ์ในเบราว์เซอร์แทน', 'warn');
-    _openPrintWindow();
-    return;
-  }
-  showToast('⏳ กำลังสร้าง PDF...', 'info');
-  // iframe ซ่อน กว้าง A4 (~794px @96dpi) เพื่อ render เลย์เอาต์เหมือนจริง
-  var iframe = document.createElement('iframe');
-  iframe.style.cssText = 'position:fixed;left:-10000px;top:0;width:794px;height:1123px;border:0;background:#fff;';
-  document.body.appendChild(iframe);
-  var idoc = iframe.contentWindow.document;
-  idoc.open(); idoc.write(html); idoc.close();
-
-  var capture = function() {
-    var el = idoc.getElementById('docPage') || idoc.body;
-    var opt = {
-      margin: 0,
-      filename: fname,
-      image: { type: 'jpeg', quality: 0.96 },
-      html2canvas: { scale: 2, useCORS: true, backgroundColor: '#ffffff', windowWidth: 794, logging: false },
-      jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
-      pagebreak: { mode: ['css', 'legacy'] }
-    };
-    html2pdf().set(opt).from(el).outputPdf('datauristring').then(function(datauri) {
-      try { document.body.removeChild(iframe); } catch (e) {}
-      // ตัด prefix ที่ฝั่ง client → ส่ง base64 ล้วน (กันปัญหา decode ฝั่ง server)
-      var s = String(datauri);
-      var i = s.indexOf('base64,');
-      var pure = (i >= 0 ? s.substring(i + 7) : s);
-      _uploadPdfBase64(pure, fname);
-    }).catch(function(e) {
-      try { document.body.removeChild(iframe); } catch (e2) {}
-      showToast('❌ สร้าง PDF ไม่สำเร็จ: ' + e.message + ' — ลองพิมพ์ในเบราว์เซอร์', 'error');
-      _printed = true; updateSubmitCard();
-    });
-  };
-  // รอ font (Sarabun) + เนื้อหาโหลดเสร็จก่อน capture
-  var w = iframe.contentWindow;
-  setTimeout(function() {
-    if (w.document.fonts && w.document.fonts.ready) {
-      w.document.fonts.ready.then(function(){ setTimeout(capture, 300); });
-    } else {
-      setTimeout(capture, 800);
-    }
-  }, 200);
-}
-
-function _uploadPdfBase64(datauri, fname) {
-  showToast('⏳ กำลังอัปโหลด...', 'info');
+  showToast('⏳ กำลังสร้างลิงก์เอกสาร...', 'info');
   fetch(API_URL, {
     method: 'POST', redirect: 'follow', headers: { 'Content-Type': 'text/plain' },
-    body: JSON.stringify({ action: 'uploadPrintFile', filename: fname, pdf_base64: datauri })
+    body: JSON.stringify({ action: 'uploadPrintFile', filename: fname, html: html })
   })
   .then(function(r){
     var ct = r.headers.get('content-type') || '';
@@ -1763,16 +1707,24 @@ function _uploadPdfBase64(datauri, fname) {
   })
   .then(function(data) {
     if (data.status !== 'ok') throw new Error(data.message || 'upload failed');
-    _showPrintLinkModal(data.url, fname);
+    _showPrintLinkModal(data.url, fname);  // url = ลิงก์ download ตรง
     _printed = true; updateSubmitCard();
   })
   .catch(function(err) {
-    showToast('❌ อัปโหลดไม่สำเร็จ: ' + err.message, 'error');
+    showToast('❌ สร้างลิงก์ไม่สำเร็จ: ' + err.message + ' — โหลดไฟล์ลงเครื่องแทน', 'error');
+    // fallback: download ตรงจากเครื่อง
+    var blob = new Blob([html], { type: 'text/html;charset=utf-8' });
+    var u = URL.createObjectURL(blob);
+    var a = document.createElement('a'); a.href = u; a.download = fname;
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(function(){ URL.revokeObjectURL(u); }, 1000);
     _printed = true; updateSubmitCard();
   });
 }
 
-// เปิดเอกสารในแท็บใหม่เพื่อพิมพ์/Save as PDF แบบ native (คุณภาพสูงสุด)
+var _lastPrintHtml = '', _lastPrintName = 'document.html';
+
+// เปิดเอกสารในแท็บใหม่เพื่อพิมพ์/Save as PDF แบบ native (สำรอง)
 function _openPrintWindow() {
   if (!_lastPrintHtml) { showToast('ยังไม่มีเอกสาร — กดสร้างเอกสารก่อน', 'warn'); return; }
   var w = window.open('', '_blank');
@@ -1791,8 +1743,8 @@ function _showPrintLinkModal(url, fname) {
   modal.innerHTML =
     '<div style="background:#fff;border-radius:12px;padding:24px;width:100%;max-width:480px;box-shadow:0 20px 60px rgba(0,0,0,.2);">'+
       '<div style="font-size:32px;text-align:center;margin-bottom:8px;">📄</div>'+
-      '<div style="font-size:15px;font-weight:700;text-align:center;margin-bottom:4px;">เอกสารพร้อมพิมพ์แล้ว</div>'+
-      '<div style="font-size:12px;color:#666;text-align:center;margin-bottom:16px;">Copy link ด้านล่าง แล้วเปิดในคอมเพื่อพิมพ์</div>'+
+      '<div style="font-size:15px;font-weight:700;text-align:center;margin-bottom:4px;">เอกสารพร้อมแล้ว</div>'+
+      '<div style="font-size:12px;color:#666;text-align:center;margin-bottom:16px;">กดลิงก์เพื่อโหลดไฟล์ HTML → เปิดในเบราว์เซอร์เพื่อพิมพ์</div>'+
       '<div style="background:#f3f0e8;border:1.5px solid #d4c99a;border-radius:8px;padding:10px 12px;font-size:12px;font-family:monospace;word-break:break-all;margin-bottom:12px;color:#1a1612;" id="printLinkText">'+url+'</div>'+
       '<div style="display:flex;gap:8px;">'+
         '<button id="btnCopyLink" style="flex:1;background:#f5c842;border:none;border-radius:8px;padding:12px;font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer;min-height:44px;">📋 Copy Link</button>'+
