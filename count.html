@@ -1728,7 +1728,11 @@ function _renderPdfAndUpload(html, fname) {
     };
     html2pdf().set(opt).from(el).outputPdf('datauristring').then(function(datauri) {
       try { document.body.removeChild(iframe); } catch (e) {}
-      _uploadPdfBase64(datauri, fname);
+      // ตัด prefix ที่ฝั่ง client → ส่ง base64 ล้วน (กันปัญหา decode ฝั่ง server)
+      var s = String(datauri);
+      var i = s.indexOf('base64,');
+      var pure = (i >= 0 ? s.substring(i + 7) : s);
+      _uploadPdfBase64(pure, fname);
     }).catch(function(e) {
       try { document.body.removeChild(iframe); } catch (e2) {}
       showToast('❌ สร้าง PDF ไม่สำเร็จ: ' + e.message + ' — ลองพิมพ์ในเบราว์เซอร์', 'error');
