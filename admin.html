@@ -285,6 +285,7 @@ table.recon .grp{border-left:1px solid var(--border);}
       <div class="table-wrap" id="siteStatusTable"><div class="empty"><span class="spinner"></span></div></div>
 
       <div class="eyebrow">สรุปกระทบยอด — Actual vs System <span class="ehint">— ใช้เมื่อทุก Site นับเสร็จ · Diff = Actual − System</span></div>
+      <div style="margin-bottom:10px;"><button class="btn btn-success" onclick="exportReconCSV()">⬇️ Export CSV</button></div>
       <div class="table-wrap recon-wrap" id="reconTable"><div class="empty">ยังไม่มีข้อมูลการนับ</div></div>
     </div>
 
@@ -428,7 +429,7 @@ var RECON_COLS = [
 ];
 
 var S = { round:null, sites:[], books:{}, subs:[], tab:'dashboard', bookSite:'', rv:null, docnos:{}, docMeta:{} };
-var _pollTimer = null, _modalOpen = false, _toastTimer = null;
+var _pollTimer = null, _modalOpen = false, _toastTimer = null, _docMetaInit = false;
 
 /* ── PIN ─────────────────────────────────────────────── */
 function verifyPin(){
@@ -467,9 +468,14 @@ function loadData(showSpin){
       S.subs  = d.subs  || [];
       S.docnos  = d.docnos  || {};
       S.docMeta = d.docMeta || {};
-      var _dd=document.getElementById('docDateInput'), _dy=document.getElementById('docYearInput');
-      if(_dd) _dd.value = S.docMeta.doc_date || '';
-      if(_dy) _dy.value = S.docMeta.doc_year || '';
+      // เซ็ตค่าช่องวันที่/ปี "แค่ครั้งแรก" — หลังจากนั้นปล่อยให้เป็นค่าที่ผู้ใช้พิมพ์/บันทึก
+      // (กัน poll รอบถัดไปเอาค่าจาก server มาทับข้อความที่ยังพิมพ์ไม่เสร็จ/ยังไม่บันทึก)
+      if(!_docMetaInit){
+        var _dd=document.getElementById('docDateInput'), _dy=document.getElementById('docYearInput');
+        if(_dd) _dd.value = S.docMeta.doc_date || '';
+        if(_dy) _dy.value = S.docMeta.doc_year || '';
+        _docMetaInit = true;
+      }
     }
     renderAll(); markSynced();
   }).catch(function(){ document.getElementById('syncText').textContent='ออฟไลน์'; });
@@ -626,6 +632,46 @@ function renderRecon(){
   if(!anyData){
     el.insertAdjacentHTML('afterbegin','<div style="padding:9px 14px;font-size:11.5px;color:var(--muted);border-bottom:1px solid var(--border);">ℹ️ ยังไม่มี Site ที่ส่งผลการนับ — ตารางจะเติมค่าเมื่อเริ่มมีข้อมูลเข้ามา</div>');
   }
+}
+
+// ── Export ตารางกระทบยอดเป็น CSV ──
+function exportReconCSV(){
+  var act = activeSites();
+  if(!act.length){ toast('ยังไม่มี Site','error'); return; }
+  function q(v){ return '"' + String(v==null?'':v).replace(/"/g,'""') + '"'; }
+  var rows = [];
+  // header 2 ชั้น → รวมเป็นชื่อคอลัมน์เดียว
+  var head = ['Location Name'];
+  RECON_COLS.forEach(function(c){ head.push(c.label+' Actual', c.label+' System', c.label+' Diff'); });
+  head.push('Sum total');
+  rows.push(head.map(q).join(','));
+
+  var gA={}, gS={}, gD={}; RECON_COLS.forEach(function(c){ gA[c.key]=0; gS[c.key]=0; gD[c.key]=0; });
+  act.forEach(function(s){
+    var line=[s.site_name], siteSum=0;
+    RECON_COLS.forEach(function(c){
+      var a=actualOf(s.site_id,c.key); var aShown=(a==null)?0:a;
+      var sys=systemOf(s.site_id,c.key); var d=aShown-sys;
+      gA[c.key]+=aShown; gS[c.key]+=sys; gD[c.key]+=d; siteSum+=d;
+      line.push(aShown, sys, d);
+    });
+    line.push(siteSum);
+    rows.push(line.map(q).join(','));
+  });
+  var foot=['Grand Total'], fSum=0;
+  RECON_COLS.forEach(function(c){ foot.push(gA[c.key], gS[c.key], gD[c.key]); fSum+=gD[c.key]; });
+  foot.push(fSum);
+  rows.push(foot.map(q).join(','));
+
+  var roundName = (S.round && S.round.round_name) ? S.round.round_name : 'stockcount';
+  var csv = '\ufeff' + rows.join('\r\n'); // BOM ให้ Excel อ่านภาษาไทยได้
+  var blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+  var url = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = url; a.download = 'กระทบยอด_'+roundName+'.csv';
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+  toast('⬇️ Export CSV แล้ว','success');
 }
 
 /* ── Render: Sites ───────────────────────────────────── */
