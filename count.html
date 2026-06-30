@@ -1512,7 +1512,7 @@ function printDoc() {
   var wL_pcs=bL['คงเหลือ']||0, wC_pcs=bC['คงเหลือ']||0;
   var wL_out=bL['ระหว่างโอนออก']||0, wC_out=bC['ระหว่างโอนออก']||0;
   var wL_due=wL_pcs+wL_out, wC_due=wC_pcs+wC_out;
-  var wL_diff=wL_pcs-wL_counted, wC_diff=wC_pcs-wC_counted;
+  var wL_diff=wL_counted-wL_pcs, wC_diff=wC_counted-wC_pcs;   // ส่วนต่าง = นับจริง − คงเหลือ (Actual − Book)
   var wL_net=wL_diff+wL_sai+wL_nok, wC_net=wC_diff+wC_sai+wC_nok;
 
   var pB_counted=sumExclude(tot.brs,PLASTIC_EXCLUDE), pS_counted=sumExclude(tot.swwi,PLASTIC_EXCLUDE);
@@ -1523,9 +1523,9 @@ function printDoc() {
   var pB_pcs=bB['คงเหลือ']||0, pS_pcs=bS['คงเหลือ']||0;
   var pB_out=bB['ระหว่างโอนออก']||0, pS_out=bS['ระหว่างโอนออก']||0;
   var pB_due=pB_pcs+pB_out, pS_due=pS_pcs+pS_out;
-  var pB_diff=pB_pcs-pB_counted, pS_diff=pS_pcs-pS_counted;
-  var pB_net=pB_diff+pB_sai-pB_brs1-pB_brs2+pB_nok;
-  var pS_net=pS_diff+pS_sai-pS_brs1-pS_brs2+pS_nok;
+  var pB_diff=pB_counted-pB_pcs, pS_diff=pS_counted-pS_pcs;   // ส่วนต่าง = นับจริง − คงเหลือ (Actual − Book)
+  var pB_net=pB_diff+pB_sai+pB_nok;   // BRS-900 โอนออกแล้ว = ไม่ใช่ของเรา → ไม่นำมาคิด (ถูกกันออกจาก counted แล้ว)
+  var pS_net=pS_diff+pS_sai+pS_nok;
 
   function n(v){ return (Number(v)||0).toLocaleString('th-TH'); }
   // row: label กำหนด nowrap ไว้ใน CSS แล้ว ไม่ต้องใส่ทีละ row
@@ -1664,11 +1664,11 @@ function printDoc() {
       '<tr><td class="section-label" colspan="3">สรุปผลการตรวจนับ</td></tr>'+
       row('จำนวนคงเหลือบนระบบ',wL_pcs,wC_pcs)+
       row('บวก ระหว่างโอนออก',wL_out,wC_out)+
-      row('รวมยอดคงค้างในหน้าบัญชีเช่า',wL_due,wC_due,true)+
-      row('รวมพาเลทที่ตรวจนับได้จริง',wL_counted,wC_counted,true)+
+      row('รวมจำนวนยอดคงค้างในหน้าบัญชีเช่า',wL_due,wC_due,true)+
+      row('รวมจำนวนพาเลทที่ตรวจนับได้จริง',wL_counted,wC_counted,true)+
       row('ส่วนต่าง',wL_diff,wC_diff)+
-      row('บวก สายการผลิต',wL_sai,wC_sai,false,1)+
-      row('บวก นอกระบบ PCS',wL_nok,wC_nok,false,1)+
+      row('บวก พาเลทที่ใช้ในสายการผลิต',wL_sai,wC_sai,false,1)+
+      row('บวก พาเลทที่ควบคุมนอกระบบ PCS',wL_nok,wC_nok,false,1)+
       row('ส่วนต่างสุทธิ',wL_net,wC_net,true)
     )+
     tbl('ตารางข้อมูลจำนวนพาเลทพลาสติก','ข้อมูลจากระบบควบคุมพาเลท (PCS)',['BRS','SWWI'],
@@ -1689,13 +1689,11 @@ function printDoc() {
       '<tr><td class="section-label" colspan="3">สรุปผลการตรวจนับ</td></tr>'+
       row('จำนวนคงเหลือบนระบบ',pB_pcs,pS_pcs)+
       row('บวก ระหว่างโอนออก',pB_out,pS_out)+
-      row('รวมยอดคงค้างในหน้าบัญชีเช่า',pB_due,pS_due,true)+
-      row('รวมพาเลทที่ตรวจนับได้จริง',pB_counted,pS_counted,true)+
+      row('รวมจำนวนยอดคงค้างในหน้าบัญชีเช่า',pB_due,pS_due,true)+
+      row('รวมจำนวนพาเลทที่ตรวจนับได้จริง',pB_counted,pS_counted,true)+
       row('ส่วนต่าง',pB_diff,pS_diff)+
-      row('บวก สายการผลิต',pB_sai,pS_sai,false,1)+
-      row('หัก BRS-900 (ตัวเอง)',-pB_brs1,-pS_brs1,false,1)+
-      row('หัก BRS-900 (ที่อื่น)',-pB_brs2,-pS_brs2,false,1)+
-      row('บวก นอกระบบ PCS',pB_nok,pS_nok,false,1)+
+      row('บวก พาเลทที่ใช้ในสายการผลิต',pB_sai,pS_sai,false,1)+
+      row('บวก พาเลทที่ควบคุมนอกระบบ PCS',pB_nok,pS_nok,false,1)+
       row('ส่วนต่างสุทธิ',pB_net,pS_net,true)
     )+
   '</div>'+
