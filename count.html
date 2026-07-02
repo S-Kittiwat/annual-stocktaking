@@ -336,6 +336,8 @@ var API_URL = (typeof STOCKCOUNT_CONFIG !== 'undefined') ? STOCKCOUNT_CONFIG.API
 var session   = null;
 var locations = [];   // [{ name, photo, wood:{loscam:{...}, chep:{...}}, plastic:{brs:{...}, swwi:{...}} }]
 var files     = [];
+var offPcs    = { loscam:0, chep:0, brs:0, swwi:0 };  // ขั้นที่ 3: นอกระบบ PCS ระดับ Site
+var offPcsFiles = [];                                  // ไฟล์หลักฐานนอกระบบ (คนละชุดกับใบเซ็น)
 var _emptyPCS = function(){ return {คงเหลือ:0,ระหว่างโอนออก:0,ระหว่างโอนเข้า:0,ชำรุดเสียหาย:0,สูญหาย:0}; };
 var bookBalance = { loscam:_emptyPCS(), chep:_emptyPCS(), brs:_emptyPCS(), swwi:_emptyPCS() };
 var _editingIdx   = null;
@@ -353,8 +355,7 @@ var WOOD_STATUS    = [
   'พาเลทเปล่า TBC',
   'พาเลทเปล่า TBS',
   'พาเลทที่ใช้วางสินค้า',
-  'พาเลทที่ใช้ในสายการผลิต',
-  'พาเลทที่ควบคุมนอกระบบ PCS'
+  'พาเลทที่ใช้ในสายการผลิต'
 ];
 var PLASTIC_STATUS = [
   'พาเลทเปล่า RFI',
@@ -363,8 +364,7 @@ var PLASTIC_STATUS = [
   'พาเลทที่ใช้ในสายการผลิต',
   'พาเลทชำรุด รออนุมัติโอนเข้า BRS-900',
   'พาเลทชำรุด โอน BRS-900 แล้ว (ตัวเอง)',
-  'พาเลทชำรุด โอน BRS-900 แล้ว (ที่อื่น)',
-  'พาเลทที่ควบคุมนอกระบบ PCS'
+  'พาเลทชำรุด โอน BRS-900 แล้ว (ที่อื่น)'
 ];
 
 function emptyWood()    { var o={}; WOOD_STATUS.forEach(function(s){o[s]=0;}); return o; }
@@ -628,9 +628,12 @@ function renderStep1(content) {
             +siteList.map(function(s){ return '<option value="'+esc(s)+'">'+esc(s)+'</option>'; }).join('')
           +'</select>'
         +'</div>'
+        +'<button class="btn btn-primary" id="btnCheckin" onclick="doCheckIn()" disabled style="width:100%;">📍 เช็คอินหน้างาน</button>'
+        +'<div id="checkinMsg" style="font-size:12px;text-align:center;margin-top:8px;min-height:16px;color:var(--muted);"></div>'
+        +'<div id="afterCheckin" style="display:none;margin-top:6px;padding-top:14px;border-top:1px solid var(--border);">'
         +'<div class="field">'
           +'<label>ชื่อผู้นับสต็อก (ทีมพาเลทส่วนกลาง) <span style=\"color:var(--danger);\">*</span></label>'
-          +'<input class="input" id="inputName" type="text" placeholder="ชื่อ-นามสกุล" oninput="checkStep1()">'
+          +'<input class="input" id="inputName" type="text" placeholder="ชื่อ-นามสกุล" oninput="checkName()">'
         +'</div>'
         +'<div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin:10px 0 6px;">ผู้ร่วมตรวจนับ (กรอกเฉพาะที่มี)</div>'
         +'<div class="field"><label>โรงงาน/คลัง (ฝ่ายบริหาร/แผนกคลังสินค้า)</label><input class="input" id="inputAdmin" type="text" placeholder="ชื่อ-นามสกุล (ถ้ามี)"></div>'
@@ -639,16 +642,58 @@ function renderStep1(content) {
         +'<div class="field"><label>สำนักงานตรวจสอบบัญชี</label><input class="input" id="inputAudit" type="text" placeholder="ชื่อ-นามสกุล (ถ้ามี)"></div>'
         +'<div id="step1Error" style="font-size:12px;color:var(--danger);display:none;margin-bottom:10px;"></div>'
         +'<button class="btn btn-primary" id="btnStep1" onclick="confirmStep1()" disabled style="width:100%;">เริ่มนับสต็อก →</button>'
+        +'</div>'
       +'</div>'
     +'</div>';
 
-  document.getElementById('selSite').addEventListener('change', checkStep1);
+  document.getElementById('selSite').addEventListener('change', checkSiteSel);
 }
 
-function checkStep1() {
+function checkSiteSel() {
   var site = document.getElementById('selSite').value;
+  var b = document.getElementById('btnCheckin');
+  if (b) b.disabled = !site;
+}
+function checkName() {
   var name = document.getElementById('inputName').value.trim();
-  document.getElementById('btnStep1').disabled = !(site && name);
+  var b = document.getElementById('btnStep1');
+  if (b) b.disabled = !name;
+}
+async function doCheckIn() {
+  var site = document.getElementById('selSite').value;
+  if (!site) return;
+  var btn = document.getElementById('btnCheckin');
+  var msg = document.getElementById('checkinMsg');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>กำลังเช็คอิน…';
+  if (msg) msg.textContent = 'กำลังขอตำแหน่ง (ถ้าอนุญาต)…';
+
+  // best-effort GPS — ได้ก็แนบพิกัด ไม่ได้ก็เช็คอินต่อ
+  var coords = await new Promise(function(resolve){
+    if (!navigator.geolocation) return resolve(null);
+    var done = false;
+    var t = setTimeout(function(){ if(!done){ done=true; resolve(null); } }, 6000);
+    navigator.geolocation.getCurrentPosition(
+      function(p){ if(!done){ done=true; clearTimeout(t); resolve({lat:p.coords.latitude, lng:p.coords.longitude, acc:p.coords.accuracy}); } },
+      function(){ if(!done){ done=true; clearTimeout(t); resolve(null); } },
+      { enableHighAccuracy:true, timeout:6000, maximumAge:0 }
+    );
+  });
+
+  try {
+    await fetch(API_URL, {
+      method:'POST', redirect:'follow', headers:{'Content-Type':'text/plain'},
+      body: JSON.stringify({ action:'checkIn', site:site, site_id:_siteIdByName(site),
+        lat: coords?coords.lat:null, lng: coords?coords.lng:null })
+    });
+  } catch(e) {}
+
+  var when = new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'});
+  btn.innerHTML = '✅ เช็คอินแล้ว ' + when;
+  if (msg) msg.innerHTML = coords
+    ? '🟢 เช็คอินสำเร็จ · แนบพิกัดแล้ว — กรอกชื่อผู้นับเพื่อเริ่มนับ'
+    : '🟢 เช็คอินสำเร็จ (ไม่มีพิกัด GPS) — กรอกชื่อผู้นับเพื่อเริ่มนับ';
+  var after = document.getElementById('afterCheckin');
+  if (after){ after.style.display = 'block'; setTimeout(function(){ after.scrollIntoView({behavior:'smooth',block:'nearest'}); var n=document.getElementById('inputName'); if(n) n.focus(); }, 60); }
 }
 
 function confirmStep1() {
@@ -733,23 +778,40 @@ function renderStep2(content) {
         // ── รายการ Location ที่บันทึกแล้ว — แสดงด้านล่างฟอร์มเสมอ ──
         '<div id="savedSectionLabel" style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin-bottom:8px;'+(hasLoc?'':'display:none;')+'">รายการที่บันทึกแล้ว ('+locations.length+')</div>'+
         '<div class="loc-list" id="locListContainer"></div>'+
-        '<button class="btn btn-success" id="btnGoStep3" type="button" onclick="goStep3()" style="width:100%;margin-top:12px;'+(hasLoc?'':'display:none;')+'">✓ จบการนับ — ไปขั้นที่ 3: ดูสรุปยอด ▾</button>'+
+        '<button class="btn btn-success" id="btnGoStep3" type="button" onclick="goStep3()" style="width:100%;margin-top:12px;'+(hasLoc?'':'display:none;')+'">✓ จบการนับ — ไปขั้นที่ 3 ▾</button>'+
 
       '</div>'+
     '</div>'+
-    // ── Step 3: สรุป (ซ่อนไว้จนกว่าจะกดแสดง) ──
+    // ── Step 3: พาเลทที่ควบคุมนอกระบบ PCS (ระดับ Site) + ไฟล์หลักฐาน ──
+    '<div class="card '+(hasLoc?'active':'locked')+'" id="stepOffCard">'+
+      '<div class="card-head"><span class="step-badge '+(hasLoc?'active':'locked')+'">ขั้นที่ 3</span>'+
+        '<span class="card-title">พาเลทที่ควบคุมนอกระบบ PCS</span>'+
+        '<span class="card-hint">กรอกจำนวน + แนบหลักฐาน</span></div>'+
+      '<div class="card-body">'+
+        '<div style="font-size:12px;color:var(--muted);margin-bottom:12px;">กรอกจำนวนระดับ Site — <b>ถ้ามีจำนวนมากกว่า 0 ต้องแนบไฟล์หลักฐาน</b> (PDF / Excel / รูปภาพ)</div>'+
+        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">'+
+          _offInput('LOSCAM (ไม้)','loscam')+_offInput('CHEP (ไม้)','chep')+_offInput('BRS (พลาสติก)','brs')+_offInput('SWWI (พลาสติก)','swwi')+
+        '</div>'+
+        '<div class="upload-zone" id="offUploadZone" onclick="document.getElementById(\'offFileInput\').click()"'+
+          ' ondragover="event.preventDefault();this.classList.add(\'drag\')" ondragleave="this.classList.remove(\'drag\')" ondrop="handleOffDrop(event)">'+
+          '<div class="icon">📎</div><div class="label">แนบไฟล์หลักฐานนอกระบบ</div><div class="sub">PDF, Excel, รูปภาพ</div></div>'+
+        '<input type="file" id="offFileInput" accept="image/*,application/pdf,.xls,.xlsx,.csv,.xlsm" multiple onchange="handleOffFiles(this.files);this.value=\'\';" style="display:none;">'+
+        '<div class="file-list" id="offFileList">'+_renderOffFileList()+'</div>'+
+      '</div>'+
+    '</div>'+
+    // ── Step 4: สรุป (ซ่อนไว้จนกว่าจะกดแสดง) ──
     '<div class="card '+(hasLoc?'active':'locked')+'" id="step3Card">'+
       '<div class="card-head" style="cursor:pointer;" onclick="toggleStep3()" id="step3Head">'+
-        '<span class="step-badge '+(hasLoc?'active':'locked')+'">ขั้นที่ 3</span>'+
+        '<span class="step-badge '+(hasLoc?'active':'locked')+'">ขั้นที่ 4</span>'+
         '<span class="card-title">สรุปยอดนับ &amp; เทียบ Book</span>'+
         '<span id="step3Toggle" style="margin-left:auto;font-size:13px;color:var(--accent);font-weight:600;">'+(hasLoc?'▸ แสดง':'')+'</span>'+
       '</div>'+
       '<div class="card-body" id="step3Body" style="display:none;"></div>'+
     '</div>'+
 
-    // ── Step 4: Upload ──
+    // ── Step 5: Upload ──
     '<div class="card '+(hasLoc?'active':'locked')+'" id="step4Card">'+
-      '<div class="card-head"><span class="step-badge '+(hasLoc?'active':'locked')+'">ขั้นที่ 4</span>'+
+      '<div class="card-head"><span class="step-badge '+(hasLoc?'active':'locked')+'">ขั้นที่ 5</span>'+
         '<span class="card-title">Upload รายงาน (พร้อมลายเซ็น)</span>'+
         '<span class="card-hint">รูปภาพหรือ PDF</span></div>'+
       '<div class="card-body">'+
@@ -773,10 +835,11 @@ function renderStep2(content) {
       '<div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:8px;">📋 ตรวจสอบก่อน Submit</div>'+
       '<div class="step-check" id="chk1">'+_chkIcon(true)+'ขั้นที่ 1 — เลือก Site และผู้นับ</div>'+
       '<div class="step-check" id="chk2">'+_chkIcon(hasLoc)+'ขั้นที่ 2 — กรอกยอดนับ ('+(hasLoc?locations.length+' Location':'ยังไม่มี Location')+')</div>'+
-      '<div class="step-check" id="chk3a">'+_chkIcon(_step3Seen)+'ขั้นที่ 3 — ตรวจสอบสรุปยอดแล้ว'+(!_step3Seen?' (กด "▸ แสดง" ก่อน)':'')+'</div>'+
-      '<div class="step-check" id="chk3b">'+_chkIcon(_printed)+'ขั้นที่ 3 — พิมพ์เอกสารยืนยันแล้ว'+(!_printed?' (กด 🖨️ พิมพ์เอกสารยืนยัน)':'')+'</div>'+
-      '<div class="step-check" id="chk4">'+_chkIcon(files.length>0)+'ขั้นที่ 4 — Upload รายงาน '+(files.length>0?'('+files.length+' ไฟล์)':'(ยังไม่มีไฟล์)')+'</div>'+
-      '<button class="btn btn-success" id="btnSubmit" onclick="submitCount()" '+(!hasLoc||!_step3Seen||!_printed||files.length===0?'disabled':'')+' style="width:100%;margin-top:8px;">'+
+      '<div class="step-check" id="chkOff">'+_chkIcon(_offOk())+'ขั้นที่ 3 — พาเลทนอกระบบ PCS '+_offSummaryTxt()+'</div>'+
+      '<div class="step-check" id="chk3a">'+_chkIcon(_step3Seen)+'ขั้นที่ 4 — ตรวจสอบสรุปยอดแล้ว'+(!_step3Seen?' (กด "▸ แสดง" ก่อน)':'')+'</div>'+
+      '<div class="step-check" id="chk3b">'+_chkIcon(_printed)+'ขั้นที่ 4 — พิมพ์เอกสารยืนยันแล้ว'+(!_printed?' (กด 🖨️ พิมพ์เอกสารยืนยัน)':'')+'</div>'+
+      '<div class="step-check" id="chk4">'+_chkIcon(files.length>0)+'ขั้นที่ 5 — Upload รายงาน '+(files.length>0?'('+files.length+' ไฟล์)':'(ยังไม่มีไฟล์)')+'</div>'+
+      '<button class="btn btn-success" id="btnSubmit" onclick="submitCount()" '+(!hasLoc||!_offOk()||!_step3Seen||!_printed||files.length===0?'disabled':'')+' style="width:100%;margin-top:8px;">'+
         '📤 Submit ผลการนับ'+
       '</button>'+
       '<div id="submitNote" style="font-size:11px;color:var(--muted);text-align:center;margin-top:4px;"></div>'+
@@ -806,7 +869,8 @@ function updateSubmitCard() {
 
   var hasLoc  = locations.length > 0;
   var hasFile = files.length > 0;
-  var ready   = hasLoc && _step3Seen && _printed && hasFile;
+  var offOk   = _offOk();
+  var ready   = hasLoc && offOk && _step3Seen && _printed && hasFile;
 
   // ปลดล็อกขั้น 3/4 + ปุ่มไปขั้น 3 ทันทีที่มี Location (กันต้อง refresh)
   var goBtn = document.getElementById('btnGoStep3');
@@ -824,25 +888,31 @@ function updateSubmitCard() {
     chk2.innerHTML = _chkIcon(hasLoc)+'ขั้นที่ 2 — กรอกยอดนับ ('+(hasLoc?locations.length+' Location':'ยังไม่มี Location')+')';
     chk2.className = 'step-check '+(hasLoc?'done':'pending');
   }
+  var chkOff = document.getElementById('chkOff');
+  if (chkOff) {
+    chkOff.innerHTML = _chkIcon(offOk)+'ขั้นที่ 3 — พาเลทนอกระบบ PCS '+_offSummaryTxt();
+    chkOff.className = 'step-check '+(offOk?'done':'pending');
+  }
   var chk3a = document.getElementById('chk3a');
   var chk3b = document.getElementById('chk3b');
   if (chk3a) {
-    chk3a.innerHTML = _chkIcon(_step3Seen)+'ขั้นที่ 3 — ตรวจสอบสรุปยอดแล้ว'+(!_step3Seen?' <span style="color:var(--warn);">(กด ▸ แสดง ก่อน)</span>':'');
+    chk3a.innerHTML = _chkIcon(_step3Seen)+'ขั้นที่ 4 — ตรวจสอบสรุปยอดแล้ว'+(!_step3Seen?' <span style="color:var(--warn);">(กด ▸ แสดง ก่อน)</span>':'');
     chk3a.className = 'step-check '+(_step3Seen?'done':'pending');
   }
   if (chk3b) {
-    chk3b.innerHTML = _chkIcon(_printed)+'ขั้นที่ 3 — พิมพ์เอกสารยืนยันแล้ว'+(!_printed?' <span style="color:var(--warn);">(กด 🖨️ พิมพ์เอกสารยืนยัน)</span>':'');
+    chk3b.innerHTML = _chkIcon(_printed)+'ขั้นที่ 4 — พิมพ์เอกสารยืนยันแล้ว'+(!_printed?' <span style="color:var(--warn);">(กด 🖨️ พิมพ์เอกสารยืนยัน)</span>':'');
     chk3b.className = 'step-check '+(_printed?'done':'pending');
   }
   if (chk4) {
-    chk4.innerHTML = _chkIcon(hasFile)+'ขั้นที่ 4 — Upload รายงาน '+(hasFile?'('+files.length+' ไฟล์)':'(ยังไม่มีไฟล์)');
+    chk4.innerHTML = _chkIcon(hasFile)+'ขั้นที่ 5 — Upload รายงาน '+(hasFile?'('+files.length+' ไฟล์)':'(ยังไม่มีไฟล์)');
     chk4.className = 'step-check '+(hasFile?'done':'pending');
   }
   if (btn) btn.disabled = !ready;
   if (note) note.textContent = ready
     ? 'พร้อม Submit — '+locations.length+' Location · '+files.length+' ไฟล์'
     : (!hasLoc      ? 'กรุณาเพิ่มอย่างน้อย 1 Location'
-      : !_step3Seen ? 'กรุณาเปิดดูสรุปยอดในขั้นที่ 3 ก่อน'
+      : !offOk      ? 'ขั้นที่ 3: มีพาเลทนอกระบบ ต้องแนบไฟล์หลักฐานก่อน'
+      : !_step3Seen ? 'กรุณาเปิดดูสรุปยอดในขั้นที่ 4 ก่อน'
       : !_printed   ? 'กรุณาพิมพ์เอกสารยืนยันก่อน'
       : 'กรุณา Upload รายงาน (พร้อมลายเซ็น) ก่อน Submit');
 
@@ -1129,7 +1199,8 @@ function goStep3() {
   if (s4) { s4.classList.remove('locked'); s4.classList.add('active'); }
   var body = document.getElementById('step3Body');
   if (body && body.style.display === 'none') toggleStep3(); // เปิด (จะ populate ให้)
-  if (s3) setTimeout(function(){ s3.scrollIntoView({ behavior:'smooth', block:'start' }); }, 60);
+  var offc = document.getElementById('stepOffCard');
+  if (offc) setTimeout(function(){ offc.scrollIntoView({ behavior:'smooth', block:'start' }); }, 60);
 }
 
 // ============================================================
@@ -1382,6 +1453,21 @@ function removeFile(i) {
   updateSubmitCard();
 }
 
+// ── ขั้นที่ 3: พาเลทนอกระบบ PCS (ระดับ Site) + ไฟล์หลักฐาน ──
+function _offInput(label,key){
+  return '<div class="field" style="margin-bottom:0;"><label>'+label+'</label>'+
+    '<input class="input" type="number" min="0" inputmode="numeric" value="'+(offPcs[key]||0)+'" '+
+    'onchange="setOffPcs(\''+key+'\',this.value)" oninput="setOffPcs(\''+key+'\',this.value)"></div>';
+}
+function setOffPcs(key,val){ offPcs[key]=Math.max(0,Math.floor(Number(val)||0)); updateSubmitCard(); }
+function _offSum(){ return (offPcs.loscam||0)+(offPcs.chep||0)+(offPcs.brs||0)+(offPcs.swwi||0); }
+function _offOk(){ return _offSum()===0 || offPcsFiles.length>0; }
+function _offSummaryTxt(){ var s=_offSum(); if(s===0) return '(0 — ไม่ต้องแนบไฟล์)'; return '('+s+' พาเลท · '+(offPcsFiles.length?offPcsFiles.length+' ไฟล์':'⚠ ต้องแนบไฟล์')+')'; }
+function handleOffFiles(fileList){ Array.from(fileList).forEach(function(f){ offPcsFiles.push(f); }); var el=document.getElementById('offFileList'); if(el) el.innerHTML=_renderOffFileList(); updateSubmitCard(); }
+function _renderOffFileList(){ return offPcsFiles.map(function(f,i){ return '<div class="file-item"><span>📄</span><span class="fname">'+esc(f.name)+'</span><span style="font-size:11px;color:var(--muted);">'+_fmtSize(f.size)+'</span><button class="fdel" onclick="removeOffFile('+i+')" title="ลบ">✕</button></div>'; }).join(''); }
+function removeOffFile(i){ offPcsFiles.splice(i,1); var el=document.getElementById('offFileList'); if(el) el.innerHTML=_renderOffFileList(); updateSubmitCard(); }
+function handleOffDrop(e){ e.preventDefault(); var z=document.getElementById('offUploadZone'); if(z) z.classList.remove('drag'); handleOffFiles(e.dataTransfer.files); }
+
 function _renderComparison(tot) {
   var hasB = bookBalance && Object.keys(bookBalance).some(function(k){ return bookBalance[k] && typeof bookBalance[k]==='object'; });
 
@@ -1508,7 +1594,7 @@ function printDoc() {
 
   var wL_counted=sumExclude(tot.loscam,WOOD_EXCLUDE), wC_counted=sumExclude(tot.chep,WOOD_EXCLUDE);
   var wL_sai=tot.loscam['พาเลทที่ใช้ในสายการผลิต']||0, wC_sai=tot.chep['พาเลทที่ใช้ในสายการผลิต']||0;
-  var wL_nok=tot.loscam['พาเลทที่ควบคุมนอกระบบ PCS']||0, wC_nok=tot.chep['พาเลทที่ควบคุมนอกระบบ PCS']||0;
+  var wL_nok=offPcs.loscam||0, wC_nok=offPcs.chep||0;   // ดึงจากขั้นที่ 3 (ระดับ Site)
   var wL_pcs=bL['คงเหลือ']||0, wC_pcs=bC['คงเหลือ']||0;
   var wL_out=bL['ระหว่างโอนออก']||0, wC_out=bC['ระหว่างโอนออก']||0;
   var wL_due=wL_pcs+wL_out, wC_due=wC_pcs+wC_out;
@@ -1517,7 +1603,7 @@ function printDoc() {
 
   var pB_counted=sumExclude(tot.brs,PLASTIC_EXCLUDE), pS_counted=sumExclude(tot.swwi,PLASTIC_EXCLUDE);
   var pB_sai=tot.brs['พาเลทที่ใช้ในสายการผลิต']||0, pS_sai=tot.swwi['พาเลทที่ใช้ในสายการผลิต']||0;
-  var pB_nok=tot.brs['พาเลทที่ควบคุมนอกระบบ PCS']||0, pS_nok=tot.swwi['พาเลทที่ควบคุมนอกระบบ PCS']||0;
+  var pB_nok=offPcs.brs||0, pS_nok=offPcs.swwi||0;   // ดึงจากขั้นที่ 3 (ระดับ Site)
   var pB_brs1=tot.brs['พาเลทชำรุด โอน BRS-900 แล้ว (ตัวเอง)']||0, pS_brs1=tot.swwi['พาเลทชำรุด โอน BRS-900 แล้ว (ตัวเอง)']||0;
   var pB_brs2=tot.brs['พาเลทชำรุด โอน BRS-900 แล้ว (ที่อื่น)']||0, pS_brs2=tot.swwi['พาเลทชำรุด โอน BRS-900 แล้ว (ที่อื่น)']||0;
   var pB_pcs=bB['คงเหลือ']||0, pS_pcs=bS['คงเหลือ']||0;
@@ -1660,7 +1746,7 @@ function printDoc() {
       row('พาเลทเปล่า TBS',tot.loscam['พาเลทเปล่า TBS']||0,tot.chep['พาเลทเปล่า TBS']||0)+
       row('พาเลทที่ใช้วางสินค้า',tot.loscam['พาเลทที่ใช้วางสินค้า']||0,tot.chep['พาเลทที่ใช้วางสินค้า']||0)+
       row('พาเลทที่ใช้ในสายการผลิต',tot.loscam['พาเลทที่ใช้ในสายการผลิต']||0,tot.chep['พาเลทที่ใช้ในสายการผลิต']||0)+
-      row('พาเลทที่ควบคุมนอกระบบ PCS',tot.loscam['พาเลทที่ควบคุมนอกระบบ PCS']||0,tot.chep['พาเลทที่ควบคุมนอกระบบ PCS']||0)+
+      row('พาเลทที่ควบคุมนอกระบบ PCS',offPcs.loscam||0,offPcs.chep||0)+
       '<tr><td class="section-label" colspan="3">สรุปผลการตรวจนับ</td></tr>'+
       row('จำนวนคงเหลือบนระบบ',wL_pcs,wC_pcs)+
       row('บวก ระหว่างโอนออก',wL_out,wC_out)+
@@ -1685,7 +1771,7 @@ function printDoc() {
       row('ชำรุด รออนุมัติ BRS-900',tot.brs['พาเลทชำรุด รออนุมัติโอนเข้า BRS-900']||0,tot.swwi['พาเลทชำรุด รออนุมัติโอนเข้า BRS-900']||0)+
       row('ชำรุด โอน BRS-900 (ตัวเอง)',tot.brs['พาเลทชำรุด โอน BRS-900 แล้ว (ตัวเอง)']||0,tot.swwi['พาเลทชำรุด โอน BRS-900 แล้ว (ตัวเอง)']||0)+
       row('ชำรุด โอน BRS-900 (ที่อื่น)',tot.brs['พาเลทชำรุด โอน BRS-900 แล้ว (ที่อื่น)']||0,tot.swwi['พาเลทชำรุด โอน BRS-900 แล้ว (ที่อื่น)']||0)+
-      row('พาเลทที่ควบคุมนอกระบบ PCS',tot.brs['พาเลทที่ควบคุมนอกระบบ PCS']||0,tot.swwi['พาเลทที่ควบคุมนอกระบบ PCS']||0)+
+      row('พาเลทที่ควบคุมนอกระบบ PCS',offPcs.brs||0,offPcs.swwi||0)+
       '<tr><td class="section-label" colspan="3">สรุปผลการตรวจนับ</td></tr>'+
       row('จำนวนคงเหลือบนระบบ',pB_pcs,pS_pcs)+
       row('บวก ระหว่างโอนออก',pB_out,pS_out)+
@@ -1882,6 +1968,12 @@ async function submitCount() {
       var url = await uploadFile(files[i]);
       if (url) fileUrls.push(url);
     }
+    // upload ไฟล์หลักฐานนอกระบบ PCS (คนละชุด)
+    var offUrls = [];
+    for (var j = 0; j < offPcsFiles.length; j++) {
+      var ou = await uploadFile(offPcsFiles[j]);
+      if (ou) offUrls.push(ou);
+    }
 
     var tot = _calcTotals();
     var tmpId = 'SC-' + new Date().toISOString().slice(0,10).replace(/-/g,'') + '-' + Math.floor(Math.random()*900+100);
@@ -1896,6 +1988,11 @@ async function submitCount() {
       locations     : locations,
       // ── contract ใหม่ ──
       actual        : { loscam:tot.totLoscam, chep:tot.totChep, brs:tot.totBrs, swwi:tot.totSwwi },
+      off_pcs       : {
+        loscam: offPcs.loscam||0, chep: offPcs.chep||0,
+        brs:    offPcs.brs||0,    swwi: offPcs.swwi||0,
+        files:  offUrls
+      },
       pdf_url       : fileUrls[0] || '',
       // ── เผื่อ backward-compat ──
       total_loscam  : tot.totLoscam,
