@@ -587,15 +587,23 @@ function renderSiteStatus(){
     var subTag = sub
       ? '<span class="status-badge sb-approved">✓ ส่งแล้ว</span>'
       : '<span class="status-badge sb-idle">— ยังไม่ส่ง</span>';
+    var ciTag = '<span class="status-badge sb-idle">— ยังไม่มา</span>';
+    var curRid = S.round ? S.round.round_id : null;
+    if (s.checkin_at && (!curRid || s.checkin_round===curRid)) {
+      var t = new Date(s.checkin_at).toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'});
+      var gps = (s.checkin_lat&&s.checkin_lng) ? ' 📍' : '';
+      ciTag = '<span class="status-badge sb-approved" title="'+esc(s.checkin_by||'')+(s.checkin_lat?(' · '+s.checkin_lat+','+s.checkin_lng):'')+'">🟢 '+t+gps+'</span>';
+    }
     return '<tr>'
       +'<td class="num" style="color:var(--muted);">'+(i+1)+'</td>'
       +'<td style="font-weight:600;">'+esc(s.site_name)+'</td>'
+      +'<td>'+ciTag+'</td>'
       +'<td>'+bookTag+'</td>'
       +'<td>'+subTag+'</td>'
       +'<td>'+stMap[siteState(s.site_id)]+'</td>'
     +'</tr>';
   }).join('');
-  el.innerHTML = '<table><thead><tr><th>#</th><th>Site</th><th>Book Balance</th><th>ส่งข้อมูล</th><th>สถานะปิดงาน</th></tr></thead><tbody>'+rows+'</tbody></table>';
+  el.innerHTML = '<table><thead><tr><th>#</th><th>Site</th><th>เช็คอิน</th><th>Book Balance</th><th>ส่งข้อมูล</th><th>สถานะปิดงาน</th></tr></thead><tbody>'+rows+'</tbody></table>';
 }
 
 /* ── Render: Actual vs System reconciliation ─────────── */
@@ -923,6 +931,13 @@ function renderQueue(st){
         +opCell('LOSCAM',op.loscam)+opCell('CHEP',op.chep)+opCell('BRS',op.brs)+opCell('SWWI',op.swwi)
         +'<div style="border:1px solid var(--border,#e2e2e2);border-radius:8px;padding:8px 14px;text-align:center;background:rgba(0,0,0,.03);"><div style="font-size:11px;color:var(--muted,#999);">รวม</div><div style="font-size:18px;font-weight:800;">'+opTotal+'</div></div>'
       +'</div>'
+      + (function(){
+          var of = (op&&op.files&&op.files.length)?op.files:[];
+          if(!of.length) return (opTotal>0 ? '<div style="font-size:11px;color:#c0392b;margin:-6px 0 14px;">⚠ ไม่มีไฟล์หลักฐานนอกระบบแนบมา</div>' : '');
+          return '<div style="font-size:12px;color:var(--muted,#777);margin-bottom:6px;">ไฟล์หลักฐานนอกระบบ PCS</div><div style="margin-bottom:16px;">'
+            + of.map(function(u,i){return '<a class="btn-sm btn-sm-open" href="'+esc(u)+'" target="_blank" rel="noopener" style="margin:0 6px 6px 0;">🧾 หลักฐาน '+(i+1)+'</a>';}).join('')
+            + '</div>';
+        })()
       +'<div style="font-size:12px;color:var(--muted,#777);margin-bottom:6px;">ไฟล์แนบจากผู้นับ</div>'
       +'<div style="margin-bottom:16px;">'+pdf+'</div>'
       +'<div style="display:flex;gap:10px;flex-wrap:wrap;">'
