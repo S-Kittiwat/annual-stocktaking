@@ -849,7 +849,7 @@ function addAgent(){
   var link=document.getElementById('agLink').value.trim();
   var pin=document.getElementById('agPin').value.trim();
   if(!name||!pin){ toast('กรอกชื่อและ PIN','error'); return; }
-  post({action:'saveAgent', name:name, room:room, roomLink:link, pin:pin}).then(function(d){
+  post({action:'saveAgent', name:name, room:room, roomLink:link, user_pin:pin}).then(function(d){
     if(d && d.status==='error'){ toast(d.message||'เพิ่มไม่สำเร็จ','error'); return; }
     document.getElementById('agName').value=''; document.getElementById('agRoom').value='';
     document.getElementById('agLink').value=''; document.getElementById('agPin').value='';
