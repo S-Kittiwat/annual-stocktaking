@@ -446,7 +446,7 @@ var RECON_COLS = [
 ];
 
 var S = { round:null, sites:[], books:{}, subs:[], tab:'dashboard', bookSite:'', rv:null, docnos:{}, docMeta:{}, agents:[] };
-var myUserId='', myUserName='', _queueTimer=null;
+var myUserId='', myUserName='', _queueTimer=null, _tickTimer=null;
 var _pollTimer = null, _modalOpen = false, _toastTimer = null, _docMetaInit = false;
 
 /* ── PIN ─────────────────────────────────────────────── */
@@ -862,8 +862,10 @@ function delAgent(id,name){
 }
 
 // ══════ กระดานคิว recheck ══════
-function startQueuePoll(){ stopQueuePoll(); fetchQueue(); _queueTimer=setInterval(function(){ if(!_modalOpen) fetchQueue(); }, 5000); }
-function stopQueuePoll(){ if(_queueTimer){ clearInterval(_queueTimer); _queueTimer=null; } }
+function fmtDur(sec){ sec=Math.max(0,Math.floor(sec)); var h=Math.floor(sec/3600),m=Math.floor((sec%3600)/60),s=sec%60; function p(n){return String(n).padStart(2,'0');} return h?(h+':'+p(m)+':'+p(s)):(p(m)+':'+p(s)); }
+function tickQueue(){ document.querySelectorAll('.q-tick').forEach(function(el){ var since=el.dataset.since; if(!since){ el.textContent='—'; return; } el.textContent=fmtDur((Date.now()-new Date(since))/1000); }); }
+function startQueuePoll(){ stopQueuePoll(); fetchQueue(); _queueTimer=setInterval(function(){ if(!_modalOpen) fetchQueue(); }, 5000); _tickTimer=setInterval(tickQueue, 1000); }
+function stopQueuePoll(){ if(_queueTimer){ clearInterval(_queueTimer); _queueTimer=null; } if(_tickTimer){ clearInterval(_tickTimer); _tickTimer=null; } }
 function fetchQueue(){
   if(!API_URL) return;
   fetch(API_URL+'?action=getState').then(function(r){return r.json();}).then(function(d){
@@ -894,23 +896,38 @@ function renderQueue(st){
       cs.sort(function(a,b){return (b.submitted_at||'').localeCompare(a.submitted_at||'');});
       sub=cs[0]||null;
     }catch(e){}
-    var detail='';
-    if(sub){
-      var tm=sub.submitted_at?new Date(sub.submitted_at).toLocaleString('th-TH',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}):'—';
-      var a=sub.actual||{};
-      var pdf=sub.pdf_url?'<a class="btn-sm btn-sm-open" href="'+esc(sub.pdf_url)+'" target="_blank" rel="noopener">📄 เปิดใบเซ็น</a>':'<span class="status-badge sb-idle">ไม่มีไฟล์ใบเซ็น</span>';
-      detail='<div style="margin-top:8px;font-size:13px;color:var(--muted,#666);"><span class="mono">'+esc(sub.count_id||'')+'</span> · ผู้นับ: <b>'+esc(sub.counter_name||'—')+'</b> · ส่งเมื่อ '+tm+((sub.revision>1)?(' · แก้ครั้งที่ '+sub.revision):'')+'</div>'
-        +'<div style="margin-top:8px;">'+pdf+'</div>'
-        +'<div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap;">'+_qNumChip('LOSCAM',a.loscam)+_qNumChip('CHEP',a.chep)+_qNumChip('BRS',a.brs)+_qNumChip('SWWI',a.swwi)+'</div>'
-        +'<div style="margin-top:4px;font-size:11px;color:var(--muted,#999);">* ตัวเลข = ยอดนับจริงรวมที่ผู้นับส่งมา · ดูรายละเอียดเต็มในใบเซ็น</div>';
-    } else {
-      detail='<div style="margin-top:8px;font-size:13px;color:var(--muted,#888);">ไม่พบใบส่งผลของ Site นี้ (อาจถูกอนุมัติ/ตีกลับไปแล้ว — กด “ปล่อยตัว” เพื่อปิดงาน)</div>';
-    }
-    meBox.innerHTML='<div style="font-size:15px;">กำลังตรวจ: <b style="color:var(--accent,#b8893d);">'+esc(c.site)+'</b> <span style="color:var(--muted,#888);">('+esc(c.ticket)+')</span>'+(c.kicks?' · เคยตีกลับ '+c.kicks+' ครั้ง':'')+'</div>'
-      +detail
-      +'<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">'
-        +'<button class="btn btn-success" onclick="qRelease()">✓ ปล่อยตัว (อนุมัติ)</button>'
-        +'<button class="btn" style="background:#c0392b;color:#fff;" onclick="qKickback()">↩ ตีกลับ (แก้ไข)</button>'
+    var op = (sub&&sub.off_pcs)?sub.off_pcs:{loscam:null,chep:null,brs:null,swwi:null};
+    function opv(x){ return (x===null||x===undefined||x==='')?'—':x; }
+    var opTotal = ['loscam','chep','brs','swwi'].reduce(function(a,k){return a+(Number(op[k])||0);},0);
+    function opCell(lbl,val){ return '<div style="border:1px solid var(--border,#e2e2e2);border-radius:8px;padding:8px;text-align:center;"><div style="font-size:11px;color:var(--muted,#999);">'+lbl+'</div><div style="font-size:16px;font-weight:700;">'+opv(val)+'</div></div>'; }
+    var urls=(sub&&sub.pdf_urls&&sub.pdf_urls.length)?sub.pdf_urls:((sub&&sub.pdf_url)?[sub.pdf_url]:[]);
+    var pdf = urls.length
+      ? urls.map(function(u,i){return '<a class="btn-sm btn-sm-open" href="'+esc(u)+'" target="_blank" rel="noopener" style="margin:0 6px 6px 0;">📄 ไฟล์ '+(i+1)+'</a>';}).join('')
+      : '<span class="status-badge sb-idle">ไม่มีไฟล์ใบเซ็น</span>';
+    var subline = sub ? ('<span class="mono">'+esc(sub.count_id||'')+'</span> · ผู้นับ: '+esc(sub.counter_name||'—')+((sub.revision>1)?(' · แก้ครั้งที่ '+sub.revision):'')) : ('<span class="mono">'+esc(c.ticket)+'</span>');
+    var waitSec = (c.enqueuedAt&&c.calledAt) ? Math.max(0,(new Date(c.calledAt)-new Date(c.enqueuedAt))/1000) : null;
+
+    meBox.innerHTML=
+      '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px;">'
+        +'<div><div style="font-size:12px;color:var(--muted,#888);">งานของฉัน · กำลังตรวจ</div>'
+          +'<div style="font-size:19px;font-weight:700;color:var(--accent,#b8893d);">'+esc(c.site)+'</div>'
+          +'<div style="font-size:12px;color:var(--muted,#999);margin-top:1px;">'+subline+'</div></div>'
+        +(c.kicks?'<span class="status-badge sb-rejected" style="white-space:nowrap;">เคยตีกลับ '+c.kicks+'</span>':'')
+      +'</div>'
+      +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;">'
+        +'<div style="background:rgba(0,0,0,.04);border-radius:8px;padding:10px 12px;"><div style="font-size:11px;color:var(--muted,#777);">⏱ ระยะเวลารอคิว</div><div class="mono" style="font-size:19px;font-weight:700;">'+(waitSec!=null?fmtDur(waitSec):'—')+'</div></div>'
+        +'<div style="background:rgba(184,137,61,.12);border-radius:8px;padding:10px 12px;"><div style="font-size:11px;color:var(--accent,#8a6526);">▶ ดำเนินการ (เดินสด)</div><div class="mono q-tick" data-since="'+esc(c.calledAt||'')+'" style="font-size:19px;font-weight:700;color:var(--accent,#8a6526);">—</div></div>'
+      +'</div>'
+      +'<div style="font-size:12px;color:var(--muted,#777);margin-bottom:6px;">พาเลทที่ควบคุมนอกระบบ PCS <span style="color:var(--muted,#aaa);">— เทียบกับไฟล์หลักฐาน</span></div>'
+      +'<div style="display:grid;grid-template-columns:repeat(4,1fr) auto;gap:8px;align-items:stretch;margin-bottom:16px;">'
+        +opCell('LOSCAM',op.loscam)+opCell('CHEP',op.chep)+opCell('BRS',op.brs)+opCell('SWWI',op.swwi)
+        +'<div style="border:1px solid var(--border,#e2e2e2);border-radius:8px;padding:8px 14px;text-align:center;background:rgba(0,0,0,.03);"><div style="font-size:11px;color:var(--muted,#999);">รวม</div><div style="font-size:18px;font-weight:800;">'+opTotal+'</div></div>'
+      +'</div>'
+      +'<div style="font-size:12px;color:var(--muted,#777);margin-bottom:6px;">ไฟล์แนบจากผู้นับ</div>'
+      +'<div style="margin-bottom:16px;">'+pdf+'</div>'
+      +'<div style="display:flex;gap:10px;flex-wrap:wrap;">'
+        +'<button class="btn btn-success" style="flex:1;min-width:150px;" onclick="qRelease()">✓ ปล่อยตัว (อนุมัติ)</button>'
+        +'<button class="btn" style="flex:1;min-width:150px;background:#c0392b;color:#fff;" onclick="qKickback()">↩ ตีกลับ (แก้ไข)</button>'
       +'</div>';
   } else {
     var onCall=(me.state==='oncall'), has=wait.length>0;
@@ -923,10 +940,11 @@ function renderQueue(st){
   var wq=document.getElementById('queueWaiting');
   if(!wait.length){ wq.innerHTML='<div class="empty">— ไม่มีคิวรอตรวจ —</div>'; }
   else{
-    wq.innerHTML='<table><thead><tr><th>คิว</th><th>Site</th><th>ตีกลับ</th></tr></thead><tbody>'+
-      wait.map(function(w){ return '<tr><td class="mono">'+esc(w.ticket)+'</td><td style="font-weight:600;">'+esc(w.site)+'</td><td>'+(w.kicks?('↩ '+w.kicks):'—')+'</td></tr>'; }).join('')+
+    wq.innerHTML='<table><thead><tr><th>คิว</th><th>Site</th><th>ตีกลับ</th><th>รอมา</th></tr></thead><tbody>'+
+      wait.map(function(w){ return '<tr><td class="mono">'+esc(w.ticket)+'</td><td style="font-weight:600;">'+esc(w.site)+'</td><td>'+(w.kicks?('↩ '+w.kicks):'—')+'</td><td class="mono q-tick" data-since="'+esc(w.enqueuedAt||'')+'">—</td></tr>'; }).join('')+
       '</tbody></table>';
   }
+  tickQueue();
   // สถานะทุกคน
   var stMap={ idle:'⚪ ว่าง', oncall:'🟢 On call', checking:'🔵 กำลังตรวจ' };
   var aq=document.getElementById('queueAll');
@@ -968,8 +986,9 @@ function renderSubTable(elId, list, isPending){
   var rows = list.map(function(c){
     var dt = c.submitted_at ? new Date(c.submitted_at).toLocaleString('th-TH',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}) : '—';
     var sb = {pending:'<span class="status-badge sb-pending">⏳ รออนุมัติ</span>',approved:'<span class="status-badge sb-approved">✅ อนุมัติ</span>',rejected:'<span class="status-badge sb-rejected">❌ ตีกลับ</span>'}[c.status]||esc(c.status);
-    var pdf = c.pdf_url
-      ? '<a class="btn-sm btn-sm-open" href="'+esc(c.pdf_url)+'" target="_blank" rel="noopener">📄 เปิด PDF</a>'
+    var _urls=(c.pdf_urls&&c.pdf_urls.length)?c.pdf_urls:(c.pdf_url?[c.pdf_url]:[]);
+    var pdf = _urls.length
+      ? _urls.map(function(u,i){return '<a class="btn-sm btn-sm-open" href="'+esc(u)+'" target="_blank" rel="noopener" style="margin:0 3px 3px 0;">📄'+(_urls.length>1?(' '+(i+1)):'')+'</a>';}).join('')
       : '<span class="status-badge sb-idle">ไม่มีไฟล์</span>';
     var act = '';
     if(c.status==='pending'){
