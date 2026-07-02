@@ -243,7 +243,6 @@ table.recon .grp{border-left:1px solid var(--border);}
     <button class="tab" data-tab="sites" onclick="switchTab('sites')">🏭 Site & ยอดระบบ</button>
     <button class="tab" data-tab="queue" onclick="switchTab('queue')">🔔 คิว recheck</button>
     <button class="tab" data-tab="agents" onclick="switchTab('agents')">👥 ผู้ใช้</button>
-    <button class="tab" data-tab="review" onclick="switchTab('review')">✅ ตรวจสอบ <span class="tab-count zero" id="reviewBadge">0</span></button>
   </div>
 
   <div class="wrap">
@@ -321,6 +320,8 @@ table.recon .grp{border-left:1px solid var(--border);}
       <div class="table-wrap" id="queueWaiting"><div class="empty">—</div></div>
       <div class="eyebrow" style="margin-top:14px;">สถานะผู้ใช้ทุกคน</div>
       <div class="table-wrap" id="queueAll"><div class="empty">—</div></div>
+      <div class="eyebrow" style="margin-top:14px;">ผลการนับทั้งหมด (ประวัติ)</div>
+      <div class="table-wrap" id="allTableQ"><div class="empty">—</div></div>
     </div>
 
     <!-- ─── ผู้ใช้ (Users) ─── -->
@@ -338,12 +339,7 @@ table.recon .grp{border-left:1px solid var(--border);}
     </div>
 
     <!-- ─── Review ─── -->
-    <div class="panel" id="panel-review">
-      <div class="eyebrow">รอการอนุมัติ</div>
-      <div class="table-wrap" id="pendingTable"><div class="empty"><span class="spinner"></span></div></div>
-      <div class="eyebrow">ผลการนับทั้งหมด</div>
-      <div class="table-wrap" id="allTable"><div class="empty"><span class="spinner"></span></div></div>
-    </div>
+    <!-- (แท็บตรวจสอบถูกยุบเข้าแท็บคิว recheck แล้ว) -->
 
   </div>
 </div>
@@ -520,7 +516,12 @@ function markSynced(){
 }
 
 /* ── Render: everything ──────────────────────────────── */
-function renderAll(){ renderDashboard(); renderSiteStatus(); renderRecon(); renderSites(); renderAgents(); renderReview(); }
+function renderAll(){ renderDashboard(); renderSiteStatus(); renderRecon(); renderSites(); renderAgents(); renderQueueHistory(); }
+function renderQueueHistory(){
+  var el=document.getElementById('allTableQ'); if(!el) return;
+  var subs=curSubs().slice().sort(function(a,b){return (b.submitted_at||'').localeCompare(a.submitted_at||'');});
+  renderSubTable('allTableQ', subs, false);
+}
 
 function curSubs(){ var rid = S.round ? S.round.round_id : null; return S.subs.filter(function(x){ return !rid || x.round_id===rid; }); }
 function activeSites(){ return S.sites.filter(function(s){ return s.is_active; }); }
@@ -562,8 +563,7 @@ function renderDashboard(){
   document.getElementById('progFill').style.width  = (total ? Math.round(done/total*100) : 0) + '%';
 
   var badge = document.getElementById('reviewBadge');
-  badge.textContent = pending;
-  badge.className = 'tab-count' + (pending ? '' : ' zero');
+  if(badge){ badge.textContent = pending; badge.className = 'tab-count' + (pending ? '' : ' zero'); }
 }
 
 /* ── Render: Site status (control tower) ─────────────── */
@@ -888,12 +888,30 @@ function renderQueue(st){
   } else if(!me){
     meBox.innerHTML='<div class="empty">ไม่พบผู้ใช้ของคุณในระบบคิว — เพิ่มตัวเองในแท็บ “ผู้ใช้” และตั้ง PIN ให้ตรง</div>';
   } else if(me.current){
-    var c=me.current;
-    meBox.innerHTML='<div style="font-size:15px;">กำลังตรวจ: <b style="color:var(--accent,#b8893d);">'+esc(c.site)+'</b> <span style="color:var(--muted,#888);">('+esc(c.ticket)+')</span>'+(c.kicks?' · เคยตีกลับ '+c.kicks+' ครั้ง':'')+'</div>'+
-      '<div style="margin-top:10px;display:flex;gap:8px;flex-wrap:wrap;">'+
-        '<button class="btn btn-success" onclick="qRelease()">✓ ปล่อยตัว (อนุมัติ)</button>'+
-        '<button class="btn" style="background:#c0392b;color:#fff;" onclick="qKickback()">↩ ตีกลับ (แก้ไข)</button>'+
-      '</div>';
+    var c=me.current, sub=null;
+    try{
+      var cs=curSubs().filter(function(x){return String(x.site_name)===String(c.site)&&(x.status==='pending'||x.status==='reopened');});
+      cs.sort(function(a,b){return (b.submitted_at||'').localeCompare(a.submitted_at||'');});
+      sub=cs[0]||null;
+    }catch(e){}
+    var detail='';
+    if(sub){
+      var tm=sub.submitted_at?new Date(sub.submitted_at).toLocaleString('th-TH',{day:'2-digit',month:'short',hour:'2-digit',minute:'2-digit'}):'—';
+      var a=sub.actual||{};
+      var pdf=sub.pdf_url?'<a class="btn-sm btn-sm-open" href="'+esc(sub.pdf_url)+'" target="_blank" rel="noopener">📄 เปิดใบเซ็น</a>':'<span class="status-badge sb-idle">ไม่มีไฟล์ใบเซ็น</span>';
+      detail='<div style="margin-top:8px;font-size:13px;color:var(--muted,#666);"><span class="mono">'+esc(sub.count_id||'')+'</span> · ผู้นับ: <b>'+esc(sub.counter_name||'—')+'</b> · ส่งเมื่อ '+tm+((sub.revision>1)?(' · แก้ครั้งที่ '+sub.revision):'')+'</div>'
+        +'<div style="margin-top:8px;">'+pdf+'</div>'
+        +'<div style="margin-top:10px;display:flex;gap:6px;flex-wrap:wrap;">'+_qNumChip('LOSCAM',a.loscam)+_qNumChip('CHEP',a.chep)+_qNumChip('BRS',a.brs)+_qNumChip('SWWI',a.swwi)+'</div>'
+        +'<div style="margin-top:4px;font-size:11px;color:var(--muted,#999);">* ตัวเลข = ยอดนับจริงรวมที่ผู้นับส่งมา · ดูรายละเอียดเต็มในใบเซ็น</div>';
+    } else {
+      detail='<div style="margin-top:8px;font-size:13px;color:var(--muted,#888);">ไม่พบใบส่งผลของ Site นี้ (อาจถูกอนุมัติ/ตีกลับไปแล้ว — กด “ปล่อยตัว” เพื่อปิดงาน)</div>';
+    }
+    meBox.innerHTML='<div style="font-size:15px;">กำลังตรวจ: <b style="color:var(--accent,#b8893d);">'+esc(c.site)+'</b> <span style="color:var(--muted,#888);">('+esc(c.ticket)+')</span>'+(c.kicks?' · เคยตีกลับ '+c.kicks+' ครั้ง':'')+'</div>'
+      +detail
+      +'<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap;">'
+        +'<button class="btn btn-success" onclick="qRelease()">✓ ปล่อยตัว (อนุมัติ)</button>'
+        +'<button class="btn" style="background:#c0392b;color:#fff;" onclick="qKickback()">↩ ตีกลับ (แก้ไข)</button>'
+      +'</div>';
   } else {
     var onCall=(me.state==='oncall'), has=wait.length>0;
     meBox.innerHTML='<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">'+
@@ -920,6 +938,10 @@ function renderQueue(st){
         return '<tr><td style="font-weight:600;">'+esc(a.name)+(String(a.id)===String(myUserId)?' <span style="color:var(--accent,#b8893d);">(ฉัน)</span>':'')+'</td><td style="font-size:12px;">'+link+'</td><td>'+(stMap[a.state]||a.state||'')+'</td><td>'+(a.current?esc(a.current.site):'—')+'</td></tr>';
       }).join('')+'</tbody></table>';
   }
+}
+function _qNumChip(label,val){
+  var v=(val===undefined||val===null||val==='')?'—':val;
+  return '<span style="display:inline-flex;gap:4px;padding:4px 10px;border-radius:8px;background:rgba(0,0,0,.06);font-size:12px;">'+label+': <b>'+v+'</b></span>';
 }
 function qAction(action, extra){
   var p={action:action}; if(extra){ for(var k in extra) p[k]=extra[k]; }
