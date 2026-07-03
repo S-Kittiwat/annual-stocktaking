@@ -338,6 +338,7 @@ var locations = [];   // [{ name, photo, wood:{loscam:{...}, chep:{...}}, plasti
 var files     = [];
 var offPcs    = { loscam:0, chep:0, brs:0, swwi:0 };  // ขั้นที่ 3: นอกระบบ PCS ระดับ Site
 var offPcsFiles = [];                                  // ไฟล์หลักฐานนอกระบบ (คนละชุดกับใบเซ็น)
+var _checkinPhotoFile = null;                          // รูปเช็คอิน (ถือใน memory → อัปตอนเช็คอิน ไม่ลง localStorage)
 var _emptyPCS = function(){ return {คงเหลือ:0,ระหว่างโอนออก:0,ระหว่างโอนเข้า:0,ชำรุดเสียหาย:0,สูญหาย:0}; };
 var bookBalance = { loscam:_emptyPCS(), chep:_emptyPCS(), brs:_emptyPCS(), swwi:_emptyPCS() };
 var _editingIdx   = null;
@@ -628,6 +629,10 @@ function renderStep1(content) {
             +siteList.map(function(s){ return '<option value="'+esc(s)+'">'+esc(s)+'</option>'; }).join('')
           +'</select>'
         +'</div>'
+        +'<div class="field"><label>📷 รูปถ่ายหน้างาน <span style="color:var(--danger);">*</span></label>'
+          +'<div id="ciPhotoPreview" onclick="openCheckinPhoto()" style="width:100%;height:160px;border:1.5px dashed var(--border2);border-radius:var(--rs);background:var(--surface);display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;overflow:hidden;color:var(--muted);gap:6px;"><span style="font-size:32px;">📷</span><span style="font-size:12px;">แตะเพื่อถ่ายรูปหน้างาน</span></div>'
+          +'<input type="file" id="ciPhotoInput" accept="image/*" capture="environment" onchange="handleCheckinPhoto(this)" style="display:none;">'
+        +'</div>'
         +'<button class="btn btn-primary" id="btnCheckin" onclick="doCheckIn()" disabled style="width:100%;">📍 เช็คอินหน้างาน</button>'
         +'<div id="checkinMsg" style="font-size:12px;text-align:center;margin-top:8px;min-height:16px;color:var(--muted);"></div>'
         +'<div id="afterCheckin" style="display:none;margin-top:6px;padding-top:14px;border-top:1px solid var(--border);">'
@@ -652,7 +657,19 @@ function renderStep1(content) {
 function checkSiteSel() {
   var site = document.getElementById('selSite').value;
   var b = document.getElementById('btnCheckin');
-  if (b) b.disabled = !site;
+  if (b) b.disabled = !(site && _checkinPhotoFile);
+}
+function openCheckinPhoto(){ var i=document.getElementById('ciPhotoInput'); if(i) i.click(); }
+function handleCheckinPhoto(input){
+  if(!input.files || !input.files.length) return;
+  _checkinPhotoFile = input.files[0];   // ถือไว้ใน memory เฉย ๆ — ไม่ลง localStorage
+  var reader = new FileReader();
+  reader.onload = function(e){
+    var pp = document.getElementById('ciPhotoPreview');
+    if (pp) pp.innerHTML = '<img src="'+e.target.result+'" style="width:100%;height:100%;object-fit:cover;">';
+  };
+  reader.readAsDataURL(_checkinPhotoFile);
+  checkSiteSel();
 }
 function checkName() {
   var name = document.getElementById('inputName').value.trim();
@@ -661,12 +678,22 @@ function checkName() {
 }
 async function doCheckIn() {
   var site = document.getElementById('selSite').value;
-  if (!site) return;
+  if (!site || !_checkinPhotoFile) return;
   var btn = document.getElementById('btnCheckin');
   var msg = document.getElementById('checkinMsg');
   btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>กำลังเช็คอิน…';
-  if (msg) msg.textContent = 'กำลังขอตำแหน่ง (ถ้าอนุญาต)…';
 
+  // อัปรูปขึ้น Drive ทันที (ไม่เก็บใน localStorage)
+  if (msg) msg.textContent = 'กำลังอัปโหลดรูป…';
+  var photoUrl = '';
+  try { photoUrl = await uploadFile(_checkinPhotoFile); } catch(e) { photoUrl = ''; }
+  if (!photoUrl) {
+    if (msg) msg.innerHTML = '<span style="color:var(--danger);">อัปโหลดรูปไม่สำเร็จ ลองใหม่อีกครั้ง</span>';
+    btn.disabled = false; btn.innerHTML = '📍 เช็คอินหน้างาน';
+    return;
+  }
+
+  if (msg) msg.textContent = 'กำลังขอตำแหน่ง (ถ้าอนุญาต)…';
   // best-effort GPS — ได้ก็แนบพิกัด ไม่ได้ก็เช็คอินต่อ
   var coords = await new Promise(function(resolve){
     if (!navigator.geolocation) return resolve(null);
@@ -683,15 +710,15 @@ async function doCheckIn() {
     await fetch(API_URL, {
       method:'POST', redirect:'follow', headers:{'Content-Type':'text/plain'},
       body: JSON.stringify({ action:'checkIn', site:site, site_id:_siteIdByName(site),
-        lat: coords?coords.lat:null, lng: coords?coords.lng:null })
+        photo: photoUrl, lat: coords?coords.lat:null, lng: coords?coords.lng:null })
     });
   } catch(e) {}
 
   var when = new Date().toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'});
   btn.innerHTML = '✅ เช็คอินแล้ว ' + when;
   if (msg) msg.innerHTML = coords
-    ? '🟢 เช็คอินสำเร็จ · แนบพิกัดแล้ว — กรอกชื่อผู้นับเพื่อเริ่มนับ'
-    : '🟢 เช็คอินสำเร็จ (ไม่มีพิกัด GPS) — กรอกชื่อผู้นับเพื่อเริ่มนับ';
+    ? '🟢 เช็คอินสำเร็จ · แนบรูป+พิกัดแล้ว — กรอกชื่อผู้นับเพื่อเริ่มนับ'
+    : '🟢 เช็คอินสำเร็จ · แนบรูปแล้ว (ไม่มีพิกัด GPS) — กรอกชื่อผู้นับเพื่อเริ่มนับ';
   var after = document.getElementById('afterCheckin');
   if (after){ after.style.display = 'block'; setTimeout(function(){ after.scrollIntoView({behavior:'smooth',block:'nearest'}); var n=document.getElementById('inputName'); if(n) n.focus(); }, 60); }
 }
