@@ -578,7 +578,7 @@ function renderSiteStatus(){
     approved:'<span class="status-badge sb-approved">✅ อนุมัติ/ปิดงาน</span>',
     rejected:'<span class="status-badge sb-rejected">↩ ตีกลับ</span>'
   };
-  var rows = act.map(function(s,i){
+  function siteRow(s, n){
     var hasBook = !!S.books[s.site_id];
     var sub = latestSub(s.site_id);
     var bookTag = hasBook
@@ -592,18 +592,31 @@ function renderSiteStatus(){
     if (s.checkin_at && (!curRid || s.checkin_round===curRid)) {
       var t = new Date(s.checkin_at).toLocaleTimeString('th-TH',{hour:'2-digit',minute:'2-digit'});
       var gps = (s.checkin_lat&&s.checkin_lng) ? ' 📍' : '';
-      ciTag = '<span class="status-badge sb-approved" title="'+esc(s.checkin_by||'')+(s.checkin_lat?(' · '+s.checkin_lat+','+s.checkin_lng):'')+'">🟢 '+t+gps+'</span>';
+      ciTag = '<span class="status-badge sb-approved" title="'+esc(s.checkin_by||'')+(s.checkin_lat?(' · '+s.checkin_lat+','+s.checkin_lng):'')+'">🟢 '+t+gps+'</span>'
+        + (s.checkin_photo ? ' <a href="'+esc(s.checkin_photo)+'" target="_blank" rel="noopener" title="ดูรูปหน้างาน" style="text-decoration:none;">📷</a>' : '');
     }
     return '<tr>'
-      +'<td class="num" style="color:var(--muted);">'+(i+1)+'</td>'
+      +'<td class="num" style="color:var(--muted);">'+n+'</td>'
       +'<td style="font-weight:600;">'+esc(s.site_name)+'</td>'
       +'<td>'+ciTag+'</td>'
       +'<td>'+bookTag+'</td>'
       +'<td>'+subTag+'</td>'
       +'<td>'+stMap[siteState(s.site_id)]+'</td>'
     +'</tr>';
-  }).join('');
-  el.innerHTML = '<table><thead><tr><th>#</th><th>Site</th><th>เช็คอิน</th><th>Book Balance</th><th>ส่งข้อมูล</th><th>สถานะปิดงาน</th></tr></thead><tbody>'+rows+'</tbody></table>';
+  }
+  // จัดกลุ่มตามเวลาเริ่มนับ (เวลาเท่ากัน = กลุ่มเดียวกัน · ไม่กำหนด = ท้ายสุด)
+  var groups = {};
+  act.forEach(function(s){ var k=s.start_time||''; (groups[k]=groups[k]||[]).push(s); });
+  var keys = Object.keys(groups).sort(function(a,b){ if(a==='')return 1; if(b==='')return -1; return a<b?-1:(a>b?1:0); });
+  var head = '<thead><tr><th>#</th><th>Site</th><th>เช็คอิน</th><th>Book Balance</th><th>ส่งข้อมูล</th><th>สถานะปิดงาน</th></tr></thead>';
+  var n = 0, html = '';
+  keys.forEach(function(k){
+    var label = k ? ('⏰ เริ่มนับ '+k+' น.') : '⏰ ยังไม่กำหนดเวลาเริ่ม';
+    html += '<div style="font-weight:700;font-size:13px;margin:16px 0 6px;color:var(--accent,#b8893d);">'+label
+      +' <span style="color:var(--muted,#999);font-weight:400;">('+groups[k].length+' ที่)</span></div>';
+    html += '<table>'+head+'<tbody>'+groups[k].map(function(s){ n++; return siteRow(s,n); }).join('')+'</tbody></table>';
+  });
+  el.innerHTML = html;
 }
 
 /* ── Render: Actual vs System reconciliation ─────────── */
@@ -729,18 +742,25 @@ function renderSites(){
       +'<td>'+stMap[stt]+'</td>'
       +'<td>'+bookBadge+'</td>'
       +'<td style="font-size:12px;">'+docCell+'</td>'
+      +'<td><input type="time" value="'+esc(s.start_time||'')+'" onchange="saveSiteTime(\''+esc(s.site_id)+'\',this.value)" style="padding:4px 6px;font-size:12px;width:110px;"></td>'
       +'<td><div class="toggle '+(s.is_active?'on':'')+'" onclick="toggleSite(\''+esc(s.site_id)+'\')" title="เปิด/ปิดการใช้งาน"></div></td>'
       +'<td><button class="btn-sm" onclick="openBookEditor(\''+esc(s.site_id)+'\')">ใส่ยอด</button></td>'
       +'<td><button class="btn-sm btn-sm-reject" onclick="deleteSite(\''+esc(s.site_id)+'\')">ลบ</button></td>'
     +'</tr>';
   }).join('');
-  el.innerHTML = '<table><thead><tr><th>ชื่อ Site</th><th>สถานะนับ</th><th>ยอดระบบ</th><th>เลขเอกสาร</th><th>ใช้งาน</th><th></th><th></th></tr></thead><tbody>'+rows+'</tbody></table>';
+  el.innerHTML = '<table><thead><tr><th>ชื่อ Site</th><th>สถานะนับ</th><th>ยอดระบบ</th><th>เลขเอกสาร</th><th>⏰ เวลาเริ่ม</th><th>ใช้งาน</th><th></th><th></th></tr></thead><tbody>'+rows+'</tbody></table>';
   if(S.bookSite){ // ถ้ากำลังเปิด editor อยู่ อัปหัวข้อชื่อ site ให้ตรง
     var s = S.sites.filter(function(x){return x.site_id===S.bookSite;})[0];
     var lbl = document.getElementById('bookEditorSite'); if(lbl && s) lbl.textContent = s.site_name;
   }
 }
 
+function saveSiteTime(id,val){
+  post({action:'setSiteTime', site_id:id, start_time:val}).then(function(){
+    var s=S.sites.filter(function(x){return x.site_id===id;})[0]; if(s) s.start_time=val;
+    toast('⏰ ตั้งเวลาเริ่มแล้ว','success'); renderSiteStatus();
+  }).catch(function(){ toast('บันทึกไม่สำเร็จ','error'); });
+}
 function openBookEditor(siteId){
   S.bookSite = siteId;
   var s = S.sites.filter(function(x){return x.site_id===siteId;})[0];
