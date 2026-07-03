@@ -742,7 +742,7 @@ function renderSites(){
       +'<td>'+stMap[stt]+'</td>'
       +'<td>'+bookBadge+'</td>'
       +'<td style="font-size:12px;">'+docCell+'</td>'
-      +'<td><input type="time" value="'+esc(s.start_time||'')+'" onchange="saveSiteTime(\''+esc(s.site_id)+'\',this.value)" style="padding:4px 6px;font-size:12px;width:110px;"></td>'
+      +'<td><input type="text" inputmode="numeric" maxlength="5" placeholder="hh:mm" value="'+esc(s.start_time||'')+'" onchange="saveSiteTime(\''+esc(s.site_id)+'\',this.value)" style="padding:4px 6px;font-size:12px;width:70px;text-align:center;"></td>'
       +'<td><div class="toggle '+(s.is_active?'on':'')+'" onclick="toggleSite(\''+esc(s.site_id)+'\')" title="เปิด/ปิดการใช้งาน"></div></td>'
       +'<td><button class="btn-sm" onclick="openBookEditor(\''+esc(s.site_id)+'\')">ใส่ยอด</button></td>'
       +'<td><button class="btn-sm btn-sm-reject" onclick="deleteSite(\''+esc(s.site_id)+'\')">ลบ</button></td>'
@@ -756,9 +756,19 @@ function renderSites(){
 }
 
 function saveSiteTime(id,val){
-  post({action:'setSiteTime', site_id:id, start_time:val}).then(function(){
-    var s=S.sites.filter(function(x){return x.site_id===id;})[0]; if(s) s.start_time=val;
-    toast('⏰ ตั้งเวลาเริ่มแล้ว','success'); renderSiteStatus();
+  var v=String(val||'').trim();
+  if(v){
+    v=v.replace(/[.\uFF0E]/g,':').replace(/\s/g,'');       // 19.00 → 19:00
+    if(/^\d{3,4}$/.test(v)){ v=('000'+v).slice(-4); v=v.slice(0,2)+':'+v.slice(2); } // 1900 → 19:00
+    var m=v.match(/^(\d{1,2}):(\d{1,2})$/);
+    if(!m){ toast('รูปแบบเวลาไม่ถูกต้อง — พิมพ์ hh:mm','error'); loadData(false); return; }
+    var h=+m[1], mi=+m[2];
+    if(h>23||mi>59){ toast('เวลาไม่ถูกต้อง (00:00–23:59)','error'); loadData(false); return; }
+    v=('0'+h).slice(-2)+':'+('0'+mi).slice(-2);
+  }
+  post({action:'setSiteTime', site_id:id, start_time:v}).then(function(){
+    var s=S.sites.filter(function(x){return x.site_id===id;})[0]; if(s) s.start_time=v;
+    toast('⏰ ตั้งเวลาเริ่มแล้ว','success'); renderSites(); renderSiteStatus();
   }).catch(function(){ toast('บันทึกไม่สำเร็จ','error'); });
 }
 function openBookEditor(siteId){
