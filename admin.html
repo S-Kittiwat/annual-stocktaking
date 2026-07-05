@@ -240,7 +240,7 @@ table.recon .grp{border-left:1px solid var(--border);}
 <div id="app" style="display:none;">
   <div class="tabbar">
     <button class="tab active" data-tab="dashboard" onclick="switchTab('dashboard')">📊 ภาพรวม</button>
-    <button class="tab" data-tab="sites" onclick="switchTab('sites')">🏭 Site & ยอดระบบ</button>
+    <button class="tab" data-tab="sites" onclick="switchTab('sites')">⚙️ ตั้งค่า Site</button>
     <button class="tab" data-tab="queue" onclick="switchTab('queue')">🔔 คิว recheck</button>
     <button class="tab" data-tab="agents" onclick="switchTab('agents')">👥 ผู้ใช้</button>
   </div>
@@ -732,29 +732,35 @@ function renderSites(){
     rejected:'<span class="status-badge sb-rejected">↩ ตีกลับ</span>'
   };
   var rows = S.sites.map(function(s){
-    var stt = siteState(s.site_id);
     var hasBook = !!S.books[s.site_id];
     var docNo = (S.docnos && S.docnos[s.site_id]) || '';
     var bookBadge = hasBook ? '<span class="status-badge sb-locked">ใส่ยอดแล้ว ✓</span>' : '<span class="status-badge sb-idle">ยังไม่ใส่</span>';
     var docCell = docNo ? ('📄 '+esc(docNo)) : '<span style="color:var(--muted,#999);">—</span>';
     return '<tr>'
       +'<td style="font-weight:600;">'+esc(s.site_name)+'</td>'
-      +'<td>'+stMap[stt]+'</td>'
       +'<td>'+bookBadge+'</td>'
       +'<td style="font-size:12px;">'+docCell+'</td>'
       +'<td><input type="text" inputmode="numeric" maxlength="5" placeholder="hh:mm" value="'+esc(s.start_time||'')+'" onchange="saveSiteTime(\''+esc(s.site_id)+'\',this.value)" style="padding:4px 6px;font-size:12px;width:70px;text-align:center;"></td>'
+      +'<td><input type="text" placeholder="วางลิงก์ Google Drive" value="'+esc(s.drive_link||'')+'" onchange="saveSiteLink(\''+esc(s.site_id)+'\',this.value)" style="padding:4px 6px;font-size:12px;width:180px;">'+(s.drive_link?' <a href="'+esc(s.drive_link)+'" target="_blank" rel="noopener" title="เปิดลิงก์" style="text-decoration:none;">↗</a>':'')+'</td>'
       +'<td><div class="toggle '+(s.is_active?'on':'')+'" onclick="toggleSite(\''+esc(s.site_id)+'\')" title="เปิด/ปิดการใช้งาน"></div></td>'
       +'<td><button class="btn-sm" onclick="openBookEditor(\''+esc(s.site_id)+'\')">ใส่ยอด</button></td>'
       +'<td><button class="btn-sm btn-sm-reject" onclick="deleteSite(\''+esc(s.site_id)+'\')">ลบ</button></td>'
     +'</tr>';
   }).join('');
-  el.innerHTML = '<table><thead><tr><th>ชื่อ Site</th><th>สถานะนับ</th><th>ยอดระบบ</th><th>เลขเอกสาร</th><th>⏰ เวลาเริ่ม</th><th>ใช้งาน</th><th></th><th></th></tr></thead><tbody>'+rows+'</tbody></table>';
+  el.innerHTML = '<table><thead><tr><th>ชื่อ Site</th><th>ยอดระบบ</th><th>เลขเอกสาร</th><th>⏰ เวลาเริ่ม</th><th>📁 ลิงก์เอกสาร (Drive)</th><th>ใช้งาน</th><th></th><th></th></tr></thead><tbody>'+rows+'</tbody></table>';
   if(S.bookSite){ // ถ้ากำลังเปิด editor อยู่ อัปหัวข้อชื่อ site ให้ตรง
     var s = S.sites.filter(function(x){return x.site_id===S.bookSite;})[0];
     var lbl = document.getElementById('bookEditorSite'); if(lbl && s) lbl.textContent = s.site_name;
   }
 }
 
+function saveSiteLink(id,val){
+  var v=String(val||'').trim();
+  post({action:'setSiteLink', site_id:id, drive_link:v}).then(function(){
+    var s=S.sites.filter(function(x){return x.site_id===id;})[0]; if(s) s.drive_link=v;
+    toast('📁 บันทึกลิงก์เอกสารแล้ว','success'); renderSites();
+  }).catch(function(){ toast('บันทึกไม่สำเร็จ','error'); });
+}
 function saveSiteTime(id,val){
   var v=String(val||'').trim();
   if(v){
