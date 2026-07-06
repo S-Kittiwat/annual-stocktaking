@@ -477,6 +477,16 @@ function _siteIdByName(name) {
   }
   return '';
 }
+function _siteLinkByName(name) {
+  for (var i = 0; i < siteObjs.length; i++) {
+    if (String(siteObjs[i].site_name).trim() === String(name||'').trim()) return siteObjs[i].drive_link || '';
+  }
+  return '';
+}
+function openSiteDoc() {
+  var link = session ? _siteLinkByName(session.site) : '';
+  if (link) window.open(link, '_blank', 'noopener');
+}
 
 // ประเมินสถานะใบส่งผลของ site ที่เลือก → คุมแบนเนอร์ + ปุ่ม Submit
 //   approved → ล็อก (ต้องให้ Admin เปิดแก้ไขก่อน)
@@ -629,12 +639,16 @@ function renderStep1(content) {
             +siteList.map(function(s){ return '<option value="'+esc(s)+'">'+esc(s)+'</option>'; }).join('')
           +'</select>'
         +'</div>'
+        +'<button class="btn btn-primary" id="btnCheckStatus" onclick="checkStatus()" disabled style="width:100%;">🔍 ตรวจสอบสถานะ</button>'
+        +'<div id="statusBox" style="font-size:13px;margin-top:10px;display:none;padding:10px 12px;border-radius:var(--rs);line-height:1.5;"></div>'
+        +'<div id="checkinSection" style="display:none;margin-top:14px;">'
         +'<div class="field"><label>📷 รูปถ่ายหน้างาน <span style="color:var(--danger);">*</span></label>'
           +'<div id="ciPhotoPreview" onclick="openCheckinPhoto()" style="width:100%;height:160px;border:1.5px dashed var(--border2);border-radius:var(--rs);background:var(--surface);display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;overflow:hidden;color:var(--muted);gap:6px;"><span style="font-size:32px;">📷</span><span style="font-size:12px;">แตะเพื่อถ่ายรูปหน้างาน</span></div>'
           +'<input type="file" id="ciPhotoInput" accept="image/*" capture="environment" onchange="handleCheckinPhoto(this)" style="display:none;">'
         +'</div>'
         +'<button class="btn btn-primary" id="btnCheckin" onclick="doCheckIn()" disabled style="width:100%;">📍 เช็คอินหน้างาน</button>'
         +'<div id="checkinMsg" style="font-size:12px;text-align:center;margin-top:8px;min-height:16px;color:var(--muted);"></div>'
+        +'</div>'
         +'<div id="afterCheckin" style="display:none;margin-top:6px;padding-top:14px;border-top:1px solid var(--border);">'
         +'<div class="field">'
           +'<label>ชื่อผู้นับสต็อก (ทีมพาเลทส่วนกลาง) <span style=\"color:var(--danger);\">*</span></label>'
@@ -651,7 +665,77 @@ function renderStep1(content) {
       +'</div>'
     +'</div>';
 
-  document.getElementById('selSite').addEventListener('change', checkSiteSel);
+  document.getElementById('selSite').addEventListener('change', onSiteChange);
+}
+
+// เปลี่ยน Site → รีเซ็ตขั้นตอน ต้องกดตรวจสอบสถานะใหม่
+function onSiteChange() {
+  var site = document.getElementById('selSite').value;
+  _checkinPhotoFile = null;
+  var b = document.getElementById('btnCheckStatus'); if (b) b.disabled = !site;
+  var sb = document.getElementById('statusBox'); if (sb) sb.style.display = 'none';
+  var cs = document.getElementById('checkinSection'); if (cs) cs.style.display = 'none';
+  var ac = document.getElementById('afterCheckin'); if (ac) ac.style.display = 'none';
+  var pp = document.getElementById('ciPhotoPreview'); if (pp) pp.innerHTML = '<span style="font-size:32px;">📷</span><span style="font-size:12px;">แตะเพื่อถ่ายรูปหน้างาน</span>';
+  var ci = document.getElementById('btnCheckin'); if (ci) ci.disabled = true;
+}
+
+async function checkStatus() {
+  var site = document.getElementById('selSite').value;
+  if (!site) return;
+  var btn = document.getElementById('btnCheckStatus');
+  var box = document.getElementById('statusBox');
+  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>กำลังตรวจสอบ…';
+  box.style.display = 'none';
+
+  var d = null;
+  try {
+    var res = await fetch(API_URL + '?action=checkSiteStatus&site=' + encodeURIComponent(site) + '&site_id=' + encodeURIComponent(_siteIdByName(site)));
+    d = await res.json();
+  } catch(e) {}
+  btn.innerHTML = '🔍 ตรวจสอบสถานะอีกครั้ง'; btn.disabled = false;
+
+  if (!d || d.status !== 'ok') {
+    box.style.display = 'block';
+    box.style.background = 'rgba(220,53,69,.1)'; box.style.color = 'var(--danger)';
+    box.innerHTML = '⚠ ตรวจสอบสถานะไม่สำเร็จ ลองใหม่อีกครั้ง';
+    return;
+  }
+
+  box.style.display = 'block';
+  var cs = document.getElementById('checkinSection');
+  var ac = document.getElementById('afterCheckin');
+
+  if (d.gate === 'blocked') {
+    // เคยส่งข้อมูลแล้ว (รออนุมัติ/อนุมัติแล้ว) — บล็อก
+    var label = d.sub_status === 'approved' ? 'อนุมัติแล้ว (ปิดงาน)' : 'ส่งข้อมูลแล้ว รอตรวจสอบ';
+    box.style.background = 'rgba(220,53,69,.1)'; box.style.color = 'var(--danger)';
+    box.innerHTML = '🚫 <b>Site นี้'+label+'</b><br>ไม่สามารถเช็คอิน/นับซ้ำได้';
+    cs.style.display = 'none'; ac.style.display = 'none';
+    return;
+  }
+
+  if (d.gate === 'rejected') {
+    // ถูกตีกลับ — ข้ามเช็คอิน เข้าไปแก้ได้เลย
+    box.style.background = 'rgba(245,158,11,.12)'; box.style.color = '#a16207';
+    box.innerHTML = '↩️ <b>Site นี้ถูกตีกลับให้แก้ไข</b><br>ข้ามการเช็คอิน — กรอกชื่อแล้วเข้าไปแก้ไขข้อมูลได้เลย';
+    cs.style.display = 'none';
+    ac.style.display = 'block';
+    setTimeout(function(){ ac.scrollIntoView({behavior:'smooth',block:'nearest'}); var n=document.getElementById('inputName'); if(n) n.focus(); }, 60);
+    return;
+  }
+
+  // gate === 'ok' → พร้อมเช็คอิน
+  var bk = d.book || {loscam:0,chep:0,brs:0,swwi:0,total:0};
+  var bookInfo = d.hasBook
+    ? '<div style="margin-top:6px;padding-top:6px;border-top:1px solid rgba(0,0,0,.08);font-size:12px;">'
+        +'ยอดระบบ (Book) รวม <b>'+bk.total+'</b> พาเลท<br>'
+        +'LOSCAM '+bk.loscam+' · CHEP '+bk.chep+' · BRS '+bk.brs+' · SWWI '+bk.swwi+'</div>'
+    : '<div style="margin-top:6px;font-size:12px;color:#a16207;">⚠ Admin ยังไม่ใส่ยอดระบบ — เริ่มนับได้ แต่จะเทียบ Book ไม่ได้จนกว่าจะใส่</div>';
+  box.style.background = 'rgba(16,110,86,.1)'; box.style.color = 'var(--success,#0f6e56)';
+  box.innerHTML = '✅ <b>พร้อมเริ่มนับ</b>' + bookInfo;
+  cs.style.display = 'block';
+  setTimeout(function(){ cs.scrollIntoView({behavior:'smooth',block:'nearest'}); }, 60);
 }
 
 function checkSiteSel() {
@@ -760,6 +844,12 @@ function renderStep2(content) {
   var tot = _calcTotals();
 
   content.innerHTML =
+    // ── ปุ่มเปิดเอกสารที่ Admin เตรียมไว้ (มองเห็นตลอดขั้น 2-5) ──
+    (function(){
+      var link = _siteLinkByName(session.site);
+      return '<button onclick="openSiteDoc()" '+(link?'':'disabled')+' style="width:100%;margin-bottom:14px;padding:13px;border-radius:var(--rs);border:1.5px solid var(--border2);background:var(--surface);color:'+(link?'var(--accent)':'var(--muted)')+';font-family:var(--font);font-size:14px;font-weight:600;cursor:'+(link?'pointer':'not-allowed')+';min-height:48px;touch-action:manipulation;display:flex;align-items:center;justify-content:center;gap:8px;">'
+        +'<span style="font-size:18px;">📁</span>'+(link?'เปิดเอกสารจาก Admin':'ยังไม่มีเอกสารจาก Admin')+(link?' <span style="font-size:12px;">↗</span>':'')+'</button>';
+    })()+
     // ── Step 2: ฟอร์มกรอก + รายการ — ไม่มี view switching อีกต่อไป ──
     '<div class="card active" id="step2Card">'+
       '<div class="card-head" style="cursor:pointer;" onclick="toggleStep2()" id="step2Head">'+
@@ -1215,17 +1305,17 @@ function toggleStep2() {
 // ปุ่ม "ไปขั้นที่ 3" — พับขั้น 2 + ปลดล็อก + เปิดสรุป + เลื่อนไปหา
 function goStep3() {
   if (locations.length === 0) { showToast('กรุณาบันทึกอย่างน้อย 1 Location ก่อน', 'warn'); return; }
-  // ข้อ 1: พับซ่อนขั้นที่ 2
+  // พับซ่อนขั้นที่ 2
   var s2body = document.getElementById('step2Body');
   var s2tog  = document.getElementById('step2Toggle');
   if (s2body) s2body.style.display = 'none';
   if (s2tog)  s2tog.textContent = '▸ กลับไปแก้การนับ';
-
-  var s3 = document.getElementById('step3Card'), s4 = document.getElementById('step4Card');
-  if (s3) { s3.classList.remove('locked'); s3.classList.add('active'); }
-  if (s4) { s4.classList.remove('locked'); s4.classList.add('active'); }
-  var body = document.getElementById('step3Body');
-  if (body && body.style.display === 'none') toggleStep3(); // เปิด (จะ populate ให้)
+  // ปลดล็อกขั้น 3 (นอกระบบ) / 4 (สรุป) / 5 (upload)
+  ['stepOffCard','step3Card','step4Card'].forEach(function(id){
+    var c = document.getElementById(id);
+    if (c) { c.classList.remove('locked'); c.classList.add('active'); }
+  });
+  // ไปหยุดที่ขั้น 3 (นอกระบบ PCS) — ไม่เปิดสรุปอัตโนมัติ
   var offc = document.getElementById('stepOffCard');
   if (offc) setTimeout(function(){ offc.scrollIntoView({ behavior:'smooth', block:'start' }); }, 60);
 }
