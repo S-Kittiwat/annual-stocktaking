@@ -473,6 +473,10 @@ function loadConfig() {
 }
 
 // map ชื่อ site → site_id (จาก backend) เพื่อส่งตอน submit
+// unique key ต่อ status (แปลงอักษรที่ไม่ใช่ A-Z0-9_ เป็นรหัส กันชนกันเมื่อเป็นภาษาไทย)
+function _statusKey(s){
+  return String(s).replace(/\s+/g,'_').replace(/[^A-Za-z0-9_]/g, function(c){ return 'x'+c.charCodeAt(0); });
+}
 function _siteIdByName(name) {
   for (var i = 0; i < siteObjs.length; i++) {
     if (String(siteObjs[i].site_name).trim() === String(name||'').trim()) return siteObjs[i].site_id || '';
@@ -704,7 +708,7 @@ function renderStep1(content) {
         +'<div class="field"><label>BRB-Fixed-asset Accounting</label><input class="input" id="inputFixedasset" type="text" placeholder="ชื่อ-นามสกุล (ถ้ามี)"></div>'
         +'<div class="field"><label>สำนักงานตรวจสอบบัญชี</label><input class="input" id="inputAudit" type="text" placeholder="ชื่อ-นามสกุล (ถ้ามี)"></div>'
         +'<div id="step1Error" style="font-size:12px;color:var(--danger);display:none;margin-bottom:10px;"></div>'
-        +'<div id="bookWaitBox" style="display:none;background:rgba(245,158,11,.12);color:#a16207;border-radius:var(--rs);padding:10px 12px;font-size:13px;margin-bottom:10px;line-height:1.5;">⚠ <b>ยังไม่พร้อมตรวจนับ</b> — Admin ยังไม่ใส่ยอดระบบ<br><button type="button" onclick="recheckBook()" style="margin-top:8px;background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:8px 14px;font-family:var(--font);font-size:13px;cursor:pointer;min-height:40px;touch-action:manipulation;">🔄 ตรวจสอบยอดระบบอีกครั้ง</button></div>'
+        +'<div id="bookHint" style="display:none;background:rgba(245,158,11,.12);color:#a16207;border-radius:var(--rs);padding:10px 12px;font-size:12px;margin-bottom:10px;line-height:1.5;">⚠ <b>ยังไม่พร้อมตรวจนับ</b> — Admin ยังไม่ใส่ยอดระบบ<br>เลื่อนขึ้นไปกด “🔍 ตรวจสอบสถานะอีกครั้ง” เมื่อ Admin พร้อม</div>'
         +'<button class="btn btn-primary" id="btnStep1" onclick="confirmStep1()" disabled style="width:100%;">เริ่มนับสต็อก →</button>'
         +'</div>'
       +'</div>'
@@ -767,7 +771,7 @@ async function checkStatus() {
     box.innerHTML = '↩️ <b>Site นี้ถูกตีกลับให้แก้ไข</b><br>ข้ามการเช็คอิน — กรอกชื่อแล้วเข้าไปแก้ไขข้อมูลได้เลย';
     cs.style.display = 'none';
     ac.style.display = 'block';
-    var bw0 = document.getElementById('bookWaitBox'); if (bw0) bw0.style.display = 'none';
+    var bw0 = document.getElementById('bookHint'); if (bw0) bw0.style.display = 'none';
     setTimeout(function(){ ac.scrollIntoView({behavior:'smooth',block:'nearest'}); var n=document.getElementById('inputName'); if(n) n.focus(); }, 60);
     return;
   }
@@ -786,6 +790,8 @@ async function checkStatus() {
     box.innerHTML = '⚠ <b>ไม่พร้อมตรวจนับ</b><br>Admin ยังไม่ใส่ยอดระบบ — เช็คอินได้ แต่ยัง<b>เริ่มนับไม่ได้</b> จนกว่า Admin จะใส่ยอด (กด “ตรวจสอบสถานะ” อีกครั้งเมื่อพร้อม)';
   }
   cs.style.display = 'block';
+  var bh = document.getElementById('bookHint'); if (bh) bh.style.display = _bookReady ? 'none' : 'block';
+  checkName();
   setTimeout(function(){ cs.scrollIntoView({behavior:'smooth',block:'nearest'}); }, 60);
 }
 
@@ -810,18 +816,6 @@ function checkName() {
   var name = document.getElementById('inputName').value.trim();
   var b = document.getElementById('btnStep1');
   if (b) b.disabled = !(name && _bookReady);
-}
-async function recheckBook() {
-  var site = document.getElementById('selSite').value;
-  try {
-    var res = await fetch(API_URL + '?action=checkSiteStatus&site=' + encodeURIComponent(site) + '&site_id=' + encodeURIComponent(_siteIdByName(site)));
-    var d = await res.json();
-    if (d && d.status === 'ok') _bookReady = !!d.hasBook;
-  } catch(e) {}
-  var box = document.getElementById('bookWaitBox'); if (box) box.style.display = _bookReady ? 'none' : 'block';
-  checkName();
-  if (_bookReady) showToast('พร้อมแล้ว — เริ่มนับได้', 'success');
-  else showToast('Admin ยังไม่ใส่ยอดระบบ', 'warn');
 }
 async function doCheckIn() {
   var site = document.getElementById('selSite').value;
@@ -867,7 +861,7 @@ async function doCheckIn() {
     ? '🟢 เช็คอินสำเร็จ · แนบรูป+พิกัดแล้ว — กรอกชื่อผู้นับเพื่อเริ่มนับ'
     : '🟢 เช็คอินสำเร็จ · แนบรูปแล้ว (ไม่มีพิกัด GPS) — กรอกชื่อผู้นับเพื่อเริ่มนับ';
   var after = document.getElementById('afterCheckin');
-  if (after){ after.style.display = 'block'; var bw=document.getElementById('bookWaitBox'); if(bw) bw.style.display=_bookReady?'none':'block'; checkName(); setTimeout(function(){ after.scrollIntoView({behavior:'smooth',block:'nearest'}); var n=document.getElementById('inputName'); if(n) n.focus(); }, 60); }
+  if (after){ after.style.display = 'block'; var bh=document.getElementById('bookHint'); if(bh) bh.style.display=_bookReady?'none':'block'; checkName(); setTimeout(function(){ after.scrollIntoView({behavior:'smooth',block:'nearest'}); var n=document.getElementById('inputName'); if(n) n.focus(); }, 60); }
 }
 
 function confirmStep1() {
@@ -965,11 +959,11 @@ function renderStep2(content) {
     '</div>'+
     // ── Step 3: พาเลทที่ควบคุมนอกระบบ PCS (ระดับ Site) + ไฟล์หลักฐาน ──
     '<div class="card '+(hasLoc?'active':'locked')+'" id="stepOffCard">'+
-      '<div class="card-head"><span class="step-badge '+(hasLoc?'active':'locked')+'">ขั้นที่ 3</span>'+
+      '<div class="card-head" style="cursor:pointer;" onclick="toggleOff()" id="stepOffHead"><span class="step-badge '+(hasLoc?'active':'locked')+'">ขั้นที่ 3</span>'+
         '<span class="card-title">พาเลทที่ควบคุมนอกระบบ PCS</span>'+
-        '<span class="card-hint">กรอกจำนวน + แนบหลักฐาน</span></div>'+
-      '<div class="card-body">'+
-        '<div style="font-size:12px;color:var(--muted);margin-bottom:12px;">กรอกจำนวนระดับ Site — <b>ถ้ามีจำนวนมากกว่า 0 ต้องแนบไฟล์หลักฐาน</b> (PDF / Excel / รูปภาพ)</div>'+
+        '<span id="offToggle" style="margin-left:auto;font-size:13px;color:var(--accent);font-weight:600;"></span></div>'+
+      '<div class="card-body" id="offBody">'+
+        '<div style="font-size:12px;color:var(--muted);margin-bottom:12px;">กรอกจำนวนระดับ Site — <b>ถ้ามีจำนวนมากกว่า 0 ต้องแนบไฟล์หลักฐาน</b> (PDF / Excel / รูปภาพ) · Site ที่ไม่มีนอกระบบ ปล่อยว่างแล้วกดจบได้เลย</div>'+
         '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">'+
           _offInput('LOSCAM (ไม้)','loscam')+_offInput('CHEP (ไม้)','chep')+_offInput('BRS (พลาสติก)','brs')+_offInput('SWWI (พลาสติก)','swwi')+
         '</div>'+
@@ -978,11 +972,7 @@ function renderStep2(content) {
           '<div class="icon">📎</div><div class="label">แนบไฟล์หลักฐานนอกระบบ</div><div class="sub">PDF, Excel, รูปภาพ</div></div>'+
         '<input type="file" id="offFileInput" accept="image/*,application/pdf,.xls,.xlsx,.csv,.xlsm" multiple onchange="handleOffFiles(this.files);this.value=\'\';" style="display:none;">'+
         '<div class="file-list" id="offFileList">'+_renderOffFileList()+'</div>'+
-        '<div style="display:flex;gap:8px;margin-top:16px;">'+
-          '<button class="btn btn-success" type="button" onclick="finishStep3()" style="flex:1;">✓ จบขั้นที่ 3 — ไปสรุป</button>'+
-          '<button class="btn" type="button" onclick="skipStep3()" style="flex:0 0 auto;background:var(--surface);border:1px solid var(--border);color:var(--muted);white-space:nowrap;">ข้ามขั้นนี้</button>'+
-        '</div>'+
-        '<div style="font-size:11px;color:var(--muted);text-align:center;margin-top:6px;">Site ที่ไม่มีพาเลทนอกระบบ กด “ข้ามขั้นนี้” ได้เลย</div>'+
+        '<button class="btn btn-success" type="button" onclick="finishStep3()" style="width:100%;margin-top:16px;">✓ จบขั้นที่ 3 — ไปสรุป</button>'+
       '</div>'+
     '</div>'+
     // ── Step 4: สรุป (ซ่อนไว้จนกว่าจะกดแสดง) ──
@@ -1024,7 +1014,7 @@ function renderStep2(content) {
       '<div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:8px;">📋 ตรวจสอบก่อน Submit</div>'+
       '<div class="step-check" id="chk1">'+_chkIcon(true)+'ขั้นที่ 1 — เลือก Site และผู้นับ</div>'+
       '<div class="step-check" id="chk2">'+_chkIcon(hasLoc)+'ขั้นที่ 2 — กรอกยอดนับ ('+(hasLoc?locations.length+' Location':'ยังไม่มี Location')+')</div>'+
-      '<div class="step-check" id="chkOff">'+_chkIcon(_offDone)+'ขั้นที่ 3 — พาเลทนอกระบบ PCS '+(_offDone?_offSummaryTxt():'(กด “จบขั้นที่ 3” หรือ “ข้ามขั้นนี้”)')+'</div>'+
+      '<div class="step-check" id="chkOff">'+_chkIcon(_offDone)+'ขั้นที่ 3 — พาเลทนอกระบบ PCS '+(_offDone?_offSummaryTxt():'(กด “จบขั้นที่ 3 — ไปสรุป”)')+'</div>'+
       (_isRe ? '' : '<div class="step-check" id="chk3a">'+_chkIcon(_step3Seen)+'ขั้นที่ 4 — ตรวจสอบสรุปยอดแล้ว'+(!_step3Seen?' (กด "▸ แสดง" ก่อน)':'')+'</div>')+
       (_isRe ? '' : '<div class="step-check" id="chk3b">'+_chkIcon(_printed)+'ขั้นที่ 4 — พิมพ์เอกสารยืนยันแล้ว'+(!_printed?' (กด 🖨️ พิมพ์เอกสารยืนยัน)':'')+'</div>')+
       (_isRe ? '<div class="step-check done">'+_chkIcon(true)+'ฉบับแก้ไข — ไม่ต้องพิมพ์/ตรวจสอบซ้ำ</div>' : '')+
@@ -1081,7 +1071,7 @@ function updateSubmitCard() {
   }
   var chkOff = document.getElementById('chkOff');
   if (chkOff) {
-    chkOff.innerHTML = _chkIcon(_offDone)+'ขั้นที่ 3 — พาเลทนอกระบบ PCS '+(_offDone?_offSummaryTxt():'<span style="color:var(--warn);">(กด “จบขั้นที่ 3” หรือ “ข้ามขั้นนี้”)</span>');
+    chkOff.innerHTML = _chkIcon(_offDone)+'ขั้นที่ 3 — พาเลทนอกระบบ PCS '+(_offDone?_offSummaryTxt():'<span style="color:var(--warn);">(กด “จบขั้นที่ 3 — ไปสรุป”)</span>');
     chkOff.className = 'step-check '+(_offDone?'done':'pending');
   }
   var chk3a = document.getElementById('chk3a');
@@ -1104,7 +1094,7 @@ function updateSubmitCard() {
   if (note) note.textContent = ready
     ? 'พร้อม Submit — '+locations.length+' Location · '+files.length+' ไฟล์'
     : (!hasLoc      ? 'กรุณาเพิ่มอย่างน้อย 1 Location'
-      : !_offDone   ? 'กรุณากด “จบขั้นที่ 3” หรือ “ข้ามขั้นนี้” ก่อน'
+      : !_offDone   ? 'กรุณากด “จบขั้นที่ 3 — ไปสรุป” ก่อน'
       : (!hasFile)  ? 'กรุณา Upload รายงาน (พร้อมลายเซ็น) ก่อน Submit'
       : (!_isRe && !_step3Seen) ? 'กรุณาเปิดดูสรุปยอดในขั้นที่ 4 ก่อน'
       : (!_isRe && !_printed)   ? 'กรุณาพิมพ์เอกสารยืนยันก่อน'
@@ -1132,7 +1122,7 @@ function _renderPalletTable(material, brand1cls, brand1name, brand2cls, brand2na
   var brand2 = brand2name.toLowerCase();
 
   var rows = statusList.map(function(s) {
-    var k = s.replace(/\s+/g,'_').replace(/[^\w]/g,'');
+    var k = _statusKey(s);
     var id1 = 'inp_'+material+'_'+brand1+'_'+k;
     var id2 = 'inp_'+material+'_'+brand2+'_'+k;
     return '<tr>'+
@@ -1164,12 +1154,12 @@ function _renderPalletTable(material, brand1cls, brand1name, brand2cls, brand2na
 function _updateLiveTotal() {
   var wl=0, wc=0, pb=0, ps=0;
   WOOD_STATUS.forEach(function(s){
-    var k = s.replace(/\s+/g,'_').replace(/[^\w]/g,'');
+    var k = _statusKey(s);
     wl += _getInpVal('wood','loscam',k);
     wc += _getInpVal('wood','chep',k);
   });
   PLASTIC_STATUS.forEach(function(s){
-    var k = s.replace(/\s+/g,'_').replace(/[^\w]/g,'');
+    var k = _statusKey(s);
     pb += _getInpVal('plastic','brs',k);
     ps += _getInpVal('plastic','swwi',k);
   });
@@ -1194,12 +1184,12 @@ function _setEl(id, val) {
 function _readForm() {
   var loc = emptyLoc(document.getElementById('selLocation').value);
   WOOD_STATUS.forEach(function(s){
-    var k = s.replace(/\s+/g,'_').replace(/[^\w]/g,'');
+    var k = _statusKey(s);
     loc.wood.loscam[s] = _getInpVal('wood','loscam',k);
     loc.wood.chep[s]   = _getInpVal('wood','chep',k);
   });
   PLASTIC_STATUS.forEach(function(s){
-    var k = s.replace(/\s+/g,'_').replace(/[^\w]/g,'');
+    var k = _statusKey(s);
     loc.plastic.brs[s]  = _getInpVal('plastic','brs',k);
     loc.plastic.swwi[s] = _getInpVal('plastic','swwi',k);
   });
@@ -1413,17 +1403,25 @@ function goStep3() {
   if (offc) setTimeout(function(){ offc.scrollIntoView({ behavior:'smooth', block:'start' }); }, 60);
 }
 
-// จบขั้นที่ 3 (นอกระบบ) → ไปสรุป
+// จบขั้นที่ 3 (นอกระบบ) → พับซ่อน + ไปสรุป · ไม่กรอกอะไร = ข้ามอัตโนมัติ
 function finishStep3() {
   if (!_offOk()) { showToast('มีพาเลทนอกระบบ ต้องแนบไฟล์หลักฐานก่อน', 'warn'); return; }
-  _offDone = true; goStep4();
+  _offDone = true;
+  // พับซ่อนขั้นที่ 3 (เหมือนขั้นที่ 2)
+  var ob = document.getElementById('offBody');
+  var ot = document.getElementById('offToggle');
+  if (ob) ob.style.display = 'none';
+  if (ot) ot.textContent = '▸ กลับไปแก้ไข';
+  goStep4();
 }
-// ข้ามขั้นที่ 3 — เคลียร์เป็น 0 แล้วไปสรุป
-function skipStep3() {
-  offPcs = { loscam:0, chep:0, brs:0, swwi:0 }; offPcsFiles = [];
-  ['loscam','chep','brs','swwi'].forEach(function(k){ var el=document.getElementById('off_'+k); if(el) el.value=0; });
-  var fl = document.getElementById('offFileList'); if (fl) fl.innerHTML = '';
-  _offDone = true; goStep4();
+// พับ/ขยายการ์ดขั้นที่ 3
+function toggleOff() {
+  var ob = document.getElementById('offBody');
+  var ot = document.getElementById('offToggle');
+  if (!ob) return;
+  var hidden = ob.style.display === 'none';
+  ob.style.display = hidden ? 'block' : 'none';
+  if (ot) ot.textContent = hidden ? '' : '▸ กลับไปแก้ไข';
 }
 // เปิดสรุป (ขั้นที่ 4)
 function goStep4() {
@@ -1514,14 +1512,14 @@ function _fillFormFromLocation(i) {
   var sel = document.getElementById('selLocation');
   sel.value = loc.name;
   WOOD_STATUS.forEach(function(s){
-    var k = s.replace(/\s+/g,'_').replace(/[^\w]/g,'');
+    var k = _statusKey(s);
     var el = document.getElementById('inp_wood_loscam_'+k);
     if (el){ el.value = loc.wood.loscam[s]||''; el.classList.toggle('has-val',(loc.wood.loscam[s]||0)>0); }
     el = document.getElementById('inp_wood_chep_'+k);
     if (el){ el.value = loc.wood.chep[s]||''; el.classList.toggle('has-val',(loc.wood.chep[s]||0)>0); }
   });
   PLASTIC_STATUS.forEach(function(s){
-    var k = s.replace(/\s+/g,'_').replace(/[^\w]/g,'');
+    var k = _statusKey(s);
     var el = document.getElementById('inp_plastic_brs_'+k);
     if (el){ el.value = loc.plastic.brs[s]||''; el.classList.toggle('has-val',(loc.plastic.brs[s]||0)>0); }
     el = document.getElementById('inp_plastic_swwi_'+k);
@@ -1635,12 +1633,12 @@ function addLocation() {
 function _readFormManual(name) {
   var loc = emptyLoc(name);
   WOOD_STATUS.forEach(function(s){
-    var k = s.replace(/\s+/g,'_').replace(/[^\w]/g,'');
+    var k = _statusKey(s);
     loc.wood.loscam[s] = _getInpVal('wood','loscam',k);
     loc.wood.chep[s]   = _getInpVal('wood','chep',k);
   });
   PLASTIC_STATUS.forEach(function(s){
-    var k = s.replace(/\s+/g,'_').replace(/[^\w]/g,'');
+    var k = _statusKey(s);
     loc.plastic.brs[s]  = _getInpVal('plastic','brs',k);
     loc.plastic.swwi[s] = _getInpVal('plastic','swwi',k);
   });
@@ -1696,9 +1694,9 @@ function setOffPcs(key,val){ offPcs[key]=Math.max(0,Math.floor(Number(val)||0));
 function _offSum(){ return (offPcs.loscam||0)+(offPcs.chep||0)+(offPcs.brs||0)+(offPcs.swwi||0); }
 function _offOk(){ return _offSum()===0 || offPcsFiles.length>0; }
 function _offSummaryTxt(){ var s=_offSum(); if(s===0) return '(0 — ไม่ต้องแนบไฟล์)'; return '('+s+' พาเลท · '+(offPcsFiles.length?offPcsFiles.length+' ไฟล์':'⚠ ต้องแนบไฟล์')+')'; }
-function handleOffFiles(fileList){ Array.from(fileList).forEach(function(f){ offPcsFiles.push(f); }); var el=document.getElementById('offFileList'); if(el) el.innerHTML=_renderOffFileList(); updateSubmitCard(); }
+function handleOffFiles(fileList){ Array.from(fileList).forEach(function(f){ offPcsFiles.push(f); }); var el=document.getElementById('offFileList'); if(el) el.innerHTML=_renderOffFileList(); _offDone=false; updateSubmitCard(); }
 function _renderOffFileList(){ return offPcsFiles.map(function(f,i){ return '<div class="file-item"><span>📄</span><span class="fname">'+esc(f.name)+'</span><span style="font-size:11px;color:var(--muted);">'+_fmtSize(f.size)+'</span><button class="fdel" onclick="removeOffFile('+i+')" title="ลบ">✕</button></div>'; }).join(''); }
-function removeOffFile(i){ offPcsFiles.splice(i,1); var el=document.getElementById('offFileList'); if(el) el.innerHTML=_renderOffFileList(); updateSubmitCard(); }
+function removeOffFile(i){ offPcsFiles.splice(i,1); var el=document.getElementById('offFileList'); if(el) el.innerHTML=_renderOffFileList(); _offDone=false; updateSubmitCard(); }
 function handleOffDrop(e){ e.preventDefault(); var z=document.getElementById('offUploadZone'); if(z) z.classList.remove('drag'); handleOffFiles(e.dataTransfer.files); }
 
 function _renderComparison(tot) {
