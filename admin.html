@@ -1042,11 +1042,13 @@ function renderSubTable(elId, list, isPending){
       ? _urls.map(function(u,i){return '<a class="btn-sm btn-sm-open" href="'+esc(u)+'" target="_blank" rel="noopener" style="margin:0 3px 3px 0;">📄'+(_urls.length>1?(' '+(i+1)):'')+'</a>';}).join('')
       : '<span class="status-badge sb-idle">ไม่มีไฟล์</span>';
     var act = '';
-    if(c.status==='pending'){
+    if(isPending && c.status==='pending'){
       act = '<button class="btn-sm btn-sm-approve" onclick="openReview(\''+esc(c.count_id)+'\',\'approved\')">✅ อนุมัติ</button>'
           + '<button class="btn-sm btn-sm-reject" onclick="openReview(\''+esc(c.count_id)+'\',\'rejected\')">❌ ตีกลับ</button>';
     } else if(c.review_comment){
-      act = '<span style="font-size:11px;color:var(--muted);" title="'+esc(c.review_comment)+'">💬 มีคอมเมนต์</span>';
+      act = '<span style="font-size:11px;color:var(--muted);" title="'+esc(c.review_comment)+'">💬 '+esc(c.review_comment)+'</span>';
+    } else {
+      act = '<span style="color:var(--muted,#bbb);">—</span>';
     }
     return '<tr>'
       +'<td class="cid">'+esc(c.count_id)+'</td>'
@@ -1058,7 +1060,7 @@ function renderSubTable(elId, list, isPending){
       +'<td><div class="action-btns">'+act+'</div></td>'
     +'</tr>';
   }).join('');
-  el.innerHTML = '<table><thead><tr><th>Count ID</th><th>Site</th><th>ผู้นับ</th><th>ส่งเมื่อ</th><th>ใบเซ็น</th><th>สถานะ</th><th>จัดการ</th></tr></thead><tbody>'+rows+'</tbody></table>';
+  el.innerHTML = '<table><thead><tr><th>Count ID</th><th>Site</th><th>ผู้นับ</th><th>ส่งเมื่อ</th><th>ใบเซ็น</th><th>สถานะ</th><th>'+(isPending?'จัดการ':'หมายเหตุ')+'</th></tr></thead><tbody>'+rows+'</tbody></table>';
 }
 
 /* ── Review modal ────────────────────────────────────── */
