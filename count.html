@@ -1031,6 +1031,34 @@ function renderStep2(content) {
     _fillFormFromLocation(_editingIdx);
   }
   updateSubmitCard();
+  applyRejectHl();
+}
+
+// ไฮไลต์ขั้นที่ Admin ระบุว่าต้องแก้ (ตอนถูกตีกลับ) + กางเปิดให้
+function applyRejectHl(){
+  var steps = (siteSubmission && siteSubmission.reject_steps) || [];
+  var isRe = siteSubmission && (siteSubmission.status==='rejected'||siteSubmission.status==='reopened');
+  if (!isRe || !steps.length) return;
+  var hasW = steps.indexOf('count_wood')>=0, hasP = steps.indexOf('count_plastic')>=0;
+  var cfg = [
+    { id:'step2Card',   on:(hasW||hasP), label:'ต้องแก้ไข: ยอดนับจริง'+((hasW&&hasP)?' (ไม้+พลาสติก)':(hasW?' (ไม้)':' (พลาสติก)')), body:'step2Body' },
+    { id:'stepOffCard', on:steps.indexOf('offpcs')>=0, label:'ต้องแก้ไข: พาเลทนอกระบบ PCS', body:'offBody' },
+    { id:'step4Card',   on:steps.indexOf('file')>=0,   label:'ต้องแก้ไข: ไฟล์ใบเซ็น', body:null }
+  ];
+  cfg.forEach(function(c){
+    var card=document.getElementById(c.id); if(!card||!c.on) return;
+    card.style.border='2px solid #dc2626';
+    card.style.boxShadow='0 0 0 3px rgba(220,38,38,.08)';
+    var head=card.querySelector('.card-head');
+    if(head && !head.querySelector('.rejFlag')){
+      var b=document.createElement('div');
+      b.className='rejFlag';
+      b.style.cssText='flex-basis:100%;width:100%;background:#dc2626;color:#fff;font-size:12px;font-weight:700;padding:5px 10px;border-radius:6px;margin-top:8px;';
+      b.textContent='⚠ '+c.label;
+      head.appendChild(b);
+    }
+    if(c.body){ var bd=document.getElementById(c.body); if(bd) bd.style.display='block'; }
+  });
 }
 
 // ── Bind events ครั้งเดียวตอนสร้าง DOM — ไม่ผูกซ้ำเมื่อสลับ view ──
