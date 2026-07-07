@@ -1038,6 +1038,20 @@ function renderQueue(st){
             + of.map(function(u,i){return '<a class="btn-sm btn-sm-open" href="'+esc(u)+'" target="_blank" rel="noopener" style="margin:0 6px 6px 0;">🧾 หลักฐาน '+(i+1)+'</a>';}).join('')
             + '</div>';
         })()
+      + (function(){
+          var lp = (sub && sub.location_photos && sub.location_photos.length) ? sub.location_photos : [];
+          if(!lp.length) return '';
+          return '<div style="font-size:12px;color:var(--muted,#777);margin-bottom:6px;">รูปถ่ายราย Location (ขั้นที่ 2) · '+lp.length+' รูป</div>'
+            +'<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;">'
+            + lp.map(function(p){
+                var thumb = p.id ? ('https://drive.google.com/thumbnail?id='+encodeURIComponent(p.id)+'&sz=w300') : p.url;
+                return '<a href="'+esc(p.url)+'" target="_blank" rel="noopener" title="'+esc(p.name||'')+'" style="display:block;width:88px;text-decoration:none;color:inherit;">'
+                  +'<img src="'+esc(thumb)+'" loading="lazy" referrerpolicy="no-referrer" style="width:88px;height:88px;object-fit:cover;border-radius:8px;border:1px solid var(--border,#e2e2e2);background:#f4f4f4;">'
+                  +'<div style="font-size:10.5px;color:var(--muted,#888);text-align:center;margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+esc(p.name||'')+'</div>'
+                  +'</a>';
+              }).join('')
+            +'</div>';
+        })()
       +'<div style="font-size:12px;color:var(--muted,#777);margin-bottom:6px;">ไฟล์แนบจากผู้นับ</div>'
       +'<div style="margin-bottom:16px;">'+pdf+'</div>'
       +'<div style="display:flex;gap:10px;flex-wrap:wrap;">'
