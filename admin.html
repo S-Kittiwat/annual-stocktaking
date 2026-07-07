@@ -970,6 +970,27 @@ function fetchQueue(){
     if(d && d.state) renderQueue(d.state);
   }).catch(function(){});
 }
+function _qTypeBadge(t){
+  return (String(t||'review')==='help')
+    ? '<span style="display:inline-block;font-size:10.5px;font-weight:700;padding:1px 7px;border-radius:20px;background:#f8e6c3;color:#92400e;white-space:nowrap;">🙋 ขอความช่วยเหลือ</span>'
+    : '<span style="display:inline-block;font-size:10.5px;font-weight:700;padding:1px 7px;border-radius:20px;background:#dbeafe;color:#1e429f;white-space:nowrap;">📋 รอตรวจ</span>';
+}
+// แผงงานตอนกำลังคุยกับตั๋ว "ขอความช่วยเหลือ" (ไม่มีใบส่งให้ตรวจ)
+function _qHelpPanel(c){
+  var note=String(c.note||'').trim();
+  return '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px;">'
+      +'<div><div style="font-size:12px;color:var(--muted,#888);">งานของฉัน · กำลังช่วยเหลือ</div>'
+        +'<div style="font-size:19px;font-weight:700;color:var(--accent,#b8893d);">'+esc(c.site)+'</div>'
+        +'<div style="margin-top:4px;">'+_qTypeBadge('help')+'</div></div>'
+      +'<div style="background:rgba(184,137,61,.12);border-radius:8px;padding:8px 12px;text-align:center;"><div style="font-size:11px;color:var(--accent,#8a6526);">▶ กำลังคุย</div><div class="mono q-tick" data-since="'+esc(c.calledAt||'')+'" style="font-size:17px;font-weight:700;color:var(--accent,#8a6526);">—</div></div>'
+    +'</div>'
+    +'<div style="font-size:12px;color:var(--muted,#777);margin-bottom:6px;">ข้อความจากผู้นับ</div>'
+    +'<div style="background:rgba(0,0,0,.03);border:1px solid var(--border,#e2e2e2);border-radius:8px;padding:12px 14px;margin-bottom:16px;font-size:14px;white-space:pre-wrap;">'
+      +(note?esc(note):'<span style="color:var(--muted,#aaa);">— ไม่มีข้อความแนบ —</span>')+'</div>'
+    +'<div style="display:flex;gap:10px;flex-wrap:wrap;">'
+      +'<button class="btn btn-success" style="flex:1;min-width:150px;" onclick="qRelease()">✓ จบการช่วยเหลือ (ปล่อยกลับไปนับ)</button>'
+    +'</div>';
+}
 function renderQueue(st){
   st = st || {agents:[],waiting:[],stats:{}};
   var wait = st.waiting||[], users = st.agents||[];
@@ -989,6 +1010,7 @@ function renderQueue(st){
     meBox.innerHTML='<div class="empty">ไม่พบผู้ใช้ของคุณในระบบคิว — เพิ่มตัวเองในแท็บ “ผู้ใช้” และตั้ง PIN ให้ตรง</div>';
   } else if(me.current){
     var c=me.current, sub=null;
+    if(String(c.type||'review')==='help'){ meBox.innerHTML=_qHelpPanel(c); } else {
     try{
       var cs=curSubs().filter(function(x){return String(x.site_name)===String(c.site)&&(x.status==='pending'||x.status==='reopened');});
       cs.sort(function(a,b){return (b.submitted_at||'').localeCompare(a.submitted_at||'');});
@@ -1058,6 +1080,7 @@ function renderQueue(st){
         +'<button class="btn btn-success" style="flex:1;min-width:150px;" onclick="qRelease()">✓ ปล่อยตัว (อนุมัติ)</button>'
         +'<button class="btn" style="flex:1;min-width:150px;background:#c0392b;color:#fff;" onclick="qKickback()">↩ ตีกลับ (แก้ไข)</button>'
       +'</div>';
+    }
   } else {
     var onCall=(me.state==='oncall'), has=wait.length>0;
     meBox.innerHTML='<div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;">'+
@@ -1069,8 +1092,8 @@ function renderQueue(st){
   var wq=document.getElementById('queueWaiting');
   if(!wait.length){ wq.innerHTML='<div class="empty">— ไม่มีคิวรอตรวจ —</div>'; }
   else{
-    wq.innerHTML='<table><thead><tr><th>คิว</th><th>Site</th><th>ตีกลับ</th><th>รอมา</th></tr></thead><tbody>'+
-      wait.map(function(w){ return '<tr><td class="mono">'+esc(w.ticket)+'</td><td style="font-weight:600;">'+esc(w.site)+'</td><td>'+(w.kicks?('↩ '+w.kicks):'—')+'</td><td class="mono q-tick" data-since="'+esc(w.enqueuedAt||'')+'">—</td></tr>'; }).join('')+
+    wq.innerHTML='<table><thead><tr><th>คิว</th><th>Site</th><th>ชนิด</th><th>ตีกลับ</th><th>รอมา</th></tr></thead><tbody>'+
+      wait.map(function(w){ return '<tr><td class="mono">'+esc(w.ticket)+'</td><td style="font-weight:600;">'+esc(w.site)+'</td><td>'+_qTypeBadge(w.type)+'</td><td>'+(w.kicks?('↩ '+w.kicks):'—')+'</td><td class="mono q-tick" data-since="'+esc(w.enqueuedAt||'')+'">—</td></tr>'; }).join('')+
       '</tbody></table>';
   }
   tickQueue();
