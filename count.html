@@ -827,7 +827,7 @@ async function doCheckIn() {
   // อัปรูปขึ้น Drive ทันที (ไม่เก็บใน localStorage)
   if (msg) msg.textContent = 'กำลังอัปโหลดรูป…';
   var photoUrl = '';
-  try { photoUrl = await uploadFile(_checkinPhotoFile); } catch(e) { photoUrl = ''; }
+  try { photoUrl = await uploadFile(_checkinPhotoFile, { kind:'checkin', site:site, siteId:_siteIdByName(site) }); } catch(e) { photoUrl = ''; }
   if (!photoUrl) {
     if (msg) msg.innerHTML = '<span style="color:var(--danger);">อัปโหลดรูปไม่สำเร็จ ลองใหม่อีกครั้ง</span>';
     btn.disabled = false; btn.innerHTML = '📍 เช็คอินหน้างาน';
@@ -2090,9 +2090,10 @@ function printDoc() {
   '</body></html>';
 
   // ── Upload HTML → GAS → แสดง link ──
+  var sid   = (session && session.site_id) ? String(session.site_id).replace(/[:\/\\*?"<>|]/g,'_') : '';
   var site  = (session && session.site ? session.site.replace(/[:\/\\*?"<>|]/g,'_') : 'report');
   var docNo = DOC_NUMBER.replace(/[:\/\\*?"<>|]/g,'_');
-  var fname = docNo + '_' + site + '.html';
+  var fname = (sid ? sid + '_' : '') + site + '__print__' + docNo + '.html';
 
   // ── สร้าง html สำหรับ upload แยกต่างหาก (แทน logo base64 ด้วย text) ──
   var htmlUpload = html.replace(
@@ -2224,14 +2225,33 @@ async function submitCount() {
     // upload ไฟล์ก่อน — ไฟล์แรก = รายงานที่เซ็นแล้ว ใช้เป็น pdf_url
     var fileUrls = [];
     for (var i = 0; i < files.length; i++) {
-      var url = await uploadFile(files[i]);
+      var url = await uploadFile(files[i], { kind:'report', extra:(i+1) });
       if (url) fileUrls.push(url);
     }
     // upload ไฟล์หลักฐานนอกระบบ PCS (คนละชุด)
     var offUrls = [];
     for (var j = 0; j < offPcsFiles.length; j++) {
-      var ou = await uploadFile(offPcsFiles[j]);
+      var ou = await uploadFile(offPcsFiles[j], { kind:'offpcs', extra:(j+1) });
       if (ou) offUrls.push(ou);
+    }
+
+    // upload รูปถ่ายราย Location (ขั้นที่ 2) → เก็บเป็น URL (เดิมถูกทิ้ง)
+    // และแทน base64 ใน locations ด้วย URL เพื่อลดขนาด payload มหาศาล
+    var locPhotos    = [];
+    var locationsOut = [];
+    for (var li = 0; li < locations.length; li++) {
+      var L = locations[li];
+      var lurl = '', lid = '';
+      if (L.photo && /^data:/.test(L.photo)) {
+        var up = await _uploadDataUrl(L.photo, _buildFileName('loc.jpg', { kind:'loc', extra:L.name }));
+        lurl = up.url; lid = up.id;
+      } else if (L.photo && /^https?:/.test(L.photo)) {
+        lurl = L.photo;   // resubmit: เป็น URL อยู่แล้ว
+      }
+      if (lurl) locPhotos.push({ name:L.name, url:lurl, id:lid });
+      var copy = JSON.parse(JSON.stringify(L));
+      copy.photo = lurl;  // แทน base64 ด้วย URL
+      locationsOut.push(copy);
     }
 
     var tot = _calcTotals();
@@ -2244,7 +2264,8 @@ async function submitCount() {
       site_id       : session.site_id || _siteIdByName(session.site),
       counter_name  : session.name,
       timestamp     : new Date().toISOString(),
-      locations     : locations,
+      locations     : locationsOut,
+      location_photos: locPhotos,
       // ── contract ใหม่ ──
       actual        : { loscam:tot.totLoscam, chep:tot.totChep, brs:tot.totBrs, swwi:tot.totSwwi },
       off_pcs       : {
@@ -2292,19 +2313,57 @@ async function submitCount() {
   }
 }
 
-async function uploadFile(file) {
+// ── ตั้งชื่อไฟล์ให้บอกได้ว่าเป็นของ site ไหน + ปลอดภัยข้ามระบบ ──
+// รูปแบบ: {siteId}_{siteName}__{kind[-extra]}__{yyyymmdd-hhmmss}.{ext}
+function _fileTs() {
+  var d = new Date(), p = function(n){ return ('0'+n).slice(-2); };
+  return d.getFullYear() + p(d.getMonth()+1) + p(d.getDate()) + '-' +
+         p(d.getHours()) + p(d.getMinutes()) + p(d.getSeconds());
+}
+function _safeSeg(s, max) {
+  var out = String(s == null ? '' : s)
+    .replace(/[\/\\:*?"<>|\u0000-\u001F]/g, '_')  // อักขระต้องห้าม + control
+    .replace(/\s+/g, '_')
+    .replace(/_+/g, '_')
+    .replace(/^[._]+|[._]+$/g, '');               // ตัดจุด/ขีดล่างหัวท้าย
+  return out.slice(0, max || 40) || '_';
+}
+function _extOf(name, def) {
+  var m = String(name || '').match(/\.([A-Za-z0-9]{1,8})$/);
+  return m ? m[1].toLowerCase() : (def || 'jpg');
+}
+function _buildFileName(origName, opts) {
+  opts = opts || {};
+  var sid = opts.siteId != null ? opts.siteId : ((session && session.site_id) ? session.site_id : '');
+  var snm = opts.site   != null ? opts.site   : ((session && session.site)   ? session.site   : 'site');
+  var parts = [];
+  if (sid) parts.push(_safeSeg(sid, 24));
+  parts.push(_safeSeg(snm, 40));
+  var kind = (opts.kind || 'file') +
+             (opts.extra != null && opts.extra !== '' ? '-' + _safeSeg(opts.extra, 24) : '');
+  parts.push(_safeSeg(kind, 50));
+  parts.push(_fileTs());
+  return parts.join('__').slice(0, 150) + '.' + _extOf(origName, opts.defExt);
+}
+
+// อัป base64 dataURL ตรง ๆ → คืน { url, id, thumb }
+function _uploadDataUrl(dataUrl, filename) {
+  return fetch(API_URL, {
+    method:'POST', redirect:'follow', headers:{'Content-Type':'text/plain'},
+    body: JSON.stringify({ action:'uploadFile', filename:filename, data:dataUrl })
+  })
+  .then(function(r){ return r.json(); })
+  .then(function(d){ return { url: d.url || '', id: d.fileId || '', thumb: d.thumb || '' }; })
+  .catch(function(){ return { url:'', id:'', thumb:'' }; });
+}
+
+// อัปไฟล์ (File/Blob) → คืน URL (string). opts = { kind, extra, site, siteId }
+async function uploadFile(file, opts) {
   return new Promise(function(resolve) {
     var reader = new FileReader();
-    reader.onload = async function(e) {
-      try {
-        var res = await fetch(API_URL, {
-          method:'POST', redirect:'follow',
-          headers:{'Content-Type':'text/plain'},
-          body: JSON.stringify({ action:'uploadFile', filename:file.name, data:e.target.result })
-        });
-        var data = await res.json();
-        resolve(data.url || '');
-      } catch(e){ resolve(''); }
+    reader.onload = function(e) {
+      _uploadDataUrl(e.target.result, _buildFileName(file.name, opts))
+        .then(function(res){ resolve(res.url || ''); });
     };
     reader.readAsDataURL(file);
   });
