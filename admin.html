@@ -775,10 +775,10 @@ function renderSites(){
         +'<td>'+docField+'</td>'
         +'<td><input id="editStartTime" type="text" inputmode="numeric" maxlength="5" placeholder="hh:mm" value="'+esc(s.start_time||'')+'" style="padding:4px 6px;font-size:12px;width:70px;text-align:center;"></td>'
         +'<td><input id="editDriveLink" type="text" placeholder="วางลิงก์ Google Drive" value="'+esc(s.drive_link||'')+'" style="padding:4px 6px;font-size:12px;width:180px;"></td>'
-        +'<td><div class="toggle '+(s.is_active?'on':'')+'" onclick="toggleSite(\''+sidJs+'\')" title="เปิด/ปิดการใช้งาน"></div></td>'
+        +'<td><div class="toggle '+(S._editActive?'on':'')+'" onclick="toggleEditActive(this)" title="เปิด/ปิดการใช้งาน (บันทึกพร้อมปุ่ม 💾)"></div></td>'
         +'<td style="white-space:nowrap;">'
           +'<button id="btnSaveSite" class="btn-sm" onclick="saveSiteRow(\''+sidJs+'\')">💾 บันทึก</button> '
-          +'<button class="btn-sm" onclick="cancelEditSite()" style="background:transparent;border:1px solid var(--border,#ddd);">ยกเลิก</button>'
+          +'<button class="btn-sm" onclick="cancelEditSite()" style="background:#e5e7eb;border:1px solid #cbd5e1;color:#334155;font-weight:600;">✕ ยกเลิก</button>'
         +'</td>'
       +'</tr>';
     }
@@ -795,7 +795,9 @@ function renderSites(){
       +'<td style="font-size:12px;">'+docCell+'</td>'
       +'<td style="font-size:12px;text-align:center;">'+timeCell+'</td>'
       +'<td style="font-size:12px;">'+linkCell+'</td>'
-      +'<td><div class="toggle '+(s.is_active?'on':'')+'" onclick="toggleSite(\''+sidJs+'\')" title="เปิด/ปิดการใช้งาน"></div></td>'
+      +'<td>'+(s.is_active
+          ? '<span class="status-badge sb-locked">🟢 เปิด</span>'
+          : '<span class="status-badge sb-idle">⚪ ปิด</span>')+'</td>'
       +'<td style="white-space:nowrap;">'
         +'<button class="btn-sm" onclick="startEditSite(\''+sidJs+'\')" '+dis+'>✏️ แก้ไข</button> '
         +'<button class="btn-sm" onclick="openBookEditor(\''+sidJs+'\')">ใส่ยอด</button> '
@@ -818,8 +820,14 @@ function _normTime(v){
   var h=+m[1], mi=+m[2]; if(h>23||mi>59) return null;
   return ('0'+h).slice(-2)+':'+('0'+mi).slice(-2);
 }
-function startEditSite(id){ S._editSite=id; renderSites(); }
+function startEditSite(id){
+  var s=S.sites.filter(function(x){return x.site_id===id;})[0];
+  S._editActive = s ? !!s.is_active : true;   // ค่าเริ่มต้นของ toggle ในโหมดแก้ไข
+  S._editSite=id; renderSites();
+}
 function cancelEditSite(){ S._editSite=null; renderSites(); }
+// สลับสถานะใช้งานในโหมดแก้ไข — เก็บไว้ในตัวแปร แล้วบันทึกพร้อมปุ่ม 💾 (ไม่ re-render กันค่าที่พิมพ์หาย)
+function toggleEditActive(el){ S._editActive=!S._editActive; if(el) el.classList.toggle('on', S._editActive); }
 function saveSiteRow(id){
   var roundOpen = !!(S.round && S.round.is_open);
   var tEl=document.getElementById('editStartTime');
@@ -827,16 +835,16 @@ function saveSiteRow(id){
   var dEl=document.getElementById('editDocNo');
   var timeVal=_normTime(tEl?tEl.value:'');
   if(timeVal===null){ toast('รูปแบบเวลาไม่ถูกต้อง — พิมพ์ hh:mm','error'); return; }
-  var payload={ action:'saveSiteFields', site_id:id, start_time:timeVal, drive_link:(lEl?String(lEl.value).trim():'') };
+  var payload={ action:'saveSiteFields', site_id:id, start_time:timeVal, drive_link:(lEl?String(lEl.value).trim():''), is_active:!!S._editActive };
   if(roundOpen && dEl){ payload.doc_no = String(dEl.value).trim(); }   // เลขเอกสารเซฟเฉพาะเมื่อมีรอบเปิด
   var btn=document.getElementById('btnSaveSite'); if(btn){ btn.disabled=true; btn.textContent='กำลังบันทึก…'; }
   post(payload).then(function(d){
     var s=S.sites.filter(function(x){return x.site_id===id;})[0];
-    if(s){ if(d.start_time!==undefined) s.start_time=d.start_time; if(d.drive_link!==undefined) s.drive_link=d.drive_link; }
+    if(s){ if(d.start_time!==undefined) s.start_time=d.start_time; if(d.drive_link!==undefined) s.drive_link=d.drive_link; if(d.is_active!==undefined) s.is_active=d.is_active; }
     if(d.doc_no!==undefined){ if(!S.docnos) S.docnos={}; S.docnos[id]=d.doc_no; }
     S._editSite=null;
     toast('✓ บันทึกแล้ว','success');
-    renderSites(); renderSiteStatus();
+    renderSites(); renderSiteStatus(); renderDashboard();
   }).catch(function(){
     if(btn){ btn.disabled=false; btn.textContent='💾 บันทึก'; }
     toast('บันทึกไม่สำเร็จ','error');
