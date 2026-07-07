@@ -756,29 +756,92 @@ function renderSites(){
     approved:'<span class="status-badge sb-locked">🔒 อนุมัติ/ล็อค</span>',
     rejected:'<span class="status-badge sb-rejected">↩ ตีกลับ</span>'
   };
+  var editing = S._editSite || null;
+  var roundOpen = !!(S.round && S.round.is_open);
   var rows = S.sites.map(function(s){
     var hasBook = !!S.books[s.site_id];
     var docNo = (S.docnos && S.docnos[s.site_id]) || '';
     var bookBadge = hasBook ? '<span class="status-badge sb-locked">ใส่ยอดแล้ว ✓</span>' : '<span class="status-badge sb-idle">ยังไม่ใส่</span>';
-    var docCell = docNo ? ('📄 '+esc(docNo)) : '<span style="color:var(--muted,#999);">—</span>';
+    var sidJs = esc(s.site_id).replace(/'/g,"\\'");
+    var isEdit = (editing === s.site_id);
+
+    if (isEdit) {
+      var docField = roundOpen
+        ? '<input id="editDocNo" type="text" value="'+esc(docNo)+'" placeholder="เช่น PE-2569-001" style="padding:4px 6px;font-size:12px;width:130px;">'
+        : '<span style="font-size:11px;color:var(--muted,#999);">ต้องเปิดรอบก่อน</span>';
+      return '<tr style="background:rgba(184,137,61,.07);">'
+        +'<td style="font-weight:600;">'+esc(s.site_name)+'</td>'
+        +'<td>'+bookBadge+'</td>'
+        +'<td>'+docField+'</td>'
+        +'<td><input id="editStartTime" type="text" inputmode="numeric" maxlength="5" placeholder="hh:mm" value="'+esc(s.start_time||'')+'" style="padding:4px 6px;font-size:12px;width:70px;text-align:center;"></td>'
+        +'<td><input id="editDriveLink" type="text" placeholder="วางลิงก์ Google Drive" value="'+esc(s.drive_link||'')+'" style="padding:4px 6px;font-size:12px;width:180px;"></td>'
+        +'<td><div class="toggle '+(s.is_active?'on':'')+'" onclick="toggleSite(\''+sidJs+'\')" title="เปิด/ปิดการใช้งาน"></div></td>'
+        +'<td style="white-space:nowrap;">'
+          +'<button id="btnSaveSite" class="btn-sm" onclick="saveSiteRow(\''+sidJs+'\')">💾 บันทึก</button> '
+          +'<button class="btn-sm" onclick="cancelEditSite()" style="background:transparent;border:1px solid var(--border,#ddd);">ยกเลิก</button>'
+        +'</td>'
+      +'</tr>';
+    }
+
+    var docCell  = docNo ? ('📄 '+esc(docNo)) : '<span style="color:var(--muted,#999);">—</span>';
+    var timeCell = s.start_time ? esc(s.start_time) : '<span style="color:var(--muted,#999);">—</span>';
+    var linkCell = s.drive_link
+      ? '<a href="'+esc(s.drive_link)+'" target="_blank" rel="noopener" style="font-size:12px;">เปิดลิงก์ ↗</a>'
+      : '<span style="color:var(--muted,#999);">—</span>';
+    var dis = (editing && !isEdit) ? 'disabled' : '';   // แก้ทีละแถว
     return '<tr>'
       +'<td style="font-weight:600;">'+esc(s.site_name)+'</td>'
       +'<td>'+bookBadge+'</td>'
       +'<td style="font-size:12px;">'+docCell+'</td>'
-      +'<td><input type="text" inputmode="numeric" maxlength="5" placeholder="hh:mm" value="'+esc(s.start_time||'')+'" onchange="saveSiteTime(\''+esc(s.site_id)+'\',this.value)" style="padding:4px 6px;font-size:12px;width:70px;text-align:center;"></td>'
-      +'<td><input type="text" placeholder="วางลิงก์ Google Drive" value="'+esc(s.drive_link||'')+'" onchange="saveSiteLink(\''+esc(s.site_id)+'\',this.value)" style="padding:4px 6px;font-size:12px;width:180px;">'+(s.drive_link?' <a href="'+esc(s.drive_link)+'" target="_blank" rel="noopener" title="เปิดลิงก์" style="text-decoration:none;">↗</a>':'')+'</td>'
-      +'<td><div class="toggle '+(s.is_active?'on':'')+'" onclick="toggleSite(\''+esc(s.site_id)+'\')" title="เปิด/ปิดการใช้งาน"></div></td>'
-      +'<td><button class="btn-sm" onclick="openBookEditor(\''+esc(s.site_id)+'\')">ใส่ยอด</button></td>'
-      +'<td><button class="btn-sm btn-sm-reject" onclick="deleteSite(\''+esc(s.site_id)+'\')">ลบ</button></td>'
+      +'<td style="font-size:12px;text-align:center;">'+timeCell+'</td>'
+      +'<td style="font-size:12px;">'+linkCell+'</td>'
+      +'<td><div class="toggle '+(s.is_active?'on':'')+'" onclick="toggleSite(\''+sidJs+'\')" title="เปิด/ปิดการใช้งาน"></div></td>'
+      +'<td style="white-space:nowrap;">'
+        +'<button class="btn-sm" onclick="startEditSite(\''+sidJs+'\')" '+dis+'>✏️ แก้ไข</button> '
+        +'<button class="btn-sm" onclick="openBookEditor(\''+sidJs+'\')">ใส่ยอด</button> '
+        +'<button class="btn-sm btn-sm-reject" onclick="deleteSite(\''+sidJs+'\')">ลบ</button>'
+      +'</td>'
     +'</tr>';
   }).join('');
-  el.innerHTML = '<table><thead><tr><th>ชื่อ Site</th><th>ยอดระบบ</th><th>เลขเอกสาร</th><th>⏰ เวลาเริ่ม</th><th>📁 ลิงก์เอกสาร (Drive)</th><th>ใช้งาน</th><th></th><th></th></tr></thead><tbody>'+rows+'</tbody></table>';
+  el.innerHTML = '<table><thead><tr><th>ชื่อ Site</th><th>ยอดระบบ</th><th>เลขเอกสาร</th><th>⏰ เวลาเริ่ม</th><th>📁 ลิงก์เอกสาร (Drive)</th><th>ใช้งาน</th><th>จัดการ</th></tr></thead><tbody>'+rows+'</tbody></table>';
   if(S.bookSite){ // ถ้ากำลังเปิด editor อยู่ อัปหัวข้อชื่อ site ให้ตรง
     var s = S.sites.filter(function(x){return x.site_id===S.bookSite;})[0];
     var lbl = document.getElementById('bookEditorSite'); if(lbl && s) lbl.textContent = s.site_name;
   }
 }
 
+function _normTime(v){
+  v=String(v||'').trim(); if(!v) return '';
+  v=v.replace(/[.\uFF0E]/g,':').replace(/\s/g,'');        // 19.00 → 19:00
+  if(/^\d{3,4}$/.test(v)){ v=('000'+v).slice(-4); v=v.slice(0,2)+':'+v.slice(2); }  // 1900 → 19:00
+  var m=v.match(/^(\d{1,2}):(\d{1,2})$/); if(!m) return null;
+  var h=+m[1], mi=+m[2]; if(h>23||mi>59) return null;
+  return ('0'+h).slice(-2)+':'+('0'+mi).slice(-2);
+}
+function startEditSite(id){ S._editSite=id; renderSites(); }
+function cancelEditSite(){ S._editSite=null; renderSites(); }
+function saveSiteRow(id){
+  var roundOpen = !!(S.round && S.round.is_open);
+  var tEl=document.getElementById('editStartTime');
+  var lEl=document.getElementById('editDriveLink');
+  var dEl=document.getElementById('editDocNo');
+  var timeVal=_normTime(tEl?tEl.value:'');
+  if(timeVal===null){ toast('รูปแบบเวลาไม่ถูกต้อง — พิมพ์ hh:mm','error'); return; }
+  var payload={ action:'saveSiteFields', site_id:id, start_time:timeVal, drive_link:(lEl?String(lEl.value).trim():'') };
+  if(roundOpen && dEl){ payload.doc_no = String(dEl.value).trim(); }   // เลขเอกสารเซฟเฉพาะเมื่อมีรอบเปิด
+  var btn=document.getElementById('btnSaveSite'); if(btn){ btn.disabled=true; btn.textContent='กำลังบันทึก…'; }
+  post(payload).then(function(d){
+    var s=S.sites.filter(function(x){return x.site_id===id;})[0];
+    if(s){ if(d.start_time!==undefined) s.start_time=d.start_time; if(d.drive_link!==undefined) s.drive_link=d.drive_link; }
+    if(d.doc_no!==undefined){ if(!S.docnos) S.docnos={}; S.docnos[id]=d.doc_no; }
+    S._editSite=null;
+    toast('✓ บันทึกแล้ว','success');
+    renderSites(); renderSiteStatus();
+  }).catch(function(){
+    if(btn){ btn.disabled=false; btn.textContent='💾 บันทึก'; }
+    toast('บันทึกไม่สำเร็จ','error');
+  });
+}
 function saveSiteLink(id,val){
   var v=String(val||'').trim();
   post({action:'setSiteLink', site_id:id, drive_link:v}).then(function(){
