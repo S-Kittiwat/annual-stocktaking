@@ -2224,6 +2224,12 @@ async function submitCount() {
         brs:    offPcs.brs||0,    swwi: offPcs.swwi||0,
         files:  offUrls
       },
+      production    : {
+        loscam: tot.loscam['พาเลทที่ใช้ในสายการผลิต']||0,
+        chep:   tot.chep['พาเลทที่ใช้ในสายการผลิต']||0,
+        brs:    tot.brs['พาเลทที่ใช้ในสายการผลิต']||0,
+        swwi:   tot.swwi['พาเลทที่ใช้ในสายการผลิต']||0
+      },
       pdf_url       : fileUrls[0] || '',
       // ── เผื่อ backward-compat ──
       total_loscam  : tot.totLoscam,
