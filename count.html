@@ -285,6 +285,9 @@ td.brs-c   {color:#1a1612;}
   </div>
 </nav>
 
+<!-- แถบเรียกเจ้าหน้าที่ (โผล่ระหว่างนับ ตั้งแต่ขั้น 1) -->
+<div id="helpBar" style="display:none;"></div>
+
 <div class="page">
   <div class="content" id="mainContent">
     <div class="loading"><span class="spinner"></span>กำลังโหลด...</div>
@@ -392,6 +395,7 @@ function fetchBookBalance(site) {
       if (data.status === 'ok' && data.book) {
         bookBalance = data.book;
       }
+      _maybeRestoreFromServer();  // reopen/rejected → เติมข้อมูลเดิมจาก server (แหล่งหลัก)
       render(); // re-render เพื่ออัป comparison + แบนเนอร์สถานะ
     })
     .catch(function(){ render(); }); // ถ้าไม่มีข้อมูลก็แสดง pending
@@ -423,6 +427,47 @@ function loadProgress() {
     if (saved) locations = JSON.parse(saved);
   } catch(e) { locations = []; }
 }
+
+// ── Restore จาก server ตอน reopen/rejected (server = แหล่งข้อมูลหลัก) ──
+var _serverRestoredKey = null;   // กันเติมซ้ำทับ edit ที่ผู้ใช้กำลังแก้
+function _n2(x){ return Number(x) || 0; }
+// แปลง location object จาก server → shape ที่หน้าจอใช้ (เติม key ที่ขาดให้ครบ + map รูป)
+function _normLocFromServer(L) {
+  L = L || {};
+  var out = emptyLoc(L.name || '');
+  if (L.wood) {
+    ['loscam','chep'].forEach(function(b){
+      if (L.wood[b]) Object.keys(out.wood[b]).forEach(function(k){ out.wood[b][k] = _n2(L.wood[b][k]); });
+    });
+  }
+  if (L.plastic) {
+    ['brs','swwi'].forEach(function(b){
+      if (L.plastic[b]) Object.keys(out.plastic[b]).forEach(function(k){ out.plastic[b][k] = _n2(L.plastic[b][k]); });
+    });
+  }
+  // รูปเดิม: ใช้ thumbnail ให้ preview เห็น + จำ url/id เต็มไว้ (resubmit จะไม่อัปซ้ำ)
+  out.photo     = L.photo_thumb || L.photo_url || (/^https?:/.test(String(L.photo||'')) ? L.photo : '') || '';
+  out._photoUrl = L.photo_url || (/^https?:/.test(String(L.photo||'')) ? L.photo : '') || '';
+  out._photoId  = L.photo_id || '';
+  return out;
+}
+function _maybeRestoreFromServer() {
+  var s = siteSubmission;
+  if (!s) return;
+  if (s.status !== 'rejected' && s.status !== 'reopened') return;
+  var key = (s.count_id || '') + '#' + (s.revision || '');
+  if (_serverRestoredKey === key) return;   // เติมไปแล้วสำหรับใบ/รอบแก้นี้ → ไม่ทับ
+  if (Array.isArray(s.locations) && s.locations.length) {
+    locations = s.locations.map(_normLocFromServer);
+  }
+  if (s.off_pcs) {
+    offPcs = { loscam:_n2(s.off_pcs.loscam), chep:_n2(s.off_pcs.chep),
+               brs:_n2(s.off_pcs.brs),       swwi:_n2(s.off_pcs.swwi) };
+  }
+  // production เติมกลับอัตโนมัติ — คำนวณจาก locations ตอน submit อยู่แล้ว
+  _serverRestoredKey = key;
+  try { saveProgress(); } catch(e) {}
+}
 var siteList  = [];
 var siteObjs  = [];    // [{ site_id, site_name }] จาก backend — ใช้ map ชื่อ→id ตอน submit
 var siteSubmission = null; // ใบส่งผลของ site ที่เลือก (null / {count_id,revision,status,review_comment})
@@ -442,6 +487,7 @@ window.onload = function() {
   loadConfig();
   // ดึง book + สถานะใบส่ง ของ site ที่ค้างไว้ (ให้ banner ล็อก/ตีกลับโชว์หลัง reload)
   if (session && session.site) fetchBookBalance(session.site);
+  startHelpPoll();   // แถบเรียกเจ้าหน้าที่ (จะซ่อนเองถ้ายังไม่มี session / อยู่หน้าล็อก)
 };
 
 function loadConfig() {
@@ -653,6 +699,87 @@ async function pollSiteQueue(){
     box.style.background='var(--surface)'; box.style.borderColor='var(--border)'; box.style.color='var(--muted)';
     box.innerHTML = 'รอ Admin เริ่มตรวจ…';
   }
+}
+
+// ══ แถบเรียกเจ้าหน้าที่ระหว่างนับ (โผล่ตั้งแต่ขั้น 1) ══════════
+var _helpTimer=null, _hbFormOpen=false, _hbBusy=false;
+var HB_BTN='padding:7px 13px;border-radius:8px;font:inherit;font-weight:600;cursor:pointer;white-space:nowrap;';
+function stopHelpPoll(){ if(_helpTimer){ clearInterval(_helpTimer); _helpTimer=null; } }
+function startHelpPoll(){ stopHelpPoll(); pollHelp(); _helpTimer=setInterval(pollHelp, 10000); }
+async function pollHelp(){
+  var bar=document.getElementById('helpBar'); if(!bar) return;
+  if(!session || !session.site){ bar.style.display='none'; return; }
+  var d=null;
+  try{
+    var res=await fetch(API_URL + '?action=getSiteQueueStatus&site=' + encodeURIComponent(session.site) + '&site_id=' + encodeURIComponent(_siteIdByName(session.site)));
+    d=await res.json();
+  }catch(e){ return; }
+  if(!d || d.status!=='ok') return;
+  // ส่งผลแล้ว/อนุมัติแล้ว หรือเป็นตั๋ว review → หน้าจอล็อกจัดการเอง ซ่อนแถบนี้
+  if(d.sub_status==='pending' || d.sub_status==='approved' || d.ticket_type==='review'){ bar.style.display='none'; return; }
+  renderHelpBar(d);
+}
+function _hbShell(color,bg,inner){
+  return '<div style="border-bottom:1px solid var(--border,#eee);background:'+bg+';">'
+    +'<div style="max-width:760px;margin:0 auto;padding:9px 14px;display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:14px;color:'+color+';">'
+    +inner+'</div></div>';
+}
+function renderHelpBar(d){
+  var bar=document.getElementById('helpBar'); if(!bar) return;
+  var st=d.queue_state||'none';
+  if(_hbFormOpen && st==='none'){ bar.style.display='block'; return; }  // กำลังพิมพ์อยู่ → อย่าทับ
+  bar.style.display='block';
+  if(st==='checking'){
+    var link=d.room_link||'';
+    bar.innerHTML=_hbShell('#0f6e56','rgba(16,110,86,.10)',
+      '🟢 <b>เจ้าหน้าที่พร้อมคุยแล้ว</b>'+(d.agent_name?(' · '+esc(d.agent_name)):'')
+      +(link ? '<button style="'+HB_BTN+'background:#0f6e56;color:#fff;border:none;margin-left:auto;" onclick="window.open(\''+esc(link)+'\',\'_blank\',\'noopener\')">🎥 เข้าห้อง Teams</button>'
+             : '<span style="font-size:12px;opacity:.8;margin-left:auto;">(ยังไม่ได้ตั้งลิงก์ห้อง)</span>'));
+  } else if(st==='waiting'){
+    bar.innerHTML=_hbShell('#92400e','rgba(234,179,8,.14)',
+      '⏳ อยู่ในคิว — ลำดับ <b>'+(d.position||'?')+'</b>/'+(d.total||'?')+' · รอเจ้าหน้าที่เรียก'
+      +'<button style="'+HB_BTN+'background:#fff;border:1px solid #d6b36a;color:#92400e;margin-left:auto;" onclick="cancelStaff()">ยกเลิกคิว</button>');
+  } else {
+    bar.innerHTML=_hbShell('var(--text,#333)','var(--surface,#faf9f6)',
+      '<span style="opacity:.75;">ติดปัญหาระหว่างนับ?</span>'
+      +'<button style="'+HB_BTN+'background:var(--accent,#b8893d);color:#fff;border:none;margin-left:auto;" onclick="hbOpenForm()">🙋 เรียกเจ้าหน้าที่</button>');
+  }
+}
+function hbOpenForm(){
+  _hbFormOpen=true;
+  var bar=document.getElementById('helpBar'); if(!bar) return;
+  bar.style.display='block';
+  bar.innerHTML='<div style="border-bottom:1px solid var(--border,#eee);background:var(--surface,#faf9f6);">'
+    +'<div style="max-width:760px;margin:0 auto;padding:10px 14px;">'
+    +'<div style="font-size:13px;color:var(--muted,#777);margin-bottom:6px;">🙋 เรียกเจ้าหน้าที่ — พิมพ์เรื่องที่ต้องการให้ช่วย (ไม่บังคับ)</div>'
+    +'<textarea id="hbNote" rows="2" maxlength="300" placeholder="เช่น พาเลทชำรุด ถ่ายรูปไม่ได้ / ยอดระบบไม่ตรง" '
+    +'style="width:100%;box-sizing:border-box;padding:8px 10px;border:1px solid var(--border,#ddd);border-radius:8px;font:inherit;resize:vertical;"></textarea>'
+    +'<div style="display:flex;gap:8px;margin-top:8px;">'
+    +'<button style="'+HB_BTN+'flex:1;background:var(--accent,#b8893d);color:#fff;border:none;" onclick="callStaff()">ส่งเข้าคิว</button>'
+    +'<button style="'+HB_BTN+'background:#fff;border:1px solid var(--border,#ddd);color:var(--text,#555);" onclick="hbCloseForm()">ยกเลิก</button>'
+    +'</div></div></div>';
+  var t=document.getElementById('hbNote'); if(t) t.focus();
+}
+function hbCloseForm(){ _hbFormOpen=false; pollHelp(); }
+async function callStaff(){
+  if(_hbBusy) return; _hbBusy=true;
+  var t=document.getElementById('hbNote'); var note=t?t.value.trim():'';
+  _hbFormOpen=false;
+  try{
+    await fetch(API_URL, { method:'POST', redirect:'follow', headers:{'Content-Type':'text/plain'},
+      body: JSON.stringify({ action:'enqueueHelp', site:session.site, note:note }) });
+    if(typeof showToast==='function') showToast('🙋 ส่งคำขอเข้าคิวแล้ว — รอเจ้าหน้าที่เรียก', 'success');
+  }catch(e){}
+  _hbBusy=false; pollHelp();
+}
+async function cancelStaff(){
+  if(_hbBusy) return; _hbBusy=true;
+  try{
+    await fetch(API_URL, { method:'POST', redirect:'follow', headers:{'Content-Type':'text/plain'},
+      body: JSON.stringify({ action:'dequeueHelp', site:session.site }) });
+    if(typeof showToast==='function') showToast('ยกเลิกคิวแล้ว', '');
+  }catch(e){}
+  _hbBusy=false; pollHelp();
 }
 
 // ดึงสถานะ site เดิมซ้ำ (ไม่ออกไปไหน) — ใช้บนหน้าจอล็อก
@@ -889,6 +1016,7 @@ function confirmStep1() {
   // ดึง book balance + สถานะใบส่งของ site นี้
   fetchBookBalance(site);
   render();
+  if (typeof pollHelp === 'function') pollHelp();   // อัปเดตแถบเรียกเจ้าหน้าที่ทันที
 }
 
 // ── Step 2: กรอกยอดนับ ────────────────────────────────────
@@ -1224,6 +1352,12 @@ function _readForm() {
   // รูปถ่าย
   var pp = document.getElementById('photoPreview');
   if (pp && pp.dataset.photo) loc.photo = pp.dataset.photo;
+  // แก้ location เดิมโดยไม่ถ่ายรูปใหม่ → คงลิงก์ไฟล์รูปต้นฉบับไว้ (ไม่ให้กลายเป็น thumbnail)
+  if (_editingIdx !== null && locations[_editingIdx] && loc.photo && !/^data:/.test(loc.photo)) {
+    var prev = locations[_editingIdx];
+    if (prev._photoUrl) loc._photoUrl = prev._photoUrl;
+    if (prev._photoId)  loc._photoId  = prev._photoId;
+  }
   return loc;
 }
 
@@ -1822,6 +1956,28 @@ function _renderComparison(tot) {
 function hasBook() {
   return bookBalance && (bookBalance.loscam||bookBalance.chep||bookBalance.brs||bookBalance.swwi);
 }
+// ── แปลงวันที่เอกสารให้เป็นรูปแบบ "วว ดดดด ปปปป" (เดือนไทย, ปี พ.ศ.) ──
+// รองรับ input: ISO(2026-07-07), 07/07/2026, หรือไทยอยู่แล้ว(7 กรกฎาคม 2569) — แปลงไม่ได้ก็คืนค่าเดิม
+var _TH_MONTHS = ['มกราคม','กุมภาพันธ์','มีนาคม','เมษายน','พฤษภาคม','มิถุนายน',
+                  'กรกฎาคม','สิงหาคม','กันยายน','ตุลาคม','พฤศจิกายน','ธันวาคม'];
+function _thaiDocDate(raw) {
+  var s = String(raw == null ? '' : raw).trim();
+  if (!s) return '';
+  var day, mon0, year, m;
+  if ((m = s.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/))) {            // ISO: yyyy-mm-dd
+    year = +m[1]; mon0 = +m[2] - 1; day = +m[3];
+  } else if ((m = s.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})$/))) {     // dd/mm/yyyy
+    day = +m[1]; mon0 = +m[2] - 1; year = +m[3];
+  } else if ((m = s.match(/^(\d{1,2})\s+(\S+)\s+(\d{4})$/)) && _TH_MONTHS.indexOf(m[2]) >= 0) { // ไทยอยู่แล้ว → normalize
+    day = +m[1]; mon0 = _TH_MONTHS.indexOf(m[2]); year = +m[3];
+  } else {
+    return s;   // รูปแบบอื่น → คงเดิม ไม่เดามั่ว
+  }
+  if (mon0 < 0 || mon0 > 11 || !day || day > 31) return s;
+  if (year < 2400) year += 543;   // ค.ศ. → พ.ศ. (ตรง convention เดิมของเอกสาร)
+  return ('0' + day).slice(-2) + ' ' + _TH_MONTHS[mon0] + ' ' + year;
+}
+
 function printDoc() {
   var tot = _calcTotals();
 
@@ -1831,7 +1987,7 @@ function printDoc() {
   var LOGO_BASE64 = (typeof PRINT_CONFIG !== 'undefined' && PRINT_CONFIG.logo)   || BRS_LOGO_DEFAULT;
   // ── ข้อมูลหัวเอกสารจาก Admin (เลขที่=ต่อ site, วันที่/ปี=ต่อรอบ) ──
   var DOC_NUMBER  = siteDocNo || (typeof PRINT_CONFIG !== 'undefined' && PRINT_CONFIG.docNo) || _docRef();
-  var DOC_DATE    = docDate   || (typeof PRINT_CONFIG !== 'undefined' && PRINT_CONFIG.date)  || '___________';
+  var DOC_DATE    = _thaiDocDate(docDate || (typeof PRINT_CONFIG !== 'undefined' && PRINT_CONFIG.date) || '') || '___________';
   var DOC_YEAR    = docYear   || (typeof PRINT_CONFIG !== 'undefined' && PRINT_CONFIG.year)  || (roundInfo && roundInfo.year) || '____';
 
   // ── ฟอนต์เอกสาร PDF — เปลี่ยนได้ที่นี่ (ใช้ฟอนต์ไทยของ Google Docs) ──
@@ -2244,13 +2400,16 @@ async function submitCount() {
       var lurl = '', lid = '';
       if (L.photo && /^data:/.test(L.photo)) {
         var up = await _uploadDataUrl(L.photo, _buildFileName('loc.jpg', { kind:'loc', extra:L.name }));
-        lurl = up.url; lid = up.id;
-      } else if (L.photo && /^https?:/.test(L.photo)) {
-        lurl = L.photo;   // resubmit: เป็น URL อยู่แล้ว
+        lurl = up.url; lid = up.id;                    // ถ่ายใหม่ → อัปขึ้น Drive
+      } else if (L._photoUrl || (L.photo && /^https?:/.test(L.photo))) {
+        lurl = L._photoUrl || L.photo;                 // รูปเดิม (reopen) → ใช้ไฟล์เดิม ไม่อัปซ้ำ
+        lid  = L._photoId || '';
       }
       if (lurl) locPhotos.push({ name:L.name, url:lurl, id:lid });
       var copy = JSON.parse(JSON.stringify(L));
-      copy.photo = lurl;  // แทน base64 ด้วย URL
+      delete copy._photoUrl; delete copy._photoId;     // ตัด field ชั่วคราวออก
+      delete copy.photo_url; delete copy.photo_id; delete copy.photo_thumb;
+      copy.photo = lurl;   // เก็บ URL (ไม่ใช่ base64) ใน locations_json
       locationsOut.push(copy);
     }
 
