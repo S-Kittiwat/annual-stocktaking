@@ -332,7 +332,8 @@ table.recon .grp{border-left:1px solid var(--border);}
         <input class="input" id="agRoom" placeholder="ห้อง เช่น Room 1" style="width:120px;">
         <input class="input" id="agLink" placeholder="วางลิงก์ห้องที่ copy จาก MS Teams" style="flex:1;min-width:170px;">
         <input class="input" id="agPin" placeholder="PIN" style="width:90px;">
-        <button class="btn btn-primary" onclick="addAgent()">+ เพิ่ม</button>
+        <button class="btn btn-primary" id="btnAddAgent" onclick="addAgent()">+ เพิ่ม</button>
+        <button class="btn" id="btnCancelEdit" onclick="cancelEditAgent()" style="display:none;background:var(--surface);border:1px solid var(--border);">ยกเลิก</button>
       </div>
       <div class="bb-hint">💡 ครั้งแรก: รัน <b>setupQueueSheets()</b> ใน Apps Script หนึ่งครั้งก่อน · ลิงก์ Teams: สร้าง/copy ลิงก์ห้องจากแอป MS Teams มาวางเอง · จำนวนผู้ใช้กี่คนก็ได้</div>
       <div class="table-wrap" id="agentsTable"><div class="empty">ยังไม่มีผู้ใช้</div></div>
@@ -882,23 +883,52 @@ function renderAgents(){
       +'<td>'+esc(a.room||'')+'</td>'
       +'<td style="font-size:12px;">'+link+'</td>'
       +'<td>'+pin+'</td>'
-      +'<td><button class="btn-sm btn-sm-reject" onclick="delAgent(\''+esc(a.id)+'\',\''+esc(a.name)+'\')">ลบ</button></td>'
+      +'<td><button class="btn-sm" onclick="editAgent(\''+esc(a.id)+'\')">แก้ไข</button> <button class="btn-sm btn-sm-reject" onclick="delAgent(\''+esc(a.id)+'\',\''+esc(a.name)+'\')">ลบ</button></td>'
     +'</tr>';
   }).join('');
   el.innerHTML='<table><thead><tr><th>ชื่อ</th><th>ห้อง</th><th>ลิงก์ Teams</th><th>PIN</th><th></th></tr></thead><tbody>'+rows+'</tbody></table>';
 }
+var _editAgentId = null;
 function addAgent(){
   var name=document.getElementById('agName').value.trim();
   var room=document.getElementById('agRoom').value.trim();
   var link=document.getElementById('agLink').value.trim();
   var pin=document.getElementById('agPin').value.trim();
   if(!name||!pin){ toast('กรอกชื่อและ PIN','error'); return; }
-  post({action:'saveAgent', name:name, room:room, roomLink:link, user_pin:pin}).then(function(d){
-    if(d && d.status==='error'){ toast(d.message||'เพิ่มไม่สำเร็จ','error'); return; }
-    document.getElementById('agName').value=''; document.getElementById('agRoom').value='';
-    document.getElementById('agLink').value=''; document.getElementById('agPin').value='';
-    toast('+ เพิ่มผู้ใช้แล้ว','success'); loadData(false);
-  }).catch(function(){ toast('เพิ่มไม่สำเร็จ','error'); });
+  var wasEdit=!!_editAgentId;
+  var payload={action:'saveAgent', name:name, room:room, roomLink:link, user_pin:pin};
+  if(_editAgentId) payload.id=_editAgentId;
+  post(payload).then(function(d){
+    if(d && d.status==='error'){ toast(d.message||'บันทึกไม่สำเร็จ','error'); return; }
+    cancelEditAgent();
+    toast(wasEdit?'💾 บันทึกการแก้ไขแล้ว':'+ เพิ่มผู้ใช้แล้ว','success'); loadData(false);
+  }).catch(function(){ toast('บันทึกไม่สำเร็จ','error'); });
+}
+function editAgent(id){
+  var a=(S.agents||[]).filter(function(x){return String(x.id)===String(id);})[0]; if(!a) return;
+  document.getElementById('agName').value=a.name||'';
+  document.getElementById('agRoom').value=a.room||'';
+  document.getElementById('agLink').value=a.roomLink||'';
+  document.getElementById('agPin').value=a.pin||'';
+  _editAgentId=id;
+  var b=document.getElementById('btnAddAgent'); if(b) b.textContent='💾 บันทึกแก้ไข';
+  var c=document.getElementById('btnCancelEdit'); if(c) c.style.display='inline-flex';
+  document.getElementById('agName').scrollIntoView({behavior:'smooth',block:'center'});
+  document.getElementById('agName').focus();
+}
+function cancelEditAgent(){
+  _editAgentId=null;
+  ['agName','agRoom','agLink','agPin'].forEach(function(id){ var e=document.getElementById(id); if(e) e.value=''; });
+  var b=document.getElementById('btnAddAgent'); if(b) b.textContent='+ เพิ่ม';
+  var c=document.getElementById('btnCancelEdit'); if(c) c.style.display='none';
+}
+function reopenSub(cid, site){
+  var reason=prompt('เปิดให้แก้ไข "'+site+'" (ที่อนุมัติแล้ว)\nระบุเหตุผล — ผู้นับจะเห็น:');
+  if(reason===null) return;
+  post({action:'reopenSubmission', count_id:cid, reason:reason}).then(function(d){
+    if(d && d.status==='error'){ toast(d.message||'เปิดแก้ไม่สำเร็จ','error'); return; }
+    toast('🔓 เปิดให้แก้ไขแล้ว — ผู้นับแก้แล้วส่งใหม่ได้','success'); loadData(false);
+  }).catch(function(){ toast('เปิดแก้ไม่สำเร็จ','error'); });
 }
 function delAgent(id,name){
   if(!confirm('ลบผู้ใช้ '+name+' ?')) return;
@@ -941,9 +971,18 @@ function renderQueue(st){
       sub=cs[0]||null;
     }catch(e){}
     var op = (sub&&sub.off_pcs)?sub.off_pcs:{loscam:null,chep:null,brs:null,swwi:null};
+    var ac = (sub&&sub.actual)?sub.actual:{loscam:null,chep:null,brs:null,swwi:null};
+    var pr = (sub&&sub.production)?sub.production:{loscam:null,chep:null,brs:null,swwi:null};
     function opv(x){ return (x===null||x===undefined||x==='')?'—':x; }
     var opTotal = ['loscam','chep','brs','swwi'].reduce(function(a,k){return a+(Number(op[k])||0);},0);
     function opCell(lbl,val){ return '<div style="border:1px solid var(--border,#e2e2e2);border-radius:8px;padding:8px;text-align:center;"><div style="font-size:11px;color:var(--muted,#999);">'+lbl+'</div><div style="font-size:16px;font-weight:700;">'+opv(val)+'</div></div>'; }
+    function provGrid(o){
+      var t=['loscam','chep','brs','swwi'].reduce(function(a,k){return a+(Number(o[k])||0);},0);
+      return '<div style="display:grid;grid-template-columns:repeat(4,1fr) auto;gap:8px;align-items:stretch;margin-bottom:14px;">'
+        +opCell('LOSCAM',o.loscam)+opCell('CHEP',o.chep)+opCell('BRS',o.brs)+opCell('SWWI',o.swwi)
+        +'<div style="border:1px solid var(--border,#e2e2e2);border-radius:8px;padding:8px 14px;text-align:center;background:rgba(0,0,0,.03);"><div style="font-size:11px;color:var(--muted,#999);">รวม</div><div style="font-size:18px;font-weight:800;">'+t+'</div></div>'
+        +'</div>';
+    }
     var urls=(sub&&sub.pdf_urls&&sub.pdf_urls.length)?sub.pdf_urls:((sub&&sub.pdf_url)?[sub.pdf_url]:[]);
     var pdf = urls.length
       ? urls.map(function(u,i){return '<a class="btn-sm btn-sm-open" href="'+esc(u)+'" target="_blank" rel="noopener" style="margin:0 6px 6px 0;">📄 ไฟล์ '+(i+1)+'</a>';}).join('')
@@ -962,11 +1001,12 @@ function renderQueue(st){
         +'<div style="background:rgba(0,0,0,.04);border-radius:8px;padding:10px 12px;"><div style="font-size:11px;color:var(--muted,#777);">⏱ ระยะเวลารอคิว</div><div class="mono" style="font-size:19px;font-weight:700;">'+(waitSec!=null?fmtDur(waitSec):'—')+'</div></div>'
         +'<div style="background:rgba(184,137,61,.12);border-radius:8px;padding:10px 12px;"><div style="font-size:11px;color:var(--accent,#8a6526);">▶ ดำเนินการ (เดินสด)</div><div class="mono q-tick" data-since="'+esc(c.calledAt||'')+'" style="font-size:19px;font-weight:700;color:var(--accent,#8a6526);">—</div></div>'
       +'</div>'
+      +'<div style="font-size:12px;color:var(--muted,#777);margin-bottom:6px;">ยอดนับจริงรวม (พาเลท)</div>'
+      +provGrid(ac)
+      +'<div style="font-size:12px;color:var(--muted,#777);margin-bottom:6px;">ยอดในสายการผลิต</div>'
+      +provGrid(pr)
       +'<div style="font-size:12px;color:var(--muted,#777);margin-bottom:6px;">พาเลทที่ควบคุมนอกระบบ PCS <span style="color:var(--muted,#aaa);">— เทียบกับไฟล์หลักฐาน</span></div>'
-      +'<div style="display:grid;grid-template-columns:repeat(4,1fr) auto;gap:8px;align-items:stretch;margin-bottom:16px;">'
-        +opCell('LOSCAM',op.loscam)+opCell('CHEP',op.chep)+opCell('BRS',op.brs)+opCell('SWWI',op.swwi)
-        +'<div style="border:1px solid var(--border,#e2e2e2);border-radius:8px;padding:8px 14px;text-align:center;background:rgba(0,0,0,.03);"><div style="font-size:11px;color:var(--muted,#999);">รวม</div><div style="font-size:18px;font-weight:800;">'+opTotal+'</div></div>'
-      +'</div>'
+      +provGrid(op)
       + (function(){
           var of = (op&&op.files&&op.files.length)?op.files:[];
           if(!of.length) return (opTotal>0 ? '<div style="font-size:11px;color:#c0392b;margin:-6px 0 14px;">⚠ ไม่มีไฟล์หลักฐานนอกระบบแนบมา</div>' : '');
@@ -1045,6 +1085,8 @@ function renderSubTable(elId, list, isPending){
     if(isPending && c.status==='pending'){
       act = '<button class="btn-sm btn-sm-approve" onclick="openReview(\''+esc(c.count_id)+'\',\'approved\')">✅ อนุมัติ</button>'
           + '<button class="btn-sm btn-sm-reject" onclick="openReview(\''+esc(c.count_id)+'\',\'rejected\')">❌ ตีกลับ</button>';
+    } else if(c.status==='approved'){
+      act = '<button class="btn-sm" onclick="reopenSub(\''+esc(c.count_id)+'\',\''+esc(c.site_name)+'\')">🔓 เปิดแก้ไข</button>';
     } else if(c.review_comment){
       act = '<span style="font-size:11px;color:var(--muted);" title="'+esc(c.review_comment)+'">💬 '+esc(c.review_comment)+'</span>';
     } else {
