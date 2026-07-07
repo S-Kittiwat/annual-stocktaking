@@ -908,10 +908,21 @@ async function checkStatus() {
   var bk = d.book || {loscam:0,chep:0,brs:0,swwi:0,total:0};
   if (d.hasBook) {
     box.style.background = 'rgba(16,110,86,.1)'; box.style.color = 'var(--success,#0f6e56)';
-    box.innerHTML = '✅ <b>พร้อมเริ่มนับ</b>'
-      +'<div style="margin-top:6px;padding-top:6px;border-top:1px solid rgba(0,0,0,.08);font-size:12px;">'
-      +'ยอดระบบ (Book) รวม <b>'+bk.total+'</b> พาเลท<br>'
-      +'LOSCAM '+bk.loscam+' · CHEP '+bk.chep+' · BRS '+bk.brs+' · SWWI '+bk.swwi+'</div>';
+    box.innerHTML = '<div style="font-size:17px;font-weight:800;margin-bottom:10px;">✅ พร้อมเริ่มนับ</div>'
+      +'<div style="border-top:1px solid rgba(0,0,0,.08);padding-top:12px;">'
+        +'<div style="font-size:12px;opacity:.85;margin-bottom:2px;">ยอดระบบ (Book) รวม</div>'
+        +'<div style="font-size:34px;font-weight:800;line-height:1;margin-bottom:12px;">'
+          + Number(bk.total||0).toLocaleString('th-TH')
+          + ' <span style="font-size:14px;font-weight:600;opacity:.8;">พาเลท</span></div>'
+        +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">'
+        + [['LOSCAM',bk.loscam],['CHEP',bk.chep],['BRS',bk.brs],['SWWI',bk.swwi]].map(function(p){
+            return '<div style="background:rgba(255,255,255,.55);border:1px solid rgba(16,110,86,.25);border-radius:10px;padding:9px 10px;text-align:center;">'
+              +'<div style="font-size:11px;font-weight:700;opacity:.75;letter-spacing:.3px;">'+p[0]+'</div>'
+              +'<div style="font-size:22px;font-weight:800;line-height:1.15;">'+Number(p[1]||0).toLocaleString('th-TH')+'</div>'
+              +'</div>';
+          }).join('')
+        +'</div>'
+      +'</div>';
   } else {
     box.style.background = 'rgba(245,158,11,.12)'; box.style.color = '#a16207';
     box.innerHTML = '⚠ <b>ไม่พร้อมตรวจนับ</b><br>Admin ยังไม่ใส่ยอดระบบ — เช็คอินได้ แต่ยัง<b>เริ่มนับไม่ได้</b> จนกว่า Admin จะใส่ยอด (กด “ตรวจสอบสถานะ” อีกครั้งเมื่อพร้อม)';
