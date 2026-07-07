@@ -367,6 +367,30 @@ table.recon .grp{border-left:1px solid var(--border);}
 </div>
 
 <!-- ════ New round modal ════ -->
+<div class="overlay" id="kickbackModal">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="modal-title">↩ ตีกลับให้แก้ไข</div>
+      <button class="modal-close" onclick="closeOverlay('kickbackModal')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-note">ติ๊กขั้นที่ผู้นับต้อง <b>แก้ไข</b> — ผู้นับจะเห็นขั้นนั้นถูกไฮไลต์ในหน้านับ</div>
+      <label style="display:flex;align-items:center;gap:8px;padding:8px 0;cursor:pointer;"><input type="checkbox" class="kbStep" value="count_wood"> ขั้นที่ 2 — ยอดนับจริง (พาเลทไม้)</label>
+      <label style="display:flex;align-items:center;gap:8px;padding:8px 0;cursor:pointer;"><input type="checkbox" class="kbStep" value="count_plastic"> ขั้นที่ 2 — ยอดนับจริง (พลาสติก)</label>
+      <label style="display:flex;align-items:center;gap:8px;padding:8px 0;cursor:pointer;"><input type="checkbox" class="kbStep" value="offpcs"> ขั้นที่ 3 — พาเลทนอกระบบ PCS</label>
+      <label style="display:flex;align-items:center;gap:8px;padding:8px 0;cursor:pointer;"><input type="checkbox" class="kbStep" value="file"> ขั้นที่ 5 — ไฟล์ใบเซ็น</label>
+      <div class="field" style="gap:8px;margin-top:10px;">
+        <label>สิ่งที่ต้องแก้ไข (จำเป็น)</label>
+        <textarea class="input" id="kbNote" rows="3" placeholder="อธิบายสิ่งที่ต้องแก้ให้ผู้นับเข้าใจ..."></textarea>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-outline" onclick="closeOverlay('kickbackModal')" style="flex:1;">ยกเลิก</button>
+      <button class="btn" onclick="confirmKickback()" style="flex:2;background:#c0392b;color:#fff;">↩ ยืนยันตีกลับ</button>
+    </div>
+  </div>
+</div>
+
 <div class="overlay" id="roundModal">
   <div class="modal">
     <div class="modal-head">
@@ -1062,7 +1086,18 @@ function qAction(action, extra){
 }
 function qCallNext(){ qAction('callNext'); }
 function qRelease(){ if(!confirm('ยืนยัน “ปล่อยตัว” = อนุมัติ Site นี้?')) return; qAction('release'); }
-function qKickback(){ var note=prompt('เหตุผลที่ตีกลับให้แก้ไข:'); if(note===null) return; qAction('kickback',{note:note}); }
+function qKickback(){
+  document.querySelectorAll('.kbStep').forEach(function(c){ c.checked=false; });
+  var n=document.getElementById('kbNote'); if(n) n.value='';
+  openOverlay('kickbackModal');
+}
+function confirmKickback(){
+  var note=(document.getElementById('kbNote').value||'').trim();
+  if(!note){ toast('กรุณาระบุสิ่งที่ต้องแก้ไข','error'); return; }
+  var steps=[]; document.querySelectorAll('.kbStep:checked').forEach(function(c){ steps.push(c.value); });
+  closeOverlay('kickbackModal');
+  qAction('kickback',{note:note, reject_steps:steps});
+}
 function qOnCall(on){ qAction('setOnCall',{on:on}); }
 
 /* ── Render: Review ──────────────────────────────────── */
