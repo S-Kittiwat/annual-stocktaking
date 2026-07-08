@@ -1184,8 +1184,10 @@ function applyRejectHl(){
     { id:'stepOffCard', on:steps.indexOf('offpcs')>=0, label:'ต้องแก้ไข: พาเลทนอกระบบ PCS', body:'offBody' },
     { id:'step4Card',   on:steps.indexOf('file')>=0,   label:'ต้องแก้ไข: ไฟล์ใบเซ็น', body:null }
   ];
+  var firstCard=null;
   cfg.forEach(function(c){
     var card=document.getElementById(c.id); if(!card||!c.on) return;
+    if(!firstCard) firstCard=card;
     card.style.border='2px solid #dc2626';
     card.style.boxShadow='0 0 0 3px rgba(220,38,38,.08)';
     var head=card.querySelector('.card-head');
@@ -1198,7 +1200,22 @@ function applyRejectHl(){
     }
     if(c.body){ var bd=document.getElementById(c.body); if(bd) bd.style.display='block'; }
   });
+  // เด้งไปหาการ์ดแรกที่ต้องแก้ + กะพริบเรียกสายตา (ครั้งเดียวต่อการเปิด/รอบแก้)
+  if(firstCard){
+    var key=(siteSubmission.count_id||'')+'#'+(siteSubmission.revision||0)+'#'+steps.join(',');
+    if(_rejHlSeen!==key){
+      _rejHlSeen=key;
+      setTimeout(function(){
+        firstCard.scrollIntoView({behavior:'smooth',block:'center'});
+        firstCard.animate(
+          [{transform:'scale(1)'},{transform:'scale(1.015)'},{transform:'scale(1)'}],
+          {duration:600,iterations:2}
+        );
+      }, 200);
+    }
+  }
 }
+var _rejHlSeen=null;
 
 // ── Bind events ครั้งเดียวตอนสร้าง DOM — ไม่ผูกซ้ำเมื่อสลับ view ──
 function _chkIcon(done) {
