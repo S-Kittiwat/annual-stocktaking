@@ -1992,7 +1992,13 @@ function _thaiDocDate(raw) {
   var s = String(raw == null ? '' : raw).trim();
   if (!s) return '';
   var day, mon0, year, m;
-  if ((m = s.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/))) {            // ISO: yyyy-mm-dd
+  if (/^\d{4}-\d{2}-\d{2}T/.test(s)) {                                    // ISO datetime (มีเวลา/Z) → แปลงเป็นเวลาไทยก่อน กัน off-by-one
+    var dt = new Date(s);
+    if (isNaN(dt.getTime())) return s;
+    var parts = new Intl.DateTimeFormat('en-GB', { timeZone:'Asia/Bangkok', day:'2-digit', month:'2-digit', year:'numeric' }).formatToParts(dt);
+    var gp = {}; parts.forEach(function(p){ gp[p.type] = p.value; });
+    day = +gp.day; mon0 = +gp.month - 1; year = +gp.year;
+  } else if ((m = s.match(/^(\d{4})[-/.](\d{1,2})[-/.](\d{1,2})$/))) {     // ISO date-only: yyyy-mm-dd
     year = +m[1]; mon0 = +m[2] - 1; day = +m[3];
   } else if ((m = s.match(/^(\d{1,2})[-/.](\d{1,2})[-/.](\d{4})$/))) {     // dd/mm/yyyy
     day = +m[1]; mon0 = +m[2] - 1; year = +m[3];
@@ -2002,7 +2008,7 @@ function _thaiDocDate(raw) {
     return s;   // รูปแบบอื่น → คงเดิม ไม่เดามั่ว
   }
   if (mon0 < 0 || mon0 > 11 || !day || day > 31) return s;
-  if (year < 2400) year += 543;   // ค.ศ. → พ.ศ. (ตรง convention เดิมของเอกสาร)
+  if (year < 2400) year += 543;   // ค.ศ. → พ.ศ. (ปี พ.ศ. อยู่แล้ว เช่น 2571 คงเดิม)
   return ('0' + day).slice(-2) + ' ' + _TH_MONTHS[mon0] + ' ' + year;
 }
 
@@ -2117,11 +2123,11 @@ function printDoc() {
   // 2-column tables
   '.two-col{display:grid;grid-template-columns:1fr 1fr;gap:4mm;margin-bottom:3mm;}'+
   '.tbl-title{font-weight:700;text-align:center;font-size:10pt;margin-bottom:1mm;}'+
-  'table.dt{width:100%;border-collapse:collapse;font-size:9.5pt;}'+
+  'table.dt{width:100%;border-collapse:collapse;font-size:8.5pt;}'+
   'table.dt th{background:#d9d9d9;font-weight:700;text-align:center;border:1px solid #888;padding:1px 4px;white-space:nowrap;}'+
   'table.dt td{border:1px solid #aaa;padding:1px 4px;vertical-align:middle;}'+
   'table.dt td.num{text-align:right;white-space:nowrap;}'+
-  'table.dt td:first-child{width:58%;}'+
+  'table.dt td:first-child{width:62%;}'+
   '.section-label{font-weight:700;background:#ebebeb;border:1px solid #888 !important;padding:1px 4px !important;}'+
   // Signatures
   '.sig-wrap{margin-top:3mm;}'+
@@ -2158,9 +2164,7 @@ function printDoc() {
         '<td class="lbl" style="vertical-align:top;">เอกสารแนบ</td>'+
         '<td colspan="3">'+
           '1. ภาพการลงพื้นที่ตรวจนับ<br>'+
-          '2. รูปภาพหน้าแรกของระบบควบคุมพาเลท<br>'+
-          '3. รายงานสรุป ECD ยังไม่ได้รับระหว่างทาง<br>'+
-          '4. เอกสารแนบใบแจ้งหนี้'+
+          '2. รูปภาพหน้าแรกของระบบควบคุมพาเลท'+
         '</td>'+
       '</tr>'+
     '</tbody></table>'+
