@@ -556,6 +556,7 @@ function startPolling(){
   _pollTimer = setInterval(function(){
     if(_modalOpen) return;                 // don't clobber input mid-edit
     if(S.tab==='sites' && S.bookSite) return; // don't wipe book entry in progress
+    if(S.tab==='sites' && S._editSite) return; // อย่า re-render ทับตอนกำลังแก้ไข site แบบ inline
     loadData(false);
   }, POLL_MS);
 }
