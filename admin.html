@@ -367,6 +367,30 @@ table.recon .grp{border-left:1px solid var(--border);}
 </div>
 
 <!-- ════ New round modal ════ -->
+<div class="overlay" id="reopenModal">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="modal-title">🔓 เปิดให้แก้ไข</div>
+      <button class="modal-close" onclick="closeOverlay('reopenModal')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="modal-note" id="roSiteHint">เปิดใบที่อนุมัติแล้วให้ผู้นับแก้ — ติ๊กขั้นที่ต้อง <b>แก้ไข</b> ผู้นับจะเห็นไฮไลต์ + เด้งไปหาในหน้านับ</div>
+      <label style="display:flex;align-items:center;gap:8px;padding:8px 0;cursor:pointer;"><input type="checkbox" class="roStep" value="count_wood"> ขั้นที่ 2 — ยอดนับจริง (พาเลทไม้)</label>
+      <label style="display:flex;align-items:center;gap:8px;padding:8px 0;cursor:pointer;"><input type="checkbox" class="roStep" value="count_plastic"> ขั้นที่ 2 — ยอดนับจริง (พลาสติก)</label>
+      <label style="display:flex;align-items:center;gap:8px;padding:8px 0;cursor:pointer;"><input type="checkbox" class="roStep" value="offpcs"> ขั้นที่ 3 — พาเลทนอกระบบ PCS</label>
+      <label style="display:flex;align-items:center;gap:8px;padding:8px 0;cursor:pointer;"><input type="checkbox" class="roStep" value="file"> ขั้นที่ 5 — ไฟล์ใบเซ็น</label>
+      <div class="field" style="gap:8px;margin-top:10px;">
+        <label>เหตุผล / สิ่งที่ต้องแก้ไข (จำเป็น)</label>
+        <textarea class="input" id="roNote" rows="3" placeholder="อธิบายให้ผู้นับเข้าใจว่าต้องแก้อะไร..."></textarea>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-outline" onclick="closeOverlay('reopenModal')" style="flex:1;">ยกเลิก</button>
+      <button class="btn" onclick="confirmReopen()" style="flex:2;background:#2563eb;color:#fff;">🔓 ยืนยันเปิดแก้ไข</button>
+    </div>
+  </div>
+</div>
+
 <div class="overlay" id="kickbackModal">
   <div class="modal">
     <div class="modal-head">
@@ -1017,10 +1041,23 @@ function cancelEditAgent(){
   var b=document.getElementById('btnAddAgent'); if(b) b.textContent='+ เพิ่ม';
   var c=document.getElementById('btnCancelEdit'); if(c) c.style.display='none';
 }
+var _reopenCtx=null;
 function reopenSub(cid, site){
-  var reason=prompt('เปิดให้แก้ไข "'+site+'" (ที่อนุมัติแล้ว)\nระบุเหตุผล — ผู้นับจะเห็น:');
-  if(reason===null) return;
-  post({action:'reopenSubmission', count_id:cid, reason:reason}).then(function(d){
+  _reopenCtx={cid:cid, site:site};
+  document.querySelectorAll('.roStep').forEach(function(c){ c.checked=false; });
+  var n=document.getElementById('roNote'); if(n) n.value='';
+  var h=document.getElementById('roSiteHint');
+  if(h) h.innerHTML='เปิดใบ <b>'+esc(site)+'</b> (ที่อนุมัติแล้ว) ให้ผู้นับแก้ — ติ๊กขั้นที่ต้อง <b>แก้ไข</b> ผู้นับจะเห็นไฮไลต์ + เด้งไปหาในหน้านับ';
+  openOverlay('reopenModal');
+}
+function confirmReopen(){
+  if(!_reopenCtx) return;
+  var note=(document.getElementById('roNote').value||'').trim();
+  if(!note){ toast('กรุณาระบุเหตุผล/สิ่งที่ต้องแก้ไข','error'); return; }
+  var steps=[]; document.querySelectorAll('.roStep:checked').forEach(function(c){ steps.push(c.value); });
+  var cid=_reopenCtx.cid; _reopenCtx=null;
+  closeOverlay('reopenModal');
+  post({action:'reopenSubmission', count_id:cid, reason:note, reject_steps:steps}).then(function(d){
     if(d && d.status==='error'){ toast(d.message||'เปิดแก้ไม่สำเร็จ','error'); return; }
     toast('🔓 เปิดให้แก้ไขแล้ว — ผู้นับแก้แล้วส่งใหม่ได้','success'); loadData(false);
   }).catch(function(){ toast('เปิดแก้ไม่สำเร็จ','error'); });
