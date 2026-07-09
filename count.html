@@ -666,9 +666,11 @@ function _renderLockScreen(content, status) {
 
 // ── หน้ารอคิว: poll สถานะคิวของ Site เป็นระยะ ──
 var _sitePollTimer = null;
+var _sitePrevQState = null;   // สถานะคิวรอบก่อน (จับตอนตั๋วหลุดคิว)
 function stopSitePoll(){ if(_sitePollTimer){ clearInterval(_sitePollTimer); _sitePollTimer=null; } }
 function startSitePoll(){
   stopSitePoll();
+  _sitePrevQState = null;
   pollSiteQueue();
   _sitePollTimer = setInterval(pollSiteQueue, 10000);
 }
@@ -682,6 +684,7 @@ async function pollSiteQueue(){
     d = await res.json();
   } catch(e) {}
   if(!d || d.status!=='ok'){ return; }
+  var prevQ=_sitePrevQState; _sitePrevQState=d.queue_state;   // จำสถานะคิวก่อนหน้า เพื่อจับตอนตั๋วหลุดคิว
   // ถ้าสถานะใบเปลี่ยน (อนุมัติ/ตีกลับ) → รีเฟรชหน้า
   if(d.sub_status==='approved' || d.sub_status==='rejected' || d.sub_status==='reopened'){
     stopSitePoll(); if(session&&session.site) fetchBookBalance(session.site); return;
@@ -696,6 +699,11 @@ async function pollSiteQueue(){
     box.style.background='var(--surface)'; box.style.borderColor='var(--border)'; box.style.color='var(--text)';
     box.innerHTML = '⏳ อยู่ในคิว — ลำดับที่ <b style="font-size:18px;color:#92400e;">'+d.position+'</b> จาก '+d.total+' คิว<br><span style="font-size:12px;color:var(--muted);">โปรดรอเจ้าหน้าที่เรียกตรวจ</span>';
   } else {
+    // queue_state='none' → ตั๋วไม่อยู่ในคิวแล้ว
+    // ถ้าเพิ่งหลุดจากสถานะ waiting/checking (เช่น ถูกตีกลับ/อนุมัติ) → อ่านสถานะใบจริงจาก server แล้วเปลี่ยนหน้า (กันค้าง)
+    if(prevQ==='waiting' || prevQ==='checking'){
+      stopSitePoll(); if(session&&session.site) fetchBookBalance(session.site); return;
+    }
     box.style.background='var(--surface)'; box.style.borderColor='var(--border)'; box.style.color='var(--muted)';
     box.innerHTML = 'รอ Admin เริ่มตรวจ…';
   }
@@ -2493,10 +2501,11 @@ async function submitCount() {
 
     var newId = data.count_id || tmpId;
     var revTxt = (data.revision && data.revision > 1) ? ' (ฉบับแก้ไขครั้งที่ '+data.revision+')' : '';
-    // ตั้งสถานะเป็น pending ทันที → ปิด overlay แล้วจะเข้าหน้าจอล็อก "รออนุมัติ" (ข้อ 5)
+    // ตั้งสถานะเป็น pending → เข้าหน้าจอล็อก "รอ Admin ตรวจสอบ/อนุมัติ" ตรง ๆ (ไม่มี pop-up กัน user เข้าใจผิดว่าจบ process)
     siteSubmission = { count_id: newId, revision: data.revision || 1, status: 'pending', review_comment: '' };
-    document.getElementById('successId').textContent = newId + revTxt;
-    document.getElementById('successOverlay').classList.add('open');
+    _printed = false; // ถ้าถูกตีกลับแล้วส่งใหม่ ต้องพิมพ์เอกสารใหม่ (เลขฉบับแก้ไข)
+    showToast('📤 ส่งแล้ว ('+newId+revTxt+') — รอ Admin ตรวจสอบ', 'success');
+    render(); // siteSubmission = pending → หน้าจอล็อกรออนุมัติ
   } catch(err) {
     showToast('ส่งไม่สำเร็จ: '+err.message, 'error');
     btn.disabled = false;
