@@ -428,6 +428,14 @@ function loadProgress() {
   } catch(e) { locations = []; }
 }
 
+// ล้าง session + งานค้างที่เป็นของรอบเก่า (กันยอดข้ามรอบปนกัน)
+function _clearStaleSession(msg) {
+  try { localStorage.removeItem('stockCountSession'); localStorage.removeItem('stockCountLocations'); } catch(e) {}
+  session = null; locations = []; siteSubmission = null; files = [];
+  try { stopSitePoll(); } catch(e) {}
+  if (msg) showToast(msg, 'info');
+}
+
 // ── Restore จาก server ตอน reopen/rejected (server = แหล่งข้อมูลหลัก) ──
 var _serverRestoredKey = null;   // กันเติมซ้ำทับ edit ที่ผู้ใช้กำลังแก้
 function _n2(x){ return Number(x) || 0; }
@@ -495,6 +503,10 @@ function loadConfig() {
     .then(function(r){ return r.json(); })
     .then(function(data) {
       roundInfo = data.round || { round_name:'นับสต็อก', is_open:true };
+      // ── กันข้อมูลข้ามรอบ: ถ้า session/งานค้างเป็นของรอบก่อน → ล้างทิ้ง เริ่มใหม่ ──
+      if (session && roundInfo && roundInfo.round_id && session.round_id !== roundInfo.round_id) {
+        _clearStaleSession('เปิดรอบนับใหม่แล้ว — โปรดเลือก Site และเริ่มนับใหม่ (ข้อมูลค้างรอบก่อนถูกล้าง)');
+      }
       siteList  = data.sites     || [];
       siteObjs  = data.site_objs || siteList.map(function(n){ return { site_id:'', site_name:n }; });
       locList   = data.locations|| [];
@@ -1032,6 +1044,7 @@ function confirmStep1() {
     site_id : _siteIdByName(site),
     name  : name,
     round : roundInfo.round_name,
+    round_id : roundInfo.round_id,   // ผูกรอบไว้ กันข้อมูลค้างข้ามรอบ
     names : {
       pallet     : name,
       admin      : (document.getElementById('inputAdmin')      || {value:''}).value.trim(),
