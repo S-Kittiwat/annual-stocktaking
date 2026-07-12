@@ -445,6 +445,13 @@ table.recon .grp{border-left:1px solid var(--border);}
       </div>
       <div class="modal-note">แตะที่ภาพเพื่อเลือก</div>
       <div id="favPickBody"><div class="lb-empty">กำลังโหลด…</div></div>
+      <div class="field" style="gap:8px;margin-top:12px;border-top:1px solid var(--border);padding-top:12px;">
+        <label>หรือวางลิงก์รูปเอง (Google Drive / URL)</label>
+        <div style="display:flex;gap:8px;">
+          <input class="input" id="favUrl" placeholder="https://drive.google.com/..." style="flex:1;">
+          <button class="btn-sm" onclick="pickFavManual()">ใช้ลิงก์นี้</button>
+        </div>
+      </div>
     </div>
     <div class="modal-foot">
       <button class="btn btn-outline" onclick="closeOverlay('favModal')" style="flex:1;">ยกเลิก</button>
@@ -1558,6 +1565,7 @@ function _lbBoard(o){
 function renderStats(d){
   var s = d.summary || {}, b = d.boards || {};
   _lbSites = d.sites || [];
+  _lbPool = d.photo_pool || [];
   var pct = s.total_sites ? Math.round((s.approved||0)/s.total_sites*100) : 0;
   var h = '';
   h += '<div class="lb-kpis">'
@@ -1629,10 +1637,14 @@ function renderStats(d){
         + '<div class="lb-val good">' + _lbNf(s.submitted) + '<small>คลัง</small></div></div>'
     + '</div></div>';
 
+  h += '<div style="text-align:center;margin-top:18px;">'
+    + '<button class="btn-sm" onclick="toggleStatsOpen(false)" style="background:#e5e7eb;border:1px solid #cbd5e1;color:#334155;">🔒 ปิดสรุปผล</button></div>';
+
   document.getElementById('statsBody').innerHTML = h;
 }
 /* ── 📷 ภาพเช็คอินยอดเยี่ยม (Admin's Pick) ── */
 var _lbSites = [];   // เก็บ rows ไว้ให้ตัวเลือกภาพ
+var _lbPool = [];    // รูปทั้งหมดที่เลือกเป็นภาพยอดเยี่ยมได้
 function _lbImg(u){
   var s = String(u||'');
   if(!s) return '';
@@ -1647,8 +1659,8 @@ function _lbFav(d){
     h += '<div class="lb-fav-wrap"><img class="lb-fav-img" src="' + esc(_lbImg(f.photo)) + '" alt="ภาพเช็คอิน"></div>'
       + '<div class="lb-rank p1" style="margin-top:10px;">'
         + '<div class="lb-medal">🏅</div>'
-        + '<div class="lb-who"><div class="n">' + esc(f.counter || f.site) + '</div>'
-          + '<div class="m">' + esc(f.site) + (f.checkin_hhmm ? ' · เช็คอิน ' + esc(f.checkin_hhmm) + ' น.' : '') + '</div></div>'
+        + '<div class="lb-who"><div class="n">' + esc(f.counter || f.site || 'ภาพยอดเยี่ยม') + '</div>'
+          + '<div class="m">' + esc(f.site || '—') + (f.checkin_hhmm ? ' · เช็คอิน ' + esc(f.checkin_hhmm) + ' น.' : '') + '</div></div>'
         + '<div class="lb-val gold">📷</div></div>';
     if(f.caption) h += '<div class="lb-hint" style="margin-top:8px;font-style:italic;">“' + esc(f.caption) + '”</div>';
   } else {
@@ -1661,33 +1673,57 @@ function _lbFav(d){
   return h;
 }
 function openFavPicker(){
-  var withPhoto = _lbSites.filter(function(x){ return x.checkin_photo; });
   var el = document.getElementById('favPickBody');
-  if(!withPhoto.length){
-    el.innerHTML = '<div class="lb-empty">ยังไม่มี Site ไหนอัปรูปเช็คอินในรอบนี้</div>';
+  var pool = _lbPool || [];
+  if(!pool.length){
+    el.innerHTML = '<div class="lb-empty">ยังไม่พบรูปในรอบนี้ — ใช้ช่อง “วางลิงก์รูปเอง” ด้านล่างได้เลย</div>';
   } else {
-    el.innerHTML = '<div class="fav-grid">' + withPhoto.map(function(x){
-      return '<div class="fav-pick" onclick="pickFav(\'' + esc(x.site_id) + '\')">'
-        + '<img src="' + esc(_lbImg(x.checkin_photo)) + '" alt="">'
-        + '<div class="fav-cap"><b>' + esc(x.counter || x.site) + '</b><br>' + esc(x.site) + '</div>'
+    el.innerHTML = '<div class="fav-grid">' + pool.map(function(x, i){
+      return '<div class="fav-pick" onclick="pickFav(' + i + ')">'
+        + '<img src="' + esc(_lbImg(x.url)) + '" alt="" loading="lazy">'
+        + '<div class="fav-cap"><b>' + esc(x.counter || x.site) + '</b><br>' + esc(x.site) + ' · ' + esc(x.kind||'') + '</div>'
         + '</div>';
     }).join('') + '</div>';
   }
   openOverlay('favModal');
 }
-function pickFav(sid){
+function pickFav(i){
+  var x = (_lbPool||[])[i]; if(!x) return;
+  _favSave({ site_id:x.site_id, url:x.url });
+}
+function pickFavManual(){
+  var u = (document.getElementById('favUrl').value||'').trim();
+  if(!u){ toast('วางลิงก์รูปก่อนนะ','error'); return; }
+  _favSave({ site_id:'', url:u });
+}
+function _favSave(o){
   var cap = (document.getElementById('favCaption').value||'').trim();
   closeOverlay('favModal');
-  post({ action:'setFavPhoto', site_id:sid, caption:cap }).then(function(r){
+  post({ action:'setFavPhoto', site_id:o.site_id||'', url:o.url||'', caption:cap }).then(function(r){
     if(r && r.status==='error'){ toast(r.message||'บันทึกไม่สำเร็จ','error'); return; }
     toast('🏅 บันทึกภาพยอดเยี่ยมแล้ว','success');
     loadStats();
   }).catch(function(){ toast('บันทึกไม่สำเร็จ','error'); });
 }
 function clearFav(){
-  post({ action:'setFavPhoto', site_id:'', caption:'' }).then(function(){
+  post({ action:'setFavPhoto', site_id:'', url:'', caption:'' }).then(function(){
     toast('ล้างการเลือกแล้ว','success'); loadStats();
   }).catch(function(){ toast('ทำรายการไม่สำเร็จ','error'); });
+}
+function toggleStatsOpen(on){
+  post({ action:'setStatsOpen', open: on ? 1 : 0 }).then(function(r){
+    if(r && r.status==='error'){ toast(r.message||'ทำรายการไม่สำเร็จ','error'); return; }
+    toast(on ? '🏆 เปิดสรุปผลแล้ว' : '🔒 ปิดสรุปผลแล้ว', 'success');
+    loadStats();
+  }).catch(function(){ toast('ทำรายการไม่สำเร็จ','error'); });
+}
+function _lbClosed(){
+  return '<div class="lb-board" style="text-align:center;padding:30px 18px;">'
+    + '<div style="font-size:40px;">🔒</div>'
+    + '<h3 style="justify-content:center;margin-top:8px;">ยังไม่เปิดสรุปผล</h3>'
+    + '<div class="lb-hint" style="text-align:center;">หอเกียรติยศจะประมวลผลเมื่อกดเปิด — เหมาะกับตอนจบรอบการนับ</div>'
+    + '<button class="btn btn-success" onclick="toggleStatsOpen(true)" style="margin-top:12px;">🏆 เปิดสรุปผลรอบนี้</button>'
+    + '</div>';
 }
 
 function loadStats(){
@@ -1703,6 +1739,7 @@ function loadStats(){
           '<div class="lb-board"><div class="lb-empty">ยังไม่มีรอบนับที่เปิดอยู่ 🙂<br>เปิดรอบใหม่แล้วกลับมาดูได้เลย</div></div>';
         return;
       }
+      if(d.enabled === false){ document.getElementById('statsBody').innerHTML = _lbClosed(); return; }
       renderStats(d);
     })
     .catch(function(){
