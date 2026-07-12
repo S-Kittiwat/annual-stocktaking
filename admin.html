@@ -676,11 +676,37 @@ function systemOf(site_id, prov){
   if(!b || !b[prov]) return 0;
   return (b[prov].onhand||0) + (b[prov].transit_out||0);
 }
-// Actual = ยอดที่นับได้จริงต่อ provider (count.html ส่งมาในฟิลด์ actual{} ตอน submit)
+// ── สูตรกระทบยอด (เฉพาะหน้าภาพรวมนี้เท่านั้น — ไม่กระทบเอกสารสรุปหรือข้อมูลในชีต) ──
+// Actual ไม้      = RFI + TBR + BER + TBC + TBS + ใช้วางสินค้า + สายการผลิต + นอกระบบ PCS + ระหว่างโอนออก
+// Actual พลาสติก  = RFI + TBS + ใช้วางสินค้า + สายการผลิต + ชำรุด รออนุมัติ BRS-900 + นอกระบบ PCS + ระหว่างโอนออก
+// System (ทั้งคู่) = คงเหลือ + ระหว่างโอนออก
+var ACTUAL_STATUS = {
+  wood: ['พาเลทเปล่า RFI','พาเลทเปล่า TBR','พาเลทเปล่า BER','พาเลทเปล่า TBC','พาเลทเปล่า TBS',
+         'พาเลทที่ใช้วางสินค้า','พาเลทที่ใช้ในสายการผลิต'],
+  plastic: ['พาเลทเปล่า RFI','พาเลทเปล่า TBS','พาเลทที่ใช้วางสินค้า','พาเลทที่ใช้ในสายการผลิต',
+            'พาเลทชำรุด รออนุมัติโอนเข้า BRS-900']
+};
+var PROV_KIND = { loscam:'wood', chep:'wood', brs:'plastic', swwi:'plastic' };
+
 function actualOf(site_id, prov){
   var s = latestSub(site_id);
-  if(!s || !s.actual || s.actual[prov]==null) return null;
-  return s.actual[prov];
+  if(!s) return null;
+  var kind = PROV_KIND[prov] || 'wood';
+  var keep = ACTUAL_STATUS[kind];
+  var locs = s.locations;
+  if(!Array.isArray(locs) || !locs.length){
+    // ไม่มี locations (ใบเก่าก่อนเก็บ locations_json) → คืน null ให้แสดงเป็นช่องว่าง แทนที่จะโชว์เลขผิดสูตร
+    return (s.actual && s.actual[prov]!=null) ? null : null;
+  }
+  var sum = 0;
+  locs.forEach(function(L){
+    var grp = (L && L[kind]) ? L[kind][prov] : null;   // L.wood.loscam / L.plastic.brs
+    if(!grp) return;
+    keep.forEach(function(k){ sum += Number(grp[k]||0); });
+  });
+  sum += Number((s.off_pcs && s.off_pcs[prov]) || 0);          // + พาเลทที่ควบคุมนอกระบบ PCS (ระดับ Site)
+  sum += Number(((S.books[site_id]||{})[prov]||{}).transit_out || 0);  // + ระหว่างโอนออก (จาก Book)
+  return sum;
 }
 function diffCell(d, isSum){
   var cls = d<0 ? 'diff-neg' : d>0 ? 'diff-pos' : 'diff-zero';
