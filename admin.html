@@ -231,6 +231,14 @@ table.recon .grp{border-left:1px solid var(--border);}
 .lb-val.good{color:var(--success);} .lb-val.purple{color:#a78bfa;}
 .lb-sec{margin:20px 2px 10px;font-size:11.5px;font-weight:800;letter-spacing:1px;color:var(--muted2);text-transform:uppercase;}
 .lb-empty{color:var(--muted2);font-size:12.5px;text-align:center;padding:12px 0 14px;}
+.lb-fav-wrap{border-radius:14px;overflow:hidden;border:1px solid var(--border);background:var(--surface2);}
+.lb-fav-img{display:block;width:100%;max-height:340px;object-fit:cover;}
+.fav-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:10px;max-height:52vh;overflow:auto;}
+.fav-pick{border:2px solid var(--border);border-radius:12px;overflow:hidden;cursor:pointer;background:var(--surface2);transition:border-color .15s;}
+.fav-pick:hover{border-color:var(--warn);}
+.fav-pick img{display:block;width:100%;height:110px;object-fit:cover;}
+.fav-cap{padding:6px 8px;font-size:11.5px;line-height:1.35;color:var(--muted);}
+.fav-cap b{color:var(--text);}
 </style>
 </head>
 <body>
@@ -420,6 +428,26 @@ table.recon .grp{border-left:1px solid var(--border);}
     <div class="modal-foot">
       <button class="btn btn-outline" onclick="closeOverlay('reopenModal')" style="flex:1;">ยกเลิก</button>
       <button class="btn" onclick="confirmReopen()" style="flex:2;background:#2563eb;color:#fff;">🔓 ยืนยันเปิดแก้ไข</button>
+    </div>
+  </div>
+</div>
+
+<div class="overlay" id="favModal">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="modal-title">🏅 เลือกภาพเช็คอินยอดเยี่ยม</div>
+      <button class="modal-close" onclick="closeOverlay('favModal')">×</button>
+    </div>
+    <div class="modal-body">
+      <div class="field" style="gap:8px;margin-bottom:10px;">
+        <label>คำชม / แคปชัน (ไม่ใส่ก็ได้)</label>
+        <input class="input" id="favCaption" placeholder="เช่น จัดโซนเป็นระเบียบมาก!">
+      </div>
+      <div class="modal-note">แตะที่ภาพเพื่อเลือก</div>
+      <div id="favPickBody"><div class="lb-empty">กำลังโหลด…</div></div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-outline" onclick="closeOverlay('favModal')" style="flex:1;">ยกเลิก</button>
     </div>
   </div>
 </div>
@@ -1529,6 +1557,7 @@ function _lbBoard(o){
 }
 function renderStats(d){
   var s = d.summary || {}, b = d.boards || {};
+  _lbSites = d.sites || [];
   var pct = s.total_sites ? Math.round((s.approved||0)/s.total_sites*100) : 0;
   var h = '';
   h += '<div class="lb-kpis">'
@@ -1541,39 +1570,36 @@ function renderStats(d){
     + '</div>';
 
   h += '<div class="lb-sec">🏭 ทีมตรวจนับ</div><div class="lb-grid">';
-  h += _lbBoard({ icon:'🎯', title:'ผ่านฉลุย — ส่งครั้งเดียวผ่าน!', gold:true, cls:'gold',
-    hint:'ส่งรอบเดียว อนุมัติเลย ไม่โดนตีกลับ', items:b.oneshot,
-    name:function(x){ return x.site; },
-    meta:function(x){ return (x.counter||'—') + ' · ' + _lbNf(x.counted) + ' พาเลท'; },
-    value:function(x){ return { main:'✨', sub: x.count_min!=null ? _lbMins(x.count_min) : 'ผ่านเลย' }; } });
-  h += _lbBoard({ icon:'⚡', title:'นับไวที่สุด', cls:'blue',
-    hint:'เวลาตั้งแต่ถึงหน้างานจนส่งผล · มาสาย = เริ่มจับเวลาตั้งแต่เวลานัด (บวกเวลาสายด้วย)', items:b.fastest,
-    name:function(x){ return x.site; },
+  h += _lbBoard({ icon:'⏰', title:'ตรงต่อเวลาที่สุด', gold:true, cls:'gold',
+    hint:'ถึงหน้างานก่อนเวลานัดหมาย — มาก่อนได้เปรียบ!', items:b.punctual,
+    name:function(x){ return x.counter || x.site; },
+    meta:function(x){ return x.site + ' · เช็คอิน ' + (x.checkin_hhmm||'—') + ' น.'; },
+    value:function(x){ return { main:(x.early_min>0 ? 'ก่อน ' + _lbMins(x.early_min) : (x.early_min===0 ? 'ตรงเป๊ะ' : 'สาย ' + _lbMins(-x.early_min))) }; } });
+  h += _lbBoard({ icon:'🏁', title:'ปิดจ๊อบไวสุด', cls:'purple',
+    hint:'ตั้งแต่เช็คอินจนได้รับอนุมัติ · มาสาย = เริ่มจับเวลาตั้งแต่เวลานัด', items:b.closer,
+    name:function(x){ return x.counter || x.site; },
     meta:function(x){
-      var m = (x.counter||'—') + ' · ' + _lbNf(x.locations) + ' โซน';
+      var m = x.site + (x.revision>1 ? ' · แก้ ' + (x.revision-1) + ' ครั้ง' : ' · ผ่านรวดเดียว');
       if(x.late_min > 0) m += ' · ⏰ สาย ' + _lbMins(x.late_min);
       return m;
     },
-    value:function(x){
-      return { main:_lbMins(x.count_min),
-               sub: x.late_min > 0 ? ('นับจริง ' + _lbMins(x.count_raw_min)) : '' };
-    } });
-  h += _lbBoard({ icon:'⏰', title:'ตรงต่อเวลาที่สุด', cls:'good',
-    hint:'ถึงหน้างานก่อนเวลานัดหมาย', items:b.punctual,
-    name:function(x){ return x.site; },
-    meta:function(x){ return 'เช็คอิน ' + (x.checkin_hhmm||'—') + ' น.'; },
-    value:function(x){ return { main:(x.early_min>0 ? 'ก่อน ' + _lbMins(x.early_min) : (x.early_min===0 ? 'ตรงเป๊ะ' : 'สาย ' + _lbMins(-x.early_min))) }; } });
-  h += _lbBoard({ icon:'🎪', title:'แม่นยำที่สุด', cls:'good',
-    hint:'ยอดนับใกล้เคียงยอดระบบมากที่สุด', items:b.accurate,
-    name:function(x){ return x.site; },
-    meta:function(x){ return (x.counter||'—') + ' · ' + _lbNf(x.counted) + ' พาเลท'; },
-    value:function(x){ return { main:(x.variance===0 ? '💯 เป๊ะ!' : '±' + _lbNf(x.variance)), sub:'ส่วนต่าง' }; } });
-  h += _lbBoard({ icon:'🏁', title:'ปิดจ๊อบไวสุด', cls:'purple',
-    hint:'ตั้งแต่เช็คอินจนได้รับอนุมัติ', items:b.closer,
-    name:function(x){ return x.site; },
-    meta:function(x){ return (x.counter||'—') + (x.revision>1 ? ' · แก้ ' + (x.revision-1) + ' ครั้ง' : ' · ผ่านรวดเดียว'); },
     value:function(x){ return { main:_lbMins(x.close_min) }; } });
+  h += _lbBoard({ icon:'📸', title:'นักถ่ายภาพ — หลักฐานแน่นสุด', cls:'blue',
+    hint:'รูป/ไฟล์หลักฐานที่ส่งมามากที่สุด (รูปโซน + หน้างาน + หลักฐาน + เอกสารเซ็น)', items:b.shutter,
+    name:function(x){ return x.counter || x.site; },
+    meta:function(x){
+      var p = [];
+      if(x.ph_loc) p.push('โซน ' + x.ph_loc);
+      if(x.ph_checkin) p.push('หน้างาน ' + x.ph_checkin);
+      if(x.ph_evid) p.push('หลักฐาน ' + x.ph_evid);
+      if(x.ph_doc) p.push('เอกสาร ' + x.ph_doc);
+      return x.site + (p.length ? ' · ' + p.join(' + ') : '');
+    },
+    value:function(x){ return { main:_lbNf(x.photos), sub:'ไฟล์' }; } });
   h += '</div>';
+
+  h += '<div class="lb-sec">📷 ภาพเช็คอินยอดเยี่ยม (Admin\'s Pick)</div>';
+  h += _lbFav(d);
 
   h += '<div class="lb-sec">👮 ทีมเจ้าหน้าที่</div><div class="lb-grid">';
   h += _lbBoard({ icon:'💪', title:'รับคิวเยอะสุด', cls:'gold',
@@ -1605,6 +1631,65 @@ function renderStats(d){
 
   document.getElementById('statsBody').innerHTML = h;
 }
+/* ── 📷 ภาพเช็คอินยอดเยี่ยม (Admin's Pick) ── */
+var _lbSites = [];   // เก็บ rows ไว้ให้ตัวเลือกภาพ
+function _lbImg(u){
+  var s = String(u||'');
+  if(!s) return '';
+  var m = s.match(/[-\w]{25,}/);                       // Drive file id → thumbnail
+  if(/drive\.google\.com/.test(s) && m) return 'https://drive.google.com/thumbnail?id=' + m[0] + '&sz=w800';
+  return s;
+}
+function _lbFav(d){
+  var f = d.fav;
+  var h = '<div class="lb-board gold">';
+  if(f && f.photo){
+    h += '<div class="lb-fav-wrap"><img class="lb-fav-img" src="' + esc(_lbImg(f.photo)) + '" alt="ภาพเช็คอิน"></div>'
+      + '<div class="lb-rank p1" style="margin-top:10px;">'
+        + '<div class="lb-medal">🏅</div>'
+        + '<div class="lb-who"><div class="n">' + esc(f.counter || f.site) + '</div>'
+          + '<div class="m">' + esc(f.site) + (f.checkin_hhmm ? ' · เช็คอิน ' + esc(f.checkin_hhmm) + ' น.' : '') + '</div></div>'
+        + '<div class="lb-val gold">📷</div></div>';
+    if(f.caption) h += '<div class="lb-hint" style="margin-top:8px;font-style:italic;">“' + esc(f.caption) + '”</div>';
+  } else {
+    h += '<div class="lb-empty">ยังไม่ได้เลือกภาพยอดเยี่ยม — เลือกภาพที่ถูกใจได้เลย 😊</div>';
+  }
+  h += '<div style="display:flex;gap:8px;margin-top:8px;">'
+    + '<button class="btn-sm" onclick="openFavPicker()">🏅 ' + (f && f.photo ? 'เปลี่ยนภาพ' : 'เลือกภาพยอดเยี่ยม') + '</button>'
+    + (f && f.photo ? '<button class="btn-sm" onclick="clearFav()" style="background:#e5e7eb;border:1px solid #cbd5e1;color:#334155;">✕ ล้าง</button>' : '')
+    + '</div></div>';
+  return h;
+}
+function openFavPicker(){
+  var withPhoto = _lbSites.filter(function(x){ return x.checkin_photo; });
+  var el = document.getElementById('favPickBody');
+  if(!withPhoto.length){
+    el.innerHTML = '<div class="lb-empty">ยังไม่มี Site ไหนอัปรูปเช็คอินในรอบนี้</div>';
+  } else {
+    el.innerHTML = '<div class="fav-grid">' + withPhoto.map(function(x){
+      return '<div class="fav-pick" onclick="pickFav(\'' + esc(x.site_id) + '\')">'
+        + '<img src="' + esc(_lbImg(x.checkin_photo)) + '" alt="">'
+        + '<div class="fav-cap"><b>' + esc(x.counter || x.site) + '</b><br>' + esc(x.site) + '</div>'
+        + '</div>';
+    }).join('') + '</div>';
+  }
+  openOverlay('favModal');
+}
+function pickFav(sid){
+  var cap = (document.getElementById('favCaption').value||'').trim();
+  closeOverlay('favModal');
+  post({ action:'setFavPhoto', site_id:sid, caption:cap }).then(function(r){
+    if(r && r.status==='error'){ toast(r.message||'บันทึกไม่สำเร็จ','error'); return; }
+    toast('🏅 บันทึกภาพยอดเยี่ยมแล้ว','success');
+    loadStats();
+  }).catch(function(){ toast('บันทึกไม่สำเร็จ','error'); });
+}
+function clearFav(){
+  post({ action:'setFavPhoto', site_id:'', caption:'' }).then(function(){
+    toast('ล้างการเลือกแล้ว','success'); loadStats();
+  }).catch(function(){ toast('ทำรายการไม่สำเร็จ','error'); });
+}
+
 function loadStats(){
   if(_lbLoading) return;
   _lbLoading = true;
