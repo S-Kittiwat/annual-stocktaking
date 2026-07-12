@@ -205,6 +205,32 @@ table.recon .grp{border-left:1px solid var(--border);}
   .round-actions{width:100%;}
   .round-actions .btn{flex:1;}
 }
+/* ── Leaderboard ── */
+.lb-kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:18px;}
+.lb-kpi{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:12px 13px;}
+.lb-kpi .v{font-size:24px;font-weight:800;line-height:1.15;}
+.lb-kpi .l{font-size:11.5px;color:var(--muted);margin-top:3px;}
+.lb-bar{height:8px;border-radius:99px;background:var(--surface3);overflow:hidden;margin-top:9px;}
+.lb-bar > i{display:block;height:100%;background:linear-gradient(90deg,var(--success),var(--accent));border-radius:99px;}
+.lb-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:12px;}
+.lb-board{background:var(--surface);border:1px solid var(--border);border-radius:16px;padding:14px 13px 8px;}
+.lb-board.gold{border-color:rgba(251,191,36,.4);background:linear-gradient(160deg,rgba(251,191,36,.07),transparent 55%),var(--surface);}
+.lb-board h3{margin:0;font-size:15px;display:flex;align-items:center;gap:7px;}
+.lb-hint{color:var(--muted2);font-size:11.5px;margin:3px 0 11px;}
+.lb-rank{display:flex;align-items:center;gap:10px;padding:9px 8px;border-radius:11px;margin-bottom:6px;background:var(--surface2);border:1px solid transparent;}
+.lb-rank.p1{background:linear-gradient(100deg,rgba(251,191,36,.16),var(--surface2) 65%);border-color:rgba(251,191,36,.35);}
+.lb-rank.p2{background:linear-gradient(100deg,rgba(203,213,225,.10),var(--surface2) 65%);}
+.lb-rank.p3{background:linear-gradient(100deg,rgba(217,138,74,.10),var(--surface2) 65%);}
+.lb-medal{font-size:19px;width:25px;text-align:center;flex:none;}
+.lb-who{flex:1;min-width:0;}
+.lb-who .n{font-weight:700;font-size:13.5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.lb-who .m{color:var(--muted);font-size:11.5px;margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.lb-val{font-weight:800;font-size:14.5px;text-align:right;flex:none;white-space:nowrap;}
+.lb-val small{display:block;font-weight:600;font-size:10.5px;color:var(--muted2);}
+.lb-val.gold{color:var(--warn);} .lb-val.blue{color:var(--accent);}
+.lb-val.good{color:var(--success);} .lb-val.purple{color:#a78bfa;}
+.lb-sec{margin:20px 2px 10px;font-size:11.5px;font-weight:800;letter-spacing:1px;color:var(--muted2);text-transform:uppercase;}
+.lb-empty{color:var(--muted2);font-size:12.5px;text-align:center;padding:12px 0 14px;}
 </style>
 </head>
 <body>
@@ -243,6 +269,7 @@ table.recon .grp{border-left:1px solid var(--border);}
     <button class="tab" data-tab="sites" onclick="switchTab('sites')">⚙️ ตั้งค่า Site</button>
     <button class="tab" data-tab="queue" onclick="switchTab('queue')">🔔 คิว recheck</button>
     <button class="tab" data-tab="agents" onclick="switchTab('agents')">👥 ผู้ใช้</button>
+    <button class="tab" data-tab="stats" onclick="switchTab('stats')">🏆 หอเกียรติยศ</button>
   </div>
 
   <div class="wrap">
@@ -337,6 +364,12 @@ table.recon .grp{border-left:1px solid var(--border);}
       </div>
       <div class="bb-hint">💡 ครั้งแรก: รัน <b>setupQueueSheets()</b> ใน Apps Script หนึ่งครั้งก่อน · ลิงก์ Teams: สร้าง/copy ลิงก์ห้องจากแอป MS Teams มาวางเอง · จำนวนผู้ใช้กี่คนก็ได้</div>
       <div class="table-wrap" id="agentsTable"><div class="empty">ยังไม่มีผู้ใช้</div></div>
+    </div>
+
+    <!-- ─── Leaderboard ─── -->
+    <div class="panel" id="panel-stats">
+      <div class="eyebrow">สถิติสนุก ๆ ของรอบนี้</div>
+      <div id="statsBody"><div class="empty"><span class="spinner"></span></div></div>
     </div>
 
     <!-- ─── Review ─── -->
@@ -557,6 +590,7 @@ function startPolling(){
     if(_modalOpen) return;                 // don't clobber input mid-edit
     if(S.tab==='sites' && S.bookSite) return; // don't wipe book entry in progress
     if(S.tab==='sites' && S._editSite) return; // อย่า re-render ทับตอนกำลังแก้ไข site แบบ inline
+    if(S.tab==='stats') loadStats();           // แท็บหอเกียรติยศ: รีเฟรชสถิติตามรอบ poll
     loadData(false);
   }, POLL_MS);
 }
@@ -1419,6 +1453,7 @@ function switchTab(name){
   document.querySelectorAll('.tab').forEach(function(t){ t.classList.toggle('active', t.dataset.tab===name); });
   document.querySelectorAll('.panel').forEach(function(p){ p.classList.toggle('active', p.id==='panel-'+name); });
   if(name==='queue') startQueuePoll(); else stopQueuePoll();
+  if(name==='stats') loadStats();
 }
 function openOverlay(id){ _modalOpen=true; document.getElementById(id).classList.add('open'); }
 function closeOverlay(id){ document.getElementById(id).classList.remove('open'); _modalOpen=false; }
@@ -1457,6 +1492,133 @@ function logout(){ try{ sessionStorage.removeItem('sc_admin_auth'); sessionStora
     if (sessionStorage.getItem('sc_admin_auth') === '1' && API_URL) { enterApp(); }
   } catch(e){}
 })();
+/* ── 🏆 Leaderboard (แท็บหอเกียรติยศ) — อ่านอย่างเดียว ── */
+var LB_MEDALS = ['🥇','🥈','🥉'];
+var _lbLoading = false;
+function _lbMins(m){
+  if(m==null) return '—';
+  if(m < 60) return m + ' นาที';
+  var h = Math.floor(m/60), r = m%60;
+  return h + ' ชม.' + (r ? ' ' + r + ' น.' : '');
+}
+function _lbSecs(s){
+  if(s==null) return '—';
+  if(s < 60) return s + ' วิ';
+  return Math.floor(s/60) + ':' + ('0'+(s%60)).slice(-2) + ' น.';
+}
+function _lbNf(n){ return Number(n||0).toLocaleString('th-TH'); }
+function _lbBoard(o){
+  var items = o.items || [];
+  var h = '<div class="lb-board' + (o.gold?' gold':'') + '">'
+        + '<h3>' + o.icon + ' ' + esc(o.title) + '</h3>'
+        + '<div class="lb-hint">' + esc(o.hint) + '</div>';
+  if(!items.length){
+    h += '<div class="lb-empty">ยังไม่มีข้อมูล — รอผลการนับก่อนนะ 😊</div>';
+  } else {
+    items.forEach(function(it,i){
+      var v = o.value(it);
+      h += '<div class="lb-rank p' + (i+1) + '">'
+        + '<div class="lb-medal">' + LB_MEDALS[i] + '</div>'
+        + '<div class="lb-who"><div class="n">' + esc(o.name(it)) + '</div>'
+        + '<div class="m">' + esc(o.meta(it)) + '</div></div>'
+        + '<div class="lb-val ' + (o.cls||'blue') + '">' + v.main
+        + (v.sub ? '<small>' + esc(v.sub) + '</small>' : '') + '</div></div>';
+    });
+  }
+  return h + '</div>';
+}
+function renderStats(d){
+  var s = d.summary || {}, b = d.boards || {};
+  var pct = s.total_sites ? Math.round((s.approved||0)/s.total_sites*100) : 0;
+  var h = '';
+  h += '<div class="lb-kpis">'
+    + '<div class="lb-kpi"><div class="v" style="color:var(--success);">' + _lbNf(s.approved) + '<span style="font-size:14px;color:var(--muted2);">/' + _lbNf(s.total_sites) + '</span></div><div class="l">✅ อนุมัติแล้ว</div></div>'
+    + '<div class="lb-kpi"><div class="v" style="color:var(--warn);">' + _lbNf(s.pending) + '</div><div class="l">⏳ รอตรวจ</div></div>'
+    + '<div class="lb-kpi"><div class="v" style="color:var(--accent);">' + (s.avg_count_min!=null ? _lbMins(s.avg_count_min) : '—') + '</div><div class="l">⚡ เวลานับเฉลี่ย</div></div>'
+    + '<div class="lb-kpi"><div class="v" style="color:#a78bfa;">' + (s.oneshot_rate!=null ? s.oneshot_rate + '%' : '—') + '</div><div class="l">🎯 ผ่านครั้งเดียว</div></div>'
+    + '<div class="lb-kpi"><div class="v">' + _lbNf(s.total_pallets) + '</div><div class="l">📦 พาเลทที่นับรวมทั้งรอบ</div></div>'
+    + '<div class="lb-kpi"><div class="l" style="margin:0 0 2px;">ความคืบหน้ารอบนี้ — ' + pct + '%</div><div class="lb-bar"><i style="width:' + pct + '%;"></i></div></div>'
+    + '</div>';
+
+  h += '<div class="lb-sec">🏭 ทีมตรวจนับ</div><div class="lb-grid">';
+  h += _lbBoard({ icon:'🎯', title:'ผ่านฉลุย — ส่งครั้งเดียวผ่าน!', gold:true, cls:'gold',
+    hint:'ส่งรอบเดียว อนุมัติเลย ไม่โดนตีกลับ', items:b.oneshot,
+    name:function(x){ return x.site; },
+    meta:function(x){ return (x.counter||'—') + ' · ' + _lbNf(x.counted) + ' พาเลท'; },
+    value:function(x){ return { main:'✨', sub: x.count_min!=null ? _lbMins(x.count_min) : 'ผ่านเลย' }; } });
+  h += _lbBoard({ icon:'⚡', title:'นับไวที่สุด', cls:'blue',
+    hint:'เวลาตั้งแต่ถึงหน้างานจนส่งผล (ไวแต่ต้องแม่นด้วยนะ!)', items:b.fastest,
+    name:function(x){ return x.site; },
+    meta:function(x){ return (x.counter||'—') + ' · ' + _lbNf(x.locations) + ' โซน'; },
+    value:function(x){ return { main:_lbMins(x.count_min) }; } });
+  h += _lbBoard({ icon:'⏰', title:'ตรงต่อเวลาที่สุด', cls:'good',
+    hint:'ถึงหน้างานก่อนเวลานัดหมาย', items:b.punctual,
+    name:function(x){ return x.site; },
+    meta:function(x){ return 'เช็คอิน ' + (x.checkin_hhmm||'—') + ' น.'; },
+    value:function(x){ return { main:(x.early_min>0 ? 'ก่อน ' + _lbMins(x.early_min) : (x.early_min===0 ? 'ตรงเป๊ะ' : 'สาย ' + _lbMins(-x.early_min))) }; } });
+  h += _lbBoard({ icon:'🎪', title:'แม่นยำที่สุด', cls:'good',
+    hint:'ยอดนับใกล้เคียงยอดระบบมากที่สุด', items:b.accurate,
+    name:function(x){ return x.site; },
+    meta:function(x){ return (x.counter||'—') + ' · ' + _lbNf(x.counted) + ' พาเลท'; },
+    value:function(x){ return { main:(x.variance===0 ? '💯 เป๊ะ!' : '±' + _lbNf(x.variance)), sub:'ส่วนต่าง' }; } });
+  h += _lbBoard({ icon:'🏁', title:'ปิดจ๊อบไวสุด', cls:'purple',
+    hint:'ตั้งแต่เช็คอินจนได้รับอนุมัติ', items:b.closer,
+    name:function(x){ return x.site; },
+    meta:function(x){ return (x.counter||'—') + (x.revision>1 ? ' · แก้ ' + (x.revision-1) + ' ครั้ง' : ' · ผ่านรวดเดียว'); },
+    value:function(x){ return { main:_lbMins(x.close_min) }; } });
+  h += '</div>';
+
+  h += '<div class="lb-sec">👮 ทีมเจ้าหน้าที่</div><div class="lb-grid">';
+  h += _lbBoard({ icon:'💪', title:'รับคิวเยอะสุด', cls:'gold',
+    hint:'ตัวหลักของทีม รับตรวจไปกี่คิวแล้ว', items:b.busiest,
+    name:function(x){ return x.name; },
+    meta:function(x){ return x.avgSec!=null ? ('เฉลี่ย ' + _lbSecs(x.avgSec) + '/คิว') : 'ยังไม่มีเวลาเฉลี่ย'; },
+    value:function(x){ return { main:_lbNf(x.taken), sub:'คิว' }; } });
+  h += _lbBoard({ icon:'🚀', title:'ตรวจไวที่สุด', cls:'blue',
+    hint:'เวลาเฉลี่ยต่อคิว — ไวและเคลียร์', items:b.quickest,
+    name:function(x){ return x.name; },
+    meta:function(x){ return 'รับไป ' + _lbNf(x.taken) + ' คิว'; },
+    value:function(x){ return { main:_lbSecs(x.avgSec), sub:'ต่อคิว' }; } });
+  h += _lbBoard({ icon:'🔍', title:'มือฉมัง — จับผิดเก่ง', cls:'purple',
+    hint:'ตีกลับให้แก้ไข ช่วยกันคุมคุณภาพ 👏', items:b.sharpest,
+    name:function(x){ return x.name; },
+    meta:function(){ return 'ช่วยให้ข้อมูลถูกต้องขึ้น'; },
+    value:function(x){ return { main:_lbNf(x.kicks), sub:'ครั้ง' }; } });
+  h += '</div>';
+
+  h += '<div class="lb-sec">📊 ภาพรวมทีม (ไม่ใช่รายบุคคล)</div><div class="lb-grid">'
+    + '<div class="lb-board">'
+      + '<div class="lb-rank"><div class="lb-medal">↩</div><div class="lb-who">'
+        + '<div class="n">การตีกลับทั้งหมด</div><div class="m">ทุกครั้ง = คุณภาพข้อมูลดีขึ้น</div></div>'
+        + '<div class="lb-val blue">' + _lbNf(s.total_kicks) + '<small>ครั้ง</small></div></div>'
+      + '<div class="lb-rank"><div class="lb-medal">📤</div><div class="lb-who">'
+        + '<div class="n">ส่งผลแล้ว</div><div class="m">จากทั้งหมด ' + _lbNf(s.total_sites) + ' คลัง</div></div>'
+        + '<div class="lb-val good">' + _lbNf(s.submitted) + '<small>คลัง</small></div></div>'
+    + '</div></div>';
+
+  document.getElementById('statsBody').innerHTML = h;
+}
+function loadStats(){
+  if(_lbLoading) return;
+  _lbLoading = true;
+  fetch(API_URL + '?action=getStats')
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      _lbLoading = false;
+      if(!d || d.status!=='ok') throw new Error('bad');
+      if(!d.round){
+        document.getElementById('statsBody').innerHTML =
+          '<div class="lb-board"><div class="lb-empty">ยังไม่มีรอบนับที่เปิดอยู่ 🙂<br>เปิดรอบใหม่แล้วกลับมาดูได้เลย</div></div>';
+        return;
+      }
+      renderStats(d);
+    })
+    .catch(function(){
+      _lbLoading = false;
+      document.getElementById('statsBody').innerHTML =
+        '<div class="lb-board"><div class="lb-empty">โหลดสถิติไม่สำเร็จ 😔 ลองสลับแท็บอีกครั้ง</div></div>';
+    });
+}
 </script>
 </body>
 </html>
