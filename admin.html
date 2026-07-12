@@ -1547,10 +1547,17 @@ function renderStats(d){
     meta:function(x){ return (x.counter||'—') + ' · ' + _lbNf(x.counted) + ' พาเลท'; },
     value:function(x){ return { main:'✨', sub: x.count_min!=null ? _lbMins(x.count_min) : 'ผ่านเลย' }; } });
   h += _lbBoard({ icon:'⚡', title:'นับไวที่สุด', cls:'blue',
-    hint:'เวลาตั้งแต่ถึงหน้างานจนส่งผล (ไวแต่ต้องแม่นด้วยนะ!)', items:b.fastest,
+    hint:'เวลาตั้งแต่ถึงหน้างานจนส่งผล · มาสาย = เริ่มจับเวลาตั้งแต่เวลานัด (บวกเวลาสายด้วย)', items:b.fastest,
     name:function(x){ return x.site; },
-    meta:function(x){ return (x.counter||'—') + ' · ' + _lbNf(x.locations) + ' โซน'; },
-    value:function(x){ return { main:_lbMins(x.count_min) }; } });
+    meta:function(x){
+      var m = (x.counter||'—') + ' · ' + _lbNf(x.locations) + ' โซน';
+      if(x.late_min > 0) m += ' · ⏰ สาย ' + _lbMins(x.late_min);
+      return m;
+    },
+    value:function(x){
+      return { main:_lbMins(x.count_min),
+               sub: x.late_min > 0 ? ('นับจริง ' + _lbMins(x.count_raw_min)) : '' };
+    } });
   h += _lbBoard({ icon:'⏰', title:'ตรงต่อเวลาที่สุด', cls:'good',
     hint:'ถึงหน้างานก่อนเวลานัดหมาย', items:b.punctual,
     name:function(x){ return x.site; },
