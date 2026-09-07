@@ -32,6 +32,20 @@ button{font-family:var(--font);}
 .sync-dot{width:7px;height:7px;border-radius:50%;background:var(--success);box-shadow:0 0 0 0 rgba(52,211,153,.5);}
 .sync-dot.live{animation:pulse 2s infinite;}
 @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(52,211,153,.45);}70%{box-shadow:0 0 0 6px rgba(52,211,153,0);}100%{box-shadow:0 0 0 0 rgba(52,211,153,0);}}
+/* ── ตัวช่วยตั้งรอบ ── */
+.wiz-step{flex:1;padding:9px 12px;border:1px solid var(--border);border-radius:var(--rs);background:var(--surface);font-size:12px;font-weight:600;color:var(--muted);display:flex;align-items:center;gap:7px;cursor:pointer;}
+.wiz-step.active{border-color:var(--accent);color:var(--accent);background:rgba(56,189,248,.07);}
+.wiz-step.done{border-color:var(--success);color:var(--success);}
+.wiz-step .n{width:19px;height:19px;border-radius:50%;background:var(--surface2);display:flex;align-items:center;justify-content:center;font-size:11px;flex:none;}
+.wiz-step.active .n{background:var(--accent);color:#04263a;}
+.wiz-step.done .n{background:var(--success);color:#04291d;}
+.wiz-foot{display:flex;gap:10px;align-items:center;margin-top:16px;flex-wrap:wrap;}
+.wiz-foot .btn:last-child{margin-left:auto;}
+.rv-row{display:flex;gap:12px;padding:9px 0;border-bottom:1px solid var(--border);font-size:13px;}
+.rv-row:last-child{border-bottom:none;}
+.rv-key{width:150px;flex:none;color:var(--muted);font-size:12px;}
+.rv-block{list-style:none;}
+@media(max-width:640px){#wizSteps{flex-wrap:wrap;}.wiz-step{min-width:calc(50% - 4px);}.rv-row{flex-direction:column;gap:2px;}.rv-key{width:auto;}}
 .badge-admin{background:rgba(251,191,36,.15);border:1px solid rgba(251,191,36,.3);color:var(--warn);font-size:11px;font-weight:600;padding:2px 10px;border-radius:20px;white-space:nowrap;}
 /* ── v2: ป้ายกำกับ + ฟอร์มในตารางตั้งค่า ── */
 .badge{display:inline-block;font-size:10px;font-weight:700;padding:1px 7px;border-radius:10px;border:1px solid var(--border);color:var(--muted);white-space:nowrap;}
@@ -280,6 +294,74 @@ table.recon .grp{border-left:1px solid var(--border);}
 </div>
 
 <!-- ════ APP ════ -->
+<!-- ════ ตัวช่วยตั้งรอบ (แสดงเมื่อยังไม่มีรอบที่เริ่มใช้งาน) ════ -->
+<div id="wizard" style="display:none;">
+  <div class="wrap" style="max-width:900px;">
+    <div style="text-align:center;margin:18px 0 22px;">
+      <div style="font-size:20px;font-weight:800;">ตั้งรอบนับใหม่</div>
+      <div style="font-size:12.5px;color:var(--muted);margin-top:4px;">
+        ตั้งให้ครบทั้ง 3 ส่วน แล้วตรวจทานก่อนเปิดให้ผู้นับเริ่มงาน
+      </div>
+    </div>
+
+    <div id="wizSteps" style="display:flex;gap:8px;margin-bottom:20px;"></div>
+
+    <!-- ขั้น 1 -->
+    <div class="wiz-panel" id="wiz-1" style="display:none;">
+      <div class="eyebrow">ขั้นที่ 1 · ข้อมูลรอบ <span class="ehint">— ใช้ทั้งรอบ แก้ทีหลังได้</span></div>
+      <div class="card" style="padding:18px;display:flex;flex-direction:column;gap:14px;">
+        <div class="field"><label>ปี (พ.ศ.)</label>
+          <input class="input" id="wzYear" type="number" placeholder="เช่น 2570" style="max-width:180px;" oninput="wizTouch()"></div>
+        <div class="field"><label>ชื่อรอบ <span style="color:var(--muted);font-weight:400;">— นับสต็อกอะไร</span></label>
+          <input class="input" id="wzName" placeholder="เช่น นับสต็อกพาเลทประจำปี 2570" oninput="wizTouch()"></div>
+        <div class="field"><label>วันที่เอกสาร</label>
+          <input class="input" id="wzDocDate" placeholder="เช่น 30 มิถุนายน 2570" style="max-width:300px;" oninput="wizTouch()">
+          <div class="hint">ข้อความนี้จะไปปรากฏบนเอกสารที่พิมพ์ พิมพ์รูปแบบไหนก็ได้ตามที่ต้องการให้แสดง</div></div>
+      </div>
+      <div class="wiz-foot">
+        <span id="wzRoundState" class="hint"></span>
+        <button class="btn btn-primary" onclick="wizSaveStep1()" id="wzBtn1">บันทึกแล้วไปต่อ →</button>
+      </div>
+    </div>
+
+    <!-- ขั้น 2 -->
+    <div class="wiz-panel" id="wiz-2" style="display:none;">
+      <div class="eyebrow">ขั้นที่ 2 · นับอะไรบ้าง <span class="ehint">— ชนิด / รายการ / สถานะ</span></div>
+      <div class="bb-hint">ตั้งค่าในแท็บ “ตั้งค่ารอบ (v2)” ด้านล่างนี้ กดบันทึกให้ผ่านก่อนจึงไปต่อได้</div>
+      <div id="wizCfgSlot"></div>
+      <div class="wiz-foot">
+        <button class="btn btn-outline" onclick="wizGo(1)">← ย้อนกลับ</button>
+        <button class="btn btn-primary" onclick="wizGo(3)">ไปต่อ →</button>
+      </div>
+    </div>
+
+    <!-- ขั้น 3 -->
+    <div class="wiz-panel" id="wiz-3" style="display:none;">
+      <div class="eyebrow">ขั้นที่ 3 · Site ที่ร่วมนับ</div>
+      <div class="add-row">
+        <input class="input" id="wzSiteName" placeholder="ชื่อ Site เช่น NDC-วังน้อย" onkeydown="if(event.key==='Enter')wizAddSite()">
+        <button class="btn btn-primary" onclick="wizAddSite()">+ เพิ่ม Site</button>
+      </div>
+      <div class="table-wrap" id="wzSitesTable"><div class="empty">ยังไม่มี Site</div></div>
+      <div class="wiz-foot">
+        <button class="btn btn-outline" onclick="wizGo(2)">← ย้อนกลับ</button>
+        <button class="btn btn-primary" onclick="wizGo(4)">ไปต่อ →</button>
+      </div>
+    </div>
+
+    <!-- ขั้น 4 -->
+    <div class="wiz-panel" id="wiz-4" style="display:none;">
+      <div class="eyebrow">ขั้นที่ 4 · ตรวจทานก่อนเริ่ม <span class="ehint">— หลังเริ่มแล้ว การแก้โครงสร้างต้องปลดล็อก</span></div>
+      <div id="wzReview"></div>
+      <div class="wiz-foot">
+        <button class="btn btn-outline" onclick="wizGo(3)">← ย้อนกลับ</button>
+        <button class="btn btn-outline" onclick="v2OpenPreview()">👁 ดูตัวอย่างหน้าผู้นับ</button>
+        <button class="btn btn-success" id="wzStartBtn" onclick="wizStart()">🚀 เริ่มรอบ — เปิดให้ผู้นับเข้าใช้</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <div id="app" style="display:none;">
   <div class="tabbar">
     <button class="tab active" data-tab="dashboard" onclick="switchTab('dashboard')">📊 ภาพรวม</button>
@@ -787,7 +869,9 @@ function loadData(showSpin){
       // v2: config ชนิด/สถานะ — ถ้ากำลังแก้ค้างอยู่ อย่าดึงของ server มาทับ (บทเรียน 2.6)
       if(d.item_config && !S.typesDirty) applyItemConfig(d.item_config);
     }
-    renderAll(); markSynced();
+    if(wizNeeded()){ wizShow(); wizRenderSteps(); }
+    else { if(document.getElementById('wizard').style.display==='block') wizHide(); renderAll(); }
+    markSynced();
   }).catch(function(){ document.getElementById('syncText').textContent='ออฟไลน์'; });
 }
 function startPolling(){
@@ -798,6 +882,7 @@ function startPolling(){
     if(S.tab==='sites' && S._editSite) return; // อย่า re-render ทับตอนกำลังแก้ไข site แบบ inline
     if(S.tab==='types' && S.typesDirty) return; // อย่าทับ config ที่กำลังแก้ค้างไว้
     if(S.tab==='setup') return;                 // แท็บตั้งค่า v2: ไม่ poll ทับเลย
+    if(document.getElementById('wizard').style.display==='block') return;  // อยู่ในตัวช่วยตั้งรอบ
     if(S.tab==='stats') loadStats();           // แท็บหอเกียรติยศ: รีเฟรชสถิติตามรอบ poll
     loadData(false);
   }, POLL_MS);
@@ -1447,6 +1532,188 @@ function v2RenderPreview(){
          })())+'</div>';
 
   box.innerHTML = html;
+}
+
+/* ════════════════════════════════════════════════════════════════
+   ตัวช่วยตั้งรอบ — บังคับตั้งให้ครบก่อนเปิดให้ผู้นับเข้าใช้
+   รอบถูกสร้างเป็น "ร่าง" (is_open=false) ตั้งแต่ขั้นที่ 1
+   เพื่อให้ config v2 มี round_id ผูก แต่ผู้นับยังไม่เห็น
+   ════════════════════════════════════════════════════════════════ */
+var WIZ = { step:1, ready:null };
+
+function wizNeeded(){
+  // ต้องตั้งรอบ ถ้ายังไม่มีรอบ หรือมีแต่ยังไม่ได้กด "เริ่มรอบ"
+  return !S.round || !S.round.round_id || !S.round.is_started;
+}
+function wizShow(){
+  document.getElementById('wizard').style.display='block';
+  document.getElementById('app').style.display='none';
+  var sp=document.getElementById('syncPill'); if(sp) sp.style.display='none';
+  wizGo(WIZ.step || (S.round && S.round.round_id ? 2 : 1));
+}
+function wizHide(){
+  document.getElementById('wizard').style.display='none';
+  document.getElementById('app').style.display='block';
+  var sp=document.getElementById('syncPill'); if(sp) sp.style.display='flex';
+}
+function wizTouch(){ /* ทำเครื่องหมายว่ามีการพิมพ์ — ไว้ขยายภายหลัง */ }
+
+function wizGo(step){
+  WIZ.step = step;
+  [1,2,3,4].forEach(function(i){
+    var el=document.getElementById('wiz-'+i); if(el) el.style.display = (i===step?'block':'none');
+  });
+  // ขั้นที่ 2 ยืมหน้าตั้งค่ารอบ v2 มาวางในกรอบ wizard (ไม่เขียนซ้ำ)
+  var slot=document.getElementById('wizCfgSlot'), panel=document.getElementById('panel-setup');
+  if(step===2 && panel && slot && panel.parentNode!==slot){
+    slot.appendChild(panel); panel.classList.add('active'); panel.style.display='flex';
+    if(!V2CFG) v2LoadConfig(); else v2Render();
+  }
+  if(step===1) wizFillStep1();
+  if(step===3) wizRenderSites();
+  if(step===4) wizRenderReview();
+  wizRenderSteps();
+}
+function wizRenderSteps(){
+  var names=['ข้อมูลรอบ','นับอะไรบ้าง','Site','ตรวจทาน'];
+  var hasRound = !!(S.round && S.round.round_id);
+  document.getElementById('wizSteps').innerHTML = names.map(function(n,i){
+    var step=i+1;
+    var done = (step===1 && hasRound) || (step===2 && V2CFG && (V2CFG.types||[]).length)
+            || (step===3 && activeSites().length);
+    var cls = WIZ.step===step ? 'active' : (done ? 'done' : '');
+    return '<div class="wiz-step '+cls+'" onclick="wizGo('+step+')"><span class="n">'
+         + (done && WIZ.step!==step ? '✓' : step)+'</span>'+esc(n)+'</div>';
+  }).join('');
+}
+
+function wizFillStep1(){
+  var y=document.getElementById('wzYear'), n=document.getElementById('wzName'), d=document.getElementById('wzDocDate');
+  if(S.round && S.round.round_id){
+    if(!y.value) y.value = S.round.year||'';
+    if(!n.value) n.value = S.round.round_name||'';
+    if(!d.value) d.value = (S.docMeta&&S.docMeta.doc_date)||'';
+    document.getElementById('wzRoundState').textContent='รอบร่าง '+S.round.round_id+' — กดบันทึกอีกครั้งเพื่ออัปเดตข้อมูล';
+    document.getElementById('wzBtn1').textContent='บันทึกแล้วไปต่อ →';
+  }else{
+    if(!y.value) y.value = new Date().getFullYear()+543;
+    document.getElementById('wzRoundState').textContent='ยังไม่ได้สร้างรอบ';
+    document.getElementById('wzBtn1').textContent='สร้างรอบ (ร่าง) →';
+  }
+}
+function wizSaveStep1(){
+  var year=document.getElementById('wzYear').value.trim();
+  var name=document.getElementById('wzName').value.trim();
+  var doc =document.getElementById('wzDocDate').value.trim();
+  if(!year || !name){ toast('กรอกปีและชื่อรอบก่อน','error'); return; }
+  var btn=document.getElementById('wzBtn1'); btn.disabled=true; btn.textContent='กำลังบันทึก…';
+
+  if(S.round && S.round.round_id){
+    // รอบร่างมีอยู่แล้ว → อัปเดตชื่อ/วันที่เอกสาร
+    post({action:'saveDocMeta', doc_date:doc, doc_year:year}).then(function(){
+      S.docMeta = S.docMeta||{}; S.docMeta.doc_date=doc; S.docMeta.doc_year=year;
+      btn.disabled=false; toast('บันทึกแล้ว','success');
+      return loadData(false);
+    }).then(function(){ wizGo(2); });
+  }else{
+    post({action:'newRound', year:year, round_name:name, doc_date:doc, doc_year:year, as_draft:true})
+    .then(function(d){
+      btn.disabled=false;
+      if(d && d.status==='error'){ toast(d.message||'สร้างรอบไม่สำเร็จ','error'); return; }
+      toast('สร้างรอบร่างแล้ว — ผู้นับยังไม่เห็นจนกว่าจะกดเริ่มรอบ','success');
+      return loadData(false).then(function(){ V2CFG=null; wizGo(2); });
+    }).catch(function(){ btn.disabled=false; toast('สร้างรอบไม่สำเร็จ','error'); });
+  }
+}
+
+function wizRenderSites(){
+  var el=document.getElementById('wzSitesTable');
+  if(!S.sites.length){ el.innerHTML='<div class="empty">ยังไม่มี Site — เพิ่มอย่างน้อย 1 แห่ง</div>'; wizRenderSteps(); return; }
+  el.innerHTML='<table><thead><tr><th>ชื่อ Site</th><th class="num" style="width:110px;">สถานะ</th><th style="width:90px;"></th></tr></thead><tbody>'
+    + S.sites.map(function(s){
+        return '<tr><td>'+esc(s.site_name)+'</td>'
+          + '<td class="num">'+(s.is_active?'<span class="badge ob">เปิดใช้งาน</span>':'<span class="badge off">ปิด</span>')+'</td>'
+          + '<td><button class="btn btn-outline btn-sm" onclick="wizToggleSite(\''+esc(s.site_id)+'\','+(!s.is_active)+')">'
+          + (s.is_active?'ปิด':'เปิด')+'</button></td></tr>';
+      }).join('')
+    + '</tbody></table>';
+  wizRenderSteps();
+}
+function wizAddSite(){
+  var inp=document.getElementById('wzSiteName'), name=inp.value.trim();
+  if(!name) return;
+  post({action:'saveSite', site_name:name}).then(function(){
+    inp.value=''; return loadData(false);
+  }).then(function(){ wizRenderSites(); toast('เพิ่ม Site แล้ว','success'); });
+}
+function wizToggleSite(id, on){
+  post({action:'toggleSite', site_id:id, is_active:on}).then(function(){ return loadData(false); })
+  .then(function(){ wizRenderSites(); });
+}
+
+function wizRenderReview(){
+  var box=document.getElementById('wzReview');
+  var cfg=V2CFG||{}, types=(cfg.types||[]).filter(function(t){return t.is_active!==false;});
+  var items=(cfg.items||[]).filter(function(i){return i.is_active!==false;});
+  var sites=activeSites();
+  var bl=(cfg.book_statuses||[]).filter(function(s){return s.is_baseline;})[0];
+  var ob=(cfg.book_statuses||[]).filter(function(s){return s.is_outstanding;});
+
+  function row(k,v){ return '<div class="rv-row"><div class="rv-key">'+esc(k)+'</div><div>'+v+'</div></div>'; }
+
+  var html='<div class="card" style="padding:16px;">'
+    + row('ปี (พ.ศ.)', esc(String((S.round&&S.round.year)||'—')))
+    + row('ชื่อรอบ', '<b>'+esc((S.round&&S.round.round_name)||'—')+'</b>')
+    + row('วันที่เอกสาร', esc((S.docMeta&&S.docMeta.doc_date)||'—'))
+    + row('Site ที่ร่วมนับ', sites.length ? esc(sites.map(function(s){return s.site_name;}).join(', ')) + ' <span class="hint">('+sites.length+' แห่ง)</span>' : '<span style="color:var(--danger);">ยังไม่มี</span>')
+    + row('ชนิดที่นับ', types.length ? types.map(function(t){
+        var its=items.filter(function(i){return i.type_id===t.type_id;});
+        var sts=(cfg.count_statuses||[]).filter(function(s){return s.type_id===t.type_id && s.is_active!==false;});
+        return '<div style="margin-bottom:4px;">'+esc((t.icon||'')+' '+t.type_name)+' — '
+             + esc(its.map(function(i){return i.item_name;}).join(', '))
+             + ' <span class="hint">('+its.length+' รายการ · '+sts.length+' สถานะ · หน่วย '+esc((its[0]||{}).unit||'—')+')</span></div>';
+      }).join('') : '<span style="color:var(--danger);">ยังไม่ได้ตั้งค่า</span>')
+    + row('ยอดคงค้าง (System)', ob.length ? esc(ob.map(function(s){return s.status_name;}).join(' + ')) : '<span style="color:var(--danger);">ยังไม่ได้เลือก</span>')
+    + row('ฐานเทียบส่วนต่าง', bl ? esc(bl.status_name) : '<span style="color:var(--danger);">ยังไม่ได้เลือก</span>')
+    + row('รายการปรับปรุง', (cfg.adjustments||[]).length ? esc(cfg.adjustments.map(function(a){return a.adjust_name;}).join(', ')) : '<span class="hint">ไม่มี</span>')
+    + '</div>';
+
+  box.innerHTML = html + '<div id="wzReadyBox" style="margin-top:12px;"></div>';
+  wizCheckReady();
+}
+function wizCheckReady(){
+  var box=document.getElementById('wzReadyBox'), btn=document.getElementById('wzStartBtn');
+  if(!box) return;
+  box.innerHTML='<div class="hint">กำลังตรวจความพร้อม…</div>';
+  post({action:'getRoundReadiness', round_id:S.round?S.round.round_id:''}).then(function(d){
+    var errs=(d&&d.errors)||[];
+    WIZ.ready = errs.length===0;
+    if(errs.length){
+      box.innerHTML='<div style="background:rgba(248,113,113,.1);border:1px solid var(--danger);border-radius:8px;padding:11px 13px;font-size:12.5px;color:var(--danger);">'
+        + '<b>ยังเริ่มรอบไม่ได้</b><ul style="margin:6px 0 0 18px;">'
+        + errs.map(function(e){ return '<li>'+esc(e)+'</li>'; }).join('')+'</ul></div>';
+      btn.disabled=true; btn.style.opacity='.5';
+    }else{
+      box.innerHTML='<div style="background:rgba(52,211,153,.1);border:1px solid var(--success);border-radius:8px;padding:11px 13px;font-size:12.5px;color:var(--success);">'
+        + '✓ ตั้งค่าครบแล้ว พร้อมเริ่มรอบ</div>';
+      btn.disabled=false; btn.style.opacity='1';
+    }
+  }).catch(function(){ box.innerHTML='<div class="hint">ตรวจความพร้อมไม่สำเร็จ</div>'; });
+}
+function wizStart(){
+  if(!confirm('เริ่มรอบนี้ — ผู้นับทุก Site จะเข้าใช้งานได้ทันที\n\nหลังจากนี้ ชื่อต่าง ๆ ยังแก้ได้ปกติ แต่การเพิ่ม/ลบรายการหรือสถานะ จะต้องปลดล็อกก่อน\n\nยืนยัน?')) return;
+  var btn=document.getElementById('wzStartBtn'); btn.disabled=true; btn.textContent='กำลังเริ่มรอบ…';
+  post({action:'startRound', round_id:S.round.round_id}).then(function(d){
+    btn.disabled=false; btn.textContent='🚀 เริ่มรอบ — เปิดให้ผู้นับเข้าใช้';
+    if(d && d.status==='error'){ toast(d.message||'เริ่มรอบไม่สำเร็จ','error'); wizCheckReady(); return; }
+    toast('เริ่มรอบแล้ว','success');
+    // คืน panel ตั้งค่ากลับที่เดิมก่อนออกจาก wizard
+    var panel=document.getElementById('panel-setup'), wrap=document.querySelector('#app .wrap');
+    if(panel && wrap && panel.parentNode!==wrap){ panel.classList.remove('active'); panel.style.display=''; wrap.appendChild(panel); }
+    return loadData(true).then(function(){ wizHide(); switchTab('dashboard'); });
+  }).catch(function(){
+    btn.disabled=false; btn.textContent='🚀 เริ่มรอบ — เปิดให้ผู้นับเข้าใช้'; toast('เริ่มรอบไม่สำเร็จ','error');
+  });
 }
 
 /* ── Render: Actual vs System reconciliation ─────────── */
