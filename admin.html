@@ -275,6 +275,7 @@ table.recon .grp{border-left:1px solid var(--border);}
   <div class="tabbar">
     <button class="tab active" data-tab="dashboard" onclick="switchTab('dashboard')">📊 ภาพรวม</button>
     <button class="tab" data-tab="sites" onclick="switchTab('sites')">⚙️ ตั้งค่า Site</button>
+    <button class="tab" data-tab="types" onclick="switchTab('types')">🧩 ชนิดที่นับ</button>
     <button class="tab" data-tab="queue" onclick="switchTab('queue')">🔔 คิว recheck</button>
     <button class="tab" data-tab="agents" onclick="switchTab('agents')">👥 ผู้ใช้</button>
     <button class="tab" data-tab="stats" onclick="switchTab('stats')">🏆 หอเกียรติยศ</button>
@@ -343,6 +344,32 @@ table.recon .grp{border-left:1px solid var(--border);}
         </div>
         <div class="bb-grid-wrap" id="bookGridWrap"></div>
         <button class="btn btn-success" id="bookSaveBtn" onclick="saveBook()" style="margin-top:10px;">💾 บันทึก Book Balance</button>
+      </div>
+    </div>
+
+    <!-- ─── ชนิดที่นับ (v2 Phase 1: config-driven) ─── -->
+    <div class="panel" id="panel-types">
+      <div id="typesWarn" class="bb-hint" style="border-left:3px solid var(--warn);">
+        ⚠️ <b>แก้ตอนไม่มีรอบเปิดอยู่เท่านั้น</b> — เปลี่ยนชื่อ/ลบสถานะระหว่างที่มีคนกำลังนับ จะทำให้ยอดที่บันทึกไว้แล้วอ่านไม่ตรงกัน
+      </div>
+
+      <div class="eyebrow">ชนิดของสิ่งที่นับ <span class="ehint">— เดิมฝังในโค้ดว่ามี “ไม้” กับ “พลาสติก” เท่านั้น</span></div>
+      <div class="table-wrap" id="typesTable"><div class="empty"><span class="spinner"></span></div></div>
+
+      <div class="eyebrow" style="margin-top:16px;">ผู้ให้บริการ / รายการย่อย <span class="ehint">— คอลัมน์ในฟอร์มนับและตารางกระทบยอด</span></div>
+      <div class="table-wrap" id="provTable"><div class="empty">—</div></div>
+      <div class="bb-hint">🔒 Phase 1 ยังเพิ่มผู้ให้บริการตัวใหม่ไม่ได้ (ชีต Submission เก็บแบบคอลัมน์ตายตัว <span class="mono">actual_loscam..swwi</span>) — แก้ชื่อ/สี/ลำดับ/สังกัดชนิด ได้เลย · เพิ่มตัวใหม่ปลดล็อกที่ Phase 3</div>
+
+      <div class="eyebrow" style="margin-top:16px;">สถานะการนับ <span class="ehint">— ติ๊ก “นับเป็น Actual” = รวมในยอดนับจริง · “ตัดออกจากเอกสาร” = ไม่รวมในใบสรุปที่พิมพ์</span></div>
+      <div class="table-wrap" id="statusTable"><div class="empty">—</div></div>
+
+      <div class="eyebrow" style="margin-top:16px;">สถานะยอดตามบัญชี (Book) <span class="ehint">— ชื่อผูกกับคอลัมน์ในชีต แก้ได้เฉพาะ flag</span></div>
+      <div class="table-wrap" id="bookStatusTable"><div class="empty">—</div></div>
+
+      <div style="display:flex;gap:10px;align-items:center;margin-top:16px;">
+        <button class="btn btn-success" id="typesSaveBtn" onclick="saveItemConfig()">💾 บันทึกการตั้งค่า</button>
+        <button class="btn btn-outline" onclick="S.typesDirty=false;loadData(true);toast('ยกเลิกการแก้ไข');">↺ ยกเลิก</button>
+        <span id="typesDirtyMark" style="font-size:12px;color:var(--warn);display:none;">● มีการแก้ไขที่ยังไม่บันทึก</span>
       </div>
     </div>
 
@@ -541,11 +568,14 @@ table.recon .grp{border-left:1px solid var(--border);}
 var API_URL   = (typeof STOCKCOUNT_CONFIG !== 'undefined') ? STOCKCOUNT_CONFIG.API_URL : '';
 var POLL_MS   = 12000;               // near-real-time refresh
 
+// ── v2 Phase 1: ค่าเหล่านี้เป็นเพียง "ค่าเริ่มต้น" — ถูกเขียนทับด้วย config จากชีต
+//    (ItemType / Provider / ItemStatus) ผ่าน applyItemConfig() ทุกครั้งที่โหลดข้อมูล
+//    ถ้า backend ยังเป็นเวอร์ชันเก่า (ไม่ส่ง item_config มา) จะใช้ค่าเริ่มต้นนี้ = พฤติกรรมเดิมทุกประการ
 var PROVIDERS = [
-  {key:'loscam', label:'LOSCAM', cls:'prov-loscam'},
-  {key:'chep',   label:'CHEP',   cls:'prov-chep'},
-  {key:'brs',    label:'BRS',    cls:'prov-brs'},
-  {key:'swwi',   label:'SWWI',   cls:'prov-swwi'}
+  {key:'loscam', label:'LOSCAM', cls:'prov-loscam', color:'', kind:'wood'},
+  {key:'chep',   label:'CHEP',   cls:'prov-chep',   color:'', kind:'wood'},
+  {key:'brs',    label:'BRS',    cls:'prov-brs',    color:'', kind:'plastic'},
+  {key:'swwi',   label:'SWWI',   cls:'prov-swwi',   color:'', kind:'plastic'}
 ];
 var STATUSES = [
   {key:'onhand',      label:'คงเหลือ'},
@@ -562,7 +592,66 @@ var RECON_COLS = [
   {key:'chep',   label:'พาเลทไม้ Chep'}
 ];
 
-var S = { round:null, sites:[], books:{}, subs:[], tab:'dashboard', bookSite:'', rv:null, docnos:{}, docMeta:{}, agents:[] };
+/* ════════════════════════════════════════════════════════════════
+   v2 Phase 1 — Config-driven
+   ITEMCFG = { types:[{type_id,type_name,icon,sort,is_active}],
+               providers:[{provider_id,provider_name,type_id,color,sort,is_active}],
+               statuses:[{type_id,status_name,in_actual,doc_exclude,sort,is_active}],
+               book_statuses:[{key,label,in_book}] }   ← 5 สถานะ Book ผูกกับคอลัมน์ชีต แก้ชื่อไม่ได้จนถึง Phase 3
+   ════════════════════════════════════════════════════════════════ */
+var ITEMCFG = null;
+
+function typeById(id){ return (ITEMCFG&&ITEMCFG.types||[]).filter(function(t){return t.type_id===id;})[0]||null; }
+function cfgTypes(){ return (ITEMCFG&&ITEMCFG.types||[]).filter(function(t){return t.is_active!==false;}).sort(function(a,b){return (a.sort||0)-(b.sort||0);}); }
+function cfgProviders(typeId){ return (ITEMCFG&&ITEMCFG.providers||[]).filter(function(p){return p.is_active!==false&&(!typeId||p.type_id===typeId);}).sort(function(a,b){return (a.sort||0)-(b.sort||0);}); }
+function cfgStatuses(typeId){ return (ITEMCFG&&ITEMCFG.statuses||[]).filter(function(s){return s.is_active!==false&&(!typeId||s.type_id===typeId);}).sort(function(a,b){return (a.sort||0)-(b.sort||0);}); }
+
+function applyItemConfig(cfg){
+  if(!cfg || !cfg.types || !cfg.types.length || !cfg.providers || !cfg.providers.length) return; // backend เก่า → คงค่าเริ่มต้น
+  ITEMCFG = cfg;
+
+  // provider list (เรียงตาม type แล้วตาม sort ของ provider)
+  var provs = [];
+  cfgTypes().forEach(function(t){
+    cfgProviders(t.type_id).forEach(function(p){
+      provs.push({ key:p.provider_id, label:p.provider_name, cls:'prov-'+p.provider_id,
+                   color:p.color||'', kind:t.type_id });
+    });
+  });
+  if(provs.length) PROVIDERS = provs;
+
+  // คอลัมน์ตารางกระทบยอด = provider ทุกตัว ป้ายชื่อ "ชนิด · ผู้ให้บริการ"
+  RECON_COLS = provs.map(function(p){
+    var t = typeById(p.kind);
+    return { key:p.key, label:(t?t.type_name+' ':'')+p.label, color:p.color||'' };
+  });
+
+  // สูตร Actual: สถานะที่ติ๊ก in_actual ของแต่ละชนิด (แทนอาเรย์ที่เคยฝังในโค้ด)
+  var act = {};
+  cfgTypes().forEach(function(t){
+    act[t.type_id] = cfgStatuses(t.type_id).filter(function(s){ return !!s.in_actual; })
+                       .map(function(s){ return s.status_name; });
+  });
+  if(Object.keys(act).length) ACTUAL_STATUS = act;
+
+  // provider → ชนิด
+  var pk = {}; provs.forEach(function(p){ pk[p.key]=p.kind; });
+  PROV_KIND = pk;
+
+  // สถานะ Book: แก้ได้แค่ flag in_book (ชื่อผูกกับหัวคอลัมน์ชีต BookBalance)
+  if(cfg.book_statuses && cfg.book_statuses.length) BOOK_STATUS_CFG = cfg.book_statuses;
+}
+
+// สถานะ Book ที่นับเป็น "ยอดคงค้างในบัญชีเช่า" (System) — เดิม hardcode ว่า onhand + transit_out
+var BOOK_STATUS_CFG = [
+  {key:'onhand', label:'คงเหลือ', in_book:true}, {key:'transit_out', label:'ระหว่างโอนออก', in_book:true},
+  {key:'transit_in', label:'ระหว่างโอนเข้า', in_book:false}, {key:'damaged', label:'ชำรุดเสียหาย', in_book:false},
+  {key:'lost', label:'สูญหาย', in_book:false}
+];
+function bookOutstandingKeys(){ return BOOK_STATUS_CFG.filter(function(s){return s.in_book;}).map(function(s){return s.key;}); }
+function provStyle(p){ return p.color ? ' style="color:'+p.color+';"' : ''; }
+
+var S = { round:null, sites:[], books:{}, subs:[], tab:'dashboard', bookSite:'', rv:null, docnos:{}, docMeta:{}, agents:[], typesDirty:false };
 var myUserId='', myUserName='', _queueTimer=null, _tickTimer=null;
 var _pollTimer = null, _modalOpen = false, _toastTimer = null, _docMetaInit = false;
 
@@ -615,6 +704,8 @@ function loadData(showSpin){
       S.docnos  = d.docnos  || {};
       S.docMeta = d.docMeta || {};
       S.agents  = d.agents  || [];
+      // v2: config ชนิด/สถานะ — ถ้ากำลังแก้ค้างอยู่ อย่าดึงของ server มาทับ (บทเรียน 2.6)
+      if(d.item_config && !S.typesDirty) applyItemConfig(d.item_config);
     }
     renderAll(); markSynced();
   }).catch(function(){ document.getElementById('syncText').textContent='ออฟไลน์'; });
@@ -625,6 +716,7 @@ function startPolling(){
     if(_modalOpen) return;                 // don't clobber input mid-edit
     if(S.tab==='sites' && S.bookSite) return; // don't wipe book entry in progress
     if(S.tab==='sites' && S._editSite) return; // อย่า re-render ทับตอนกำลังแก้ไข site แบบ inline
+    if(S.tab==='types' && S.typesDirty) return; // อย่าทับ config ที่กำลังแก้ค้างไว้
     if(S.tab==='stats') loadStats();           // แท็บหอเกียรติยศ: รีเฟรชสถิติตามรอบ poll
     loadData(false);
   }, POLL_MS);
@@ -635,7 +727,7 @@ function markSynced(){
 }
 
 /* ── Render: everything ──────────────────────────────── */
-function renderAll(){ renderDashboard(); renderSiteStatus(); renderRecon(); renderSites(); renderAgents(); renderQueueHistory(); }
+function renderAll(){ renderDashboard(); renderSiteStatus(); renderRecon(); renderSites(); renderAgents(); renderQueueHistory(); renderTypes(); }
 function renderQueueHistory(){
   var el=document.getElementById('allTableQ'); if(!el) return;
   var subs=curSubs().slice().sort(function(a,b){return (b.submitted_at||'').localeCompare(a.submitted_at||'');});
@@ -738,12 +830,161 @@ function renderSiteStatus(){
   el.innerHTML = html;
 }
 
+/* ════════════════════════════════════════════════════════
+   แท็บ "ชนิดที่นับ" — แก้ config ที่เคย hardcode ในโค้ด
+   ทุกการแก้เขียนลง ITEMCFG ใน memory ก่อน แล้วกดบันทึกทีเดียว
+   ════════════════════════════════════════════════════════ */
+function markTypesDirty(){
+  S.typesDirty = true;
+  var m = document.getElementById('typesDirtyMark');
+  if(m) m.style.display = 'inline';
+}
+function cfgEdit(kind, idx, field, value){
+  if(!ITEMCFG) return;
+  var arr = ITEMCFG[kind]; if(!arr || !arr[idx]) return;
+  arr[idx][field] = value;
+  markTypesDirty();
+  applyItemConfig(ITEMCFG);        // ให้ตารางอื่นเห็นผลทันที
+  renderTypes(true);               // true = อย่า re-render ตารางที่กำลังพิมพ์อยู่
+}
+function cfgToggle(kind, idx, field){
+  if(!ITEMCFG) return;
+  var arr = ITEMCFG[kind]; if(!arr || !arr[idx]) return;
+  arr[idx][field] = !arr[idx][field];
+  markTypesDirty(); applyItemConfig(ITEMCFG); renderTypes();
+}
+function bookFlagToggle(idx){
+  BOOK_STATUS_CFG[idx].in_book = !BOOK_STATUS_CFG[idx].in_book;
+  if(ITEMCFG) ITEMCFG.book_statuses = BOOK_STATUS_CFG;
+  markTypesDirty(); renderTypes(); renderRecon(); renderSiteStatus();
+}
+function addStatusRow(typeId){
+  if(!ITEMCFG) return;
+  var max = 0;
+  (ITEMCFG.statuses||[]).forEach(function(s){ if(s.type_id===typeId && (s.sort||0)>max) max=s.sort||0; });
+  ITEMCFG.statuses.push({ type_id:typeId, status_name:'สถานะใหม่', in_actual:true, doc_exclude:false, sort:max+1, is_active:true });
+  markTypesDirty(); applyItemConfig(ITEMCFG); renderTypes();
+}
+function addTypeRow(){
+  if(!ITEMCFG) return;
+  var max = 0; (ITEMCFG.types||[]).forEach(function(t){ if((t.sort||0)>max) max=t.sort||0; });
+  ITEMCFG.types.push({ type_id:'type'+(max+1), type_name:'ชนิดใหม่', icon:'📦', sort:max+1, is_active:true });
+  markTypesDirty(); applyItemConfig(ITEMCFG); renderTypes();
+}
+
+// keepFocus: ถ้ากำลังพิมพ์อยู่ในช่องไหน อย่าวาดตารางนั้นทับ (บทเรียน 2.6)
+function renderTypes(keepFocus){
+  if(!document.getElementById('typesTable')) return;
+  var focusId = (keepFocus && document.activeElement && document.activeElement.id) ? document.activeElement.id : '';
+
+  if(!ITEMCFG){
+    document.getElementById('typesTable').innerHTML =
+      '<div class="empty">backend ยังไม่ได้ส่ง config มา — รัน <b>setupItemConfigSheets()</b> ใน Apps Script หนึ่งครั้ง แล้วรีเฟรช</div>';
+    return;
+  }
+
+  var warn = document.getElementById('typesWarn');
+  if(warn) warn.style.display = (S.round && S.round.is_open) ? '' : 'none';
+
+  /* ── ชนิด ── */
+  var tRows = (ITEMCFG.types||[]).map(function(t,i){
+    return '<tr>'
+      + '<td><input class="input" id="ty_icon_'+i+'" style="width:52px;text-align:center;" value="'+esc(t.icon||'')+'" oninput="cfgEdit(\'types\','+i+',\'icon\',this.value)"></td>'
+      + '<td class="mono" style="color:var(--muted);">'+esc(t.type_id)+'</td>'
+      + '<td><input class="input" id="ty_name_'+i+'" value="'+esc(t.type_name||'')+'" oninput="cfgEdit(\'types\','+i+',\'type_name\',this.value)"></td>'
+      + '<td class="num"><input class="input" id="ty_sort_'+i+'" type="number" style="width:60px;text-align:center;" value="'+(t.sort||0)+'" oninput="cfgEdit(\'types\','+i+',\'sort\',Number(this.value))"></td>'
+      + '<td class="num">'+cfgProviders(t.type_id).length+'</td>'
+      + '<td class="num">'+cfgStatuses(t.type_id).length+'</td>'
+      + '<td><button class="btn btn-outline btn-sm" onclick="cfgToggle(\'types\','+i+',\'is_active\')">'+(t.is_active!==false?'ใช้งาน':'ปิด')+'</button></td>'
+      + '</tr>';
+  }).join('');
+  if(focusId.indexOf('ty_')!==0){
+    document.getElementById('typesTable').innerHTML =
+      '<table><thead><tr><th>ไอคอน</th><th>type_id</th><th>ชื่อชนิด</th><th class="num">ลำดับ</th><th class="num">ผู้ให้บริการ</th><th class="num">สถานะ</th><th></th></tr></thead>'
+      + '<tbody>'+tRows+'</tbody></table>';
+  }
+
+  /* ── ผู้ให้บริการ ── */
+  var pRows = (ITEMCFG.providers||[]).map(function(p,i){
+    var opts = (ITEMCFG.types||[]).map(function(t){
+      return '<option value="'+esc(t.type_id)+'"'+(t.type_id===p.type_id?' selected':'')+'>'+esc((t.icon||'')+' '+t.type_name)+'</option>';
+    }).join('');
+    return '<tr>'
+      + '<td class="mono" style="color:var(--muted);">'+esc(p.provider_id)+'</td>'
+      + '<td><input class="input" id="pv_name_'+i+'" value="'+esc(p.provider_name||'')+'" oninput="cfgEdit(\'providers\','+i+',\'provider_name\',this.value)"></td>'
+      + '<td><select class="input" onchange="cfgEdit(\'providers\','+i+',\'type_id\',this.value)">'+opts+'</select></td>'
+      + '<td><input type="color" value="'+esc(p.color||'#888888')+'" style="width:44px;height:30px;padding:0;border:1px solid var(--border);border-radius:6px;background:none;cursor:pointer;" oninput="cfgEdit(\'providers\','+i+',\'color\',this.value)"></td>'
+      + '<td class="num"><input class="input" id="pv_sort_'+i+'" type="number" style="width:60px;text-align:center;" value="'+(p.sort||0)+'" oninput="cfgEdit(\'providers\','+i+',\'sort\',Number(this.value))"></td>'
+      + '<td><button class="btn btn-outline btn-sm" onclick="cfgToggle(\'providers\','+i+',\'is_active\')">'+(p.is_active!==false?'ใช้งาน':'ปิด')+'</button></td>'
+      + '</tr>';
+  }).join('');
+  if(focusId.indexOf('pv_')!==0){
+    document.getElementById('provTable').innerHTML =
+      '<table><thead><tr><th>provider_id</th><th>ชื่อแสดงผล</th><th>สังกัดชนิด</th><th>สี</th><th class="num">ลำดับ</th><th></th></tr></thead>'
+      + '<tbody>'+pRows+'</tbody></table>';
+  }
+
+  /* ── สถานะการนับ (จัดกลุ่มตามชนิด) ── */
+  var sHtml = '';
+  cfgTypes().forEach(function(t){
+    var rows = (ITEMCFG.statuses||[]).map(function(s,i){ return {s:s, i:i}; })
+      .filter(function(x){ return x.s.type_id===t.type_id; })
+      .sort(function(a,b){ return (a.s.sort||0)-(b.s.sort||0); })
+      .map(function(x){
+        var s=x.s, i=x.i;
+        return '<tr>'
+          + '<td><input class="input" id="st_name_'+i+'" value="'+esc(s.status_name||'')+'" oninput="cfgEdit(\'statuses\','+i+',\'status_name\',this.value)"></td>'
+          + '<td class="num"><input type="checkbox"'+(s.in_actual?' checked':'')+' onchange="cfgToggle(\'statuses\','+i+',\'in_actual\')" style="width:17px;height:17px;cursor:pointer;"></td>'
+          + '<td class="num"><input type="checkbox"'+(s.doc_exclude?' checked':'')+' onchange="cfgToggle(\'statuses\','+i+',\'doc_exclude\')" style="width:17px;height:17px;cursor:pointer;"></td>'
+          + '<td class="num"><input class="input" id="st_sort_'+i+'" type="number" style="width:60px;text-align:center;" value="'+(s.sort||0)+'" oninput="cfgEdit(\'statuses\','+i+',\'sort\',Number(this.value))"></td>'
+          + '<td><button class="btn btn-outline btn-sm" onclick="cfgToggle(\'statuses\','+i+',\'is_active\')">'+(s.is_active!==false?'ใช้งาน':'ปิด')+'</button></td>'
+          + '</tr>';
+      }).join('');
+    sHtml += '<div style="margin-bottom:14px;">'
+      + '<div style="display:flex;align-items:center;gap:8px;margin:0 0 6px;font-weight:700;font-size:13px;">'
+      +   esc((t.icon||'')+' '+t.type_name)
+      +   '<button class="btn btn-outline btn-sm" style="margin-left:auto;" onclick="addStatusRow(\''+esc(t.type_id)+'\')">+ เพิ่มสถานะ</button></div>'
+      + '<table><thead><tr><th>ชื่อสถานะ</th><th class="num">นับเป็น Actual</th><th class="num">ตัดออกจากเอกสาร</th><th class="num">ลำดับ</th><th></th></tr></thead>'
+      + '<tbody>'+rows+'</tbody></table></div>';
+  });
+  if(focusId.indexOf('st_')!==0) document.getElementById('statusTable').innerHTML = sHtml || '<div class="empty">—</div>';
+
+  /* ── สถานะ Book ── */
+  document.getElementById('bookStatusTable').innerHTML =
+    '<table><thead><tr><th>สถานะ</th><th class="mono">คอลัมน์ในชีต</th><th class="num">นับเป็นยอดคงค้าง (System)</th></tr></thead><tbody>'
+    + BOOK_STATUS_CFG.map(function(s,i){
+        return '<tr><td>'+esc(s.label)+'</td><td class="mono" style="color:var(--muted);">'+esc(s.key)+'</td>'
+          + '<td class="num"><input type="checkbox"'+(s.in_book?' checked':'')+' onchange="bookFlagToggle('+i+')" style="width:17px;height:17px;cursor:pointer;"></td></tr>';
+      }).join('')
+    + '</tbody></table>';
+}
+
+function saveItemConfig(){
+  if(!ITEMCFG){ toast('ยังไม่มี config ให้บันทึก','error'); return; }
+  if(S.round && S.round.is_open && !confirm('ตอนนี้มีรอบที่เปิดอยู่ — การแก้ config อาจทำให้ยอดที่นับไปแล้วอ่านไม่ตรงกัน\nยืนยันบันทึก?')) return;
+  var btn = document.getElementById('typesSaveBtn'); btn.disabled=true; btn.textContent='กำลังบันทึก…';
+  ITEMCFG.book_statuses = BOOK_STATUS_CFG;
+  post({ action:'saveItemConfig', config:ITEMCFG }).then(function(d){
+    btn.disabled=false; btn.textContent='💾 บันทึกการตั้งค่า';
+    if(d && d.status==='error'){ toast(d.message||'บันทึกไม่สำเร็จ','error'); return; }
+    S.typesDirty=false;
+    var m=document.getElementById('typesDirtyMark'); if(m) m.style.display='none';
+    toast('บันทึกแล้ว — ฟอร์มนับของผู้นับจะใช้ค่าใหม่ทันที','success');
+    loadData(false);
+  }).catch(function(){
+    btn.disabled=false; btn.textContent='💾 บันทึกการตั้งค่า';
+    toast('บันทึกไม่สำเร็จ','error');
+  });
+}
+
 /* ── Render: Actual vs System reconciliation ─────────── */
 // System = ยอดในระบบ (book) = คงเหลือ + ระหว่างโอนออก  (ยอดคงค้างในบัญชีเช่า)
 function systemOf(site_id, prov){
   var b = S.books[site_id];
   if(!b || !b[prov]) return 0;
-  return (b[prov].onhand||0) + (b[prov].transit_out||0);
+  var g = b[prov], sum = 0;
+  bookOutstandingKeys().forEach(function(k){ sum += Number(g[k]||0); });   // flag in_book (ชีต) แทนสูตรฝังโค้ด
+  return sum;
 }
 // ── สูตรกระทบยอด (เฉพาะหน้าภาพรวมนี้เท่านั้น — ไม่กระทบเอกสารสรุปหรือข้อมูลในชีต) ──
 // Actual ไม้      = RFI + TBR + BER + TBC + TBS + ใช้วางสินค้า + สายการผลิต + นอกระบบ PCS + ระหว่างโอนออก
@@ -761,7 +1002,10 @@ function actualOf(site_id, prov){
   var s = latestSub(site_id);
   if(!s) return null;
   var kind = PROV_KIND[prov] || 'wood';
-  var transitOut = Number(((S.books[site_id]||{})[prov]||{}).transit_out || 0);   // + ระหว่างโอนออก (จาก Book)
+  // + สถานะ Book ที่นับเป็นยอดคงค้าง แต่ไม่ใช่ "คงเหลือ" (เดิม = ระหว่างโอนออก) — อ่านจาก flag in_book
+  var bookRow = (S.books[site_id]||{})[prov] || {};
+  var transitOut = 0;
+  bookOutstandingKeys().forEach(function(k){ if(k!=='onhand') transitOut += Number(bookRow[k]||0); });
   var offPcs     = Number((s.off_pcs && s.off_pcs[prov]) || 0);                   // + นอกระบบ PCS (ระดับ Site)
   var locs = s.locations;
 
@@ -1033,17 +1277,21 @@ function renderBookGrid(){
   if(!S.bookSite){ wrap.innerHTML=''; return; }
   var book = S.books[S.bookSite] || {};
 
-  var head = '<tr><th>สถานะ \\ พาเลท</th>' + PROVIDERS.map(function(p){return '<th class="prov-head '+p.cls+'">'+p.label+'</th>';}).join('') + '</tr>';
-  var body = STATUSES.map(function(st){
+  var head = '<tr><th>สถานะ \\ รายการ</th>' + PROVIDERS.map(function(p){
+    var t = typeById(p.kind);
+    return '<th class="prov-head '+p.cls+'"'+provStyle(p)+' title="'+esc(t?t.type_name:'')+'">'+esc(p.label)+'</th>';
+  }).join('') + '</tr>';
+  var body = BOOK_STATUS_CFG.map(function(st){
     var cells = PROVIDERS.map(function(p){
       var v = (book[p.key] && book[p.key][st.key]!=null) ? book[p.key][st.key] : '';
       return '<td><input class="bb-input" type="number" min="0" inputmode="numeric" data-p="'+p.key+'" data-s="'+st.key+'" value="'+v+'" oninput="recalcBook()"></td>';
     }).join('');
-    return '<tr><td style="font-weight:600;">'+st.label+'</td>'+cells+'</tr>';
+    return '<tr><td style="font-weight:600;">'+esc(st.label)+(st.in_book?' <span style="font-size:10px;color:var(--accent);">• นับเป็นยอดคงค้าง</span>':'')+'</td>'+cells+'</tr>';
   }).join('');
-  // ยอดคงค้างในบัญชีเช่า = คงเหลือ + ระหว่างโอนออก (แยกต่อ provider)
-  var foot = '<tr class="bb-foot"><td title="คงเหลือ + ระหว่างโอนออก">รวมยอดคงค้างในบัญชีเช่า</td>'
-    + PROVIDERS.map(function(p){return '<td class="'+p.cls+'" data-rent="'+p.key+'">0</td>';}).join('')
+  // ยอดคงค้างในบัญชีเช่า = ผลรวมสถานะที่ติ๊ก in_book ในแท็บ "ชนิดที่นับ"
+  var _obLabel = BOOK_STATUS_CFG.filter(function(s){return s.in_book;}).map(function(s){return s.label;}).join(' + ');
+  var foot = '<tr class="bb-foot"><td title="'+esc(_obLabel)+'">รวมยอดคงค้างในบัญชีเช่า</td>'
+    + PROVIDERS.map(function(p){return '<td class="'+p.cls+'"'+provStyle(p)+' data-rent="'+p.key+'">0</td>';}).join('')
     + '</tr>';
   var _docNo = (S.docnos && S.docnos[S.bookSite]) || '';
   var docNoField = '<div class="field" style="margin-bottom:12px;"><label>📄 เลขที่เอกสาร (เฉพาะ Site นี้)</label>'
@@ -1058,7 +1306,8 @@ function recalcBook(){
   PROVIDERS.forEach(function(p){ val[p.key]={}; });
   inputs.forEach(function(i){ val[i.dataset.p][i.dataset.s] = Number(i.value)||0; });
   PROVIDERS.forEach(function(p){
-    var outstanding = (val[p.key].onhand||0) + (val[p.key].transit_out||0);  // ยอดคงค้างในบัญชีเช่า
+    var outstanding = 0;                                     // ยอดคงค้างในบัญชีเช่า (flag in_book)
+    bookOutstandingKeys().forEach(function(k){ outstanding += Number(val[p.key][k]||0); });
     var e = wrap.querySelector('[data-rent="'+p.key+'"]');
     if(e) e.textContent = outstanding.toLocaleString();
   });
@@ -1066,7 +1315,7 @@ function recalcBook(){
 function saveBook(){
   if(!S.bookSite) return;
   var book = {};
-  PROVIDERS.forEach(function(p){ book[p.key]={}; STATUSES.forEach(function(s){ book[p.key][s.key]=0; }); });
+  PROVIDERS.forEach(function(p){ book[p.key]={}; BOOK_STATUS_CFG.forEach(function(s){ book[p.key][s.key]=0; }); });
   document.getElementById('bookGridWrap').querySelectorAll('.bb-input').forEach(function(i){
     book[i.dataset.p][i.dataset.s] = Number(i.value)||0;
   });
@@ -1484,10 +1733,15 @@ function confirmNewRound(){
 
 /* ── Tabs / overlay ──────────────────────────────────── */
 function switchTab(name){
+  if(S.tab==='types' && name!=='types' && S.typesDirty){
+    if(!confirm('ยังไม่ได้บันทึกการตั้งค่าชนิดที่นับ — ออกจากแท็บนี้เลยไหม (การแก้ไขจะหายไป)')) return;
+    S.typesDirty=false; loadData(false);
+  }
   S.tab=name;
   document.querySelectorAll('.tab').forEach(function(t){ t.classList.toggle('active', t.dataset.tab===name); });
   document.querySelectorAll('.panel').forEach(function(p){ p.classList.toggle('active', p.id==='panel-'+name); });
   if(name==='queue') startQueuePoll(); else stopQueuePoll();
+  if(name==='types') renderTypes();
   if(name==='stats') loadStats();
 }
 function openOverlay(id){ _modalOpen=true; document.getElementById(id).classList.add('open'); }
