@@ -33,6 +33,15 @@ button{font-family:var(--font);}
 .sync-dot.live{animation:pulse 2s infinite;}
 @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(52,211,153,.45);}70%{box-shadow:0 0 0 6px rgba(52,211,153,0);}100%{box-shadow:0 0 0 0 rgba(52,211,153,0);}}
 .badge-admin{background:rgba(251,191,36,.15);border:1px solid rgba(251,191,36,.3);color:var(--warn);font-size:11px;font-weight:600;padding:2px 10px;border-radius:20px;white-space:nowrap;}
+/* ── v2: ป้ายกำกับ + ฟอร์มในตารางตั้งค่า ── */
+.badge{display:inline-block;font-size:10px;font-weight:700;padding:1px 7px;border-radius:10px;border:1px solid var(--border);color:var(--muted);white-space:nowrap;}
+.badge.ob{border-color:var(--accent);color:var(--accent);background:rgba(56,189,248,.08);}
+.badge.off{border-color:var(--muted2,#64748b);color:var(--muted2,#64748b);}
+#panel-setup table .input{padding:6px 9px;font-size:13px;border-radius:var(--rxs,6px);}
+#panel-setup table select.input{cursor:pointer;min-width:120px;}
+#panel-setup table td{vertical-align:middle;}
+#panel-setup table input[type=checkbox]{accent-color:var(--accent);}
+#panel-types table .input{padding:6px 9px;font-size:13px;border-radius:var(--rxs,6px);}
 
 /* ── Buttons ─────────────────────────────────────────── */
 .btn{border:none;border-radius:var(--rs);padding:9px 16px;font-size:13px;font-weight:600;cursor:pointer;transition:opacity .15s,border-color .15s;display:inline-flex;align-items:center;justify-content:center;gap:6px;white-space:nowrap;}
@@ -276,6 +285,7 @@ table.recon .grp{border-left:1px solid var(--border);}
     <button class="tab active" data-tab="dashboard" onclick="switchTab('dashboard')">📊 ภาพรวม</button>
     <button class="tab" data-tab="sites" onclick="switchTab('sites')">⚙️ ตั้งค่า Site</button>
     <button class="tab" data-tab="types" onclick="switchTab('types')">🧩 ชนิดที่นับ</button>
+    <button class="tab" data-tab="setup" onclick="switchTab('setup')">🎛️ ตั้งค่ารอบ (v2)</button>
     <button class="tab" data-tab="queue" onclick="switchTab('queue')">🔔 คิว recheck</button>
     <button class="tab" data-tab="agents" onclick="switchTab('agents')">👥 ผู้ใช้</button>
     <button class="tab" data-tab="stats" onclick="switchTab('stats')">🏆 หอเกียรติยศ</button>
@@ -373,6 +383,62 @@ table.recon .grp{border-left:1px solid var(--border);}
       </div>
     </div>
 
+    <!-- ─── ตั้งค่ารอบ (v2) — ระบบใหม่ นับอะไรก็ได้ ─── -->
+    <div class="panel" id="panel-setup">
+      <div class="bb-hint" style="border-left:3px solid var(--accent);">
+        🎛️ <b>ระบบใหม่ (v2)</b> — ตั้งค่าทุกอย่างของรอบนี้ที่นี่ ชนิด/รายการ/หน่วย/สถานะ กำหนดเองได้ทั้งหมด
+        · ทุกอย่างอ้างด้วย id ภายใน <b>เปลี่ยนชื่อได้ตลอดโดยยอดที่นับไว้ไม่พัง</b>
+        · ค่าที่ตั้งผูกกับรอบนี้เท่านั้น รอบเก่าไม่กระทบ
+      </div>
+
+      <div class="eyebrow">รอบปัจจุบัน <span class="ehint" id="setupRoundLabel">—</span></div>
+      <div class="add-row" style="flex-wrap:wrap;">
+        <button class="btn btn-outline" onclick="v2LoadConfig()">↻ โหลดใหม่</button>
+        <button class="btn btn-outline" onclick="v2UseTemplate()">📋 ใช้เทมเพลตพาเลท</button>
+        <button class="btn btn-success" id="v2SaveBtn" onclick="v2Save()">💾 บันทึกการตั้งค่า</button>
+        <span id="v2DirtyMark" style="font-size:12px;color:var(--warn);display:none;align-self:center;">● ยังไม่บันทึก</span>
+      </div>
+      <div id="v2Errors" style="display:none;background:rgba(248,113,113,.1);border:1px solid var(--danger);border-radius:8px;padding:10px 12px;font-size:12px;color:var(--danger);white-space:pre-line;margin-bottom:12px;"></div>
+
+      <div class="eyebrow" style="margin-top:14px;">1 · ชนิดของสิ่งที่นับ
+        <span class="ehint">— เช่น พาเลทไม้ / ถังแก๊ส 15 กก. / ลังเบียร์ (สูงสุด 4 ชนิด)</span></div>
+      <div class="table-wrap" id="v2TypesTable"><div class="empty">—</div></div>
+      <button class="btn btn-outline btn-sm" style="margin-top:8px;" onclick="v2Add('types')">+ เพิ่มชนิด</button>
+
+      <div class="eyebrow" style="margin-top:18px;">2 · รายการที่นับ
+        <span class="ehint">— ผู้ให้บริการ/ยี่ห้อ/ขนาด · <b>สูงสุด 4 รายการต่อชนิด</b> (เกินกว่านี้ฟอร์มนับจะกว้างเกินจอมือถือ)</span></div>
+      <div class="table-wrap" id="v2ItemsTable"><div class="empty">—</div></div>
+      <button class="btn btn-outline btn-sm" style="margin-top:8px;" onclick="v2Add('items')">+ เพิ่มรายการ</button>
+
+      <div class="eyebrow" style="margin-top:18px;">3 · สถานะการนับ
+        <span class="ehint">— แถวในฟอร์มที่ผู้นับกรอก</span></div>
+      <div class="bb-hint">
+        <b>นับเป็นยอดจริง</b> = รวมเป็นยอด Actual ·
+        <b>บวกกลับ</b> = ขึ้นแถว “บวก …” ตอนหาส่วนต่างสุทธิในเอกสาร ·
+        <b>ซ่อนในเอกสาร</b> = กรอกได้แต่ไม่พิมพ์ออกมา
+      </div>
+      <div id="v2StatusTables"><div class="empty">—</div></div>
+
+      <div class="eyebrow" style="margin-top:18px;">4 · สถานะยอดตามบัญชี
+        <span class="ehint">— ยอดที่ Admin กรอกจากระบบบัญชี</span></div>
+      <div class="bb-hint">
+        <b>ยอดคงค้าง</b> = รวมเป็นยอด System ·
+        <b>ฐานเทียบ</b> = ตัวที่เอาไปลบกับยอดนับจริงเพื่อหาส่วนต่าง (เลือกได้ตัวเดียว)
+      </div>
+      <div class="table-wrap" id="v2BookTable"><div class="empty">—</div></div>
+      <button class="btn btn-outline btn-sm" style="margin-top:8px;" onclick="v2Add('book_statuses')">+ เพิ่มสถานะบัญชี</button>
+
+      <div class="eyebrow" style="margin-top:18px;">5 · รายการปรับปรุงระดับ Site
+        <span class="ehint">— เดิมคือ “นอกระบบ PCS” · ตั้งชื่อเองได้ กี่รายการก็ได้</span></div>
+      <div class="table-wrap" id="v2AdjTable"><div class="empty">—</div></div>
+      <button class="btn btn-outline btn-sm" style="margin-top:8px;" onclick="v2Add('adjustments')">+ เพิ่มรายการปรับปรุง</button>
+
+      <div style="margin-top:20px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
+        <button class="btn btn-outline" onclick="v2OpenPreview()">👁 ดูตัวอย่างหน้าผู้นับ</button>
+        <span class="hint">ดูว่าผู้นับจะเห็นอะไร และ flag ที่ตั้งไว้แปลเป็นสูตรอย่างไร</span>
+      </div>
+    </div>
+
     <!-- ─── คิว recheck (กระดานเรียกคิวตรวจซ้ำ) ─── -->
     <div class="panel" id="panel-queue">
       <div id="queueStats" style="display:flex;gap:10px;flex-wrap:wrap;margin-bottom:12px;"></div>
@@ -414,6 +480,20 @@ table.recon .grp{border-left:1px solid var(--border);}
 </div>
 
 <!-- ════ Review modal (approve / reject) ════ -->
+<!-- ════ Preview หน้าผู้นับ (v2) ════ -->
+<div class="overlay" id="v2PreviewModal">
+  <div class="modal" style="max-width:920px;max-height:88vh;display:flex;flex-direction:column;">
+    <div class="modal-head">
+      <div class="modal-title">👁 ตัวอย่างหน้าผู้นับ <span style="font-weight:400;color:var(--muted);font-size:12px;" id="v2PvRound"></span></div>
+      <button class="modal-close" onclick="v2ClosePreview()">&times;</button>
+    </div>
+    <div class="modal-body" id="v2Preview" style="overflow:auto;gap:0;"></div>
+    <div class="modal-foot">
+      <button class="btn btn-outline" onclick="v2ClosePreview()" style="flex:1;">ปิด</button>
+    </div>
+  </div>
+</div>
+
 <div class="overlay" id="reviewModal">
   <div class="modal">
     <div class="modal-head">
@@ -717,6 +797,7 @@ function startPolling(){
     if(S.tab==='sites' && S.bookSite) return; // don't wipe book entry in progress
     if(S.tab==='sites' && S._editSite) return; // อย่า re-render ทับตอนกำลังแก้ไข site แบบ inline
     if(S.tab==='types' && S.typesDirty) return; // อย่าทับ config ที่กำลังแก้ค้างไว้
+    if(S.tab==='setup') return;                 // แท็บตั้งค่า v2: ไม่ poll ทับเลย
     if(S.tab==='stats') loadStats();           // แท็บหอเกียรติยศ: รีเฟรชสถิติตามรอบ poll
     loadData(false);
   }, POLL_MS);
@@ -975,6 +1056,397 @@ function saveItemConfig(){
     btn.disabled=false; btn.textContent='💾 บันทึกการตั้งค่า';
     toast('บันทึกไม่สำเร็จ','error');
   });
+}
+
+/* ════════════════════════════════════════════════════════════════
+   v2 — ตั้งค่ารอบ (ชนิด / รายการ / สถานะ / บัญชี / ปรับปรุง)
+   แก้ใน V2CFG (memory) ก่อน แล้วกดบันทึกทีเดียว
+   ════════════════════════════════════════════════════════════════ */
+var V2CFG = null, V2LIM = { max_items_per_type:4, max_types:4 };
+
+function v2Dirty(){ S.v2Dirty = true; var m=document.getElementById('v2DirtyMark'); if(m) m.style.display='inline'; }
+function v2Err(msg){
+  var el=document.getElementById('v2Errors'); if(!el) return;
+  if(!msg){ el.style.display='none'; el.textContent=''; return; }
+  el.style.display='block'; el.textContent=msg;
+}
+function v2RoundId(){ return S.round ? S.round.round_id : ''; }
+
+function v2LoadConfig(){
+  var rid = v2RoundId();
+  if(!rid){ v2Err('ยังไม่มีรอบที่เปิดอยู่ — เปิดรอบก่อนจึงตั้งค่าได้'); return; }
+  post({action:'getRoundConfigV2', round_id:rid}).then(function(d){
+    if(d && d.config){
+      V2CFG = d.config;
+      if(d.config.limits) V2LIM = d.config.limits;
+    }
+    S.v2Dirty=false;
+    var m=document.getElementById('v2DirtyMark'); if(m) m.style.display='none';
+    v2Err(''); v2Render();
+  }).catch(function(){ v2Err('โหลด config ไม่สำเร็จ'); });
+}
+
+function v2UseTemplate(){
+  if(!confirm('แทนที่การตั้งค่าของรอบนี้ด้วยเทมเพลตพาเลท (ไม้/พลาสติก 4 รายการ)?')) return;
+  post({action:'useTemplateV2', round_id:v2RoundId()}).then(function(d){
+    if(d && d.status==='error'){ v2Err(d.message||'ไม่สำเร็จ'); return; }
+    toast('ใช้เทมเพลตแล้ว','success'); v2LoadConfig();
+  });
+}
+
+// สร้าง id ทันทีที่เพิ่มแถว — หน้าเว็บต้องใช้ id อ้างถึงกันก่อนบันทึก
+// (backend เคารพ id ที่ส่งมา และจะเติมให้เองเฉพาะแถวที่ยังไม่มี)
+function v2NewId(prefix){
+  return prefix + '_' + Date.now().toString(36) + Math.floor(Math.random()*1296).toString(36);
+}
+
+function v2Add(kind){
+  if(!V2CFG){ v2Err('ยังไม่ได้โหลด config'); return; }
+  if(!V2CFG[kind]) V2CFG[kind]=[];
+  var maxSort=0; V2CFG[kind].forEach(function(r){ if((r.sort||0)>maxSort) maxSort=r.sort||0; });
+  var row = { sort:maxSort+1, is_active:true };
+  if(kind==='types')            { row.type_id=v2NewId('ty'); row.type_name='ชนิดใหม่'; row.icon='📦'; }
+  if(kind==='items')            { row.item_id=v2NewId('it'); row.item_name='รายการใหม่'; row.unit='ชิ้น'; row.color='#94a3b8';
+                                  row.type_id = (V2CFG.types[0]||{}).type_id||''; }
+  if(kind==='book_statuses')    { row.status_id=v2NewId('bs'); row.status_name='สถานะใหม่'; row.is_outstanding=false; row.is_baseline=false; }
+  if(kind==='adjustments')      { row.adjust_id=v2NewId('aj'); row.adjust_name='รายการปรับปรุงใหม่'; row.require_file=false; }
+  if(kind==='items' && !row.type_id){ v2Err('เพิ่มชนิดก่อนจึงจะเพิ่มรายการได้'); return; }
+  V2CFG[kind].push(row); v2Dirty(); v2Render();
+}
+function v2AddStatus(typeId){
+  if(!V2CFG) return;
+  if(!typeId){ v2Err('ชนิดนี้ยังไม่มี id — ลองโหลดใหม่'); return; }
+  if(!V2CFG.count_statuses) V2CFG.count_statuses=[];
+  var maxSort=0;
+  V2CFG.count_statuses.forEach(function(s){ if(s.type_id===typeId && (s.sort||0)>maxSort) maxSort=s.sort||0; });
+  V2CFG.count_statuses.push({ status_id:v2NewId('cs'), type_id:typeId, status_name:'สถานะใหม่', in_actual:true,
+                              add_back:false, doc_hide:false, sort:maxSort+1, is_active:true });
+  v2Dirty(); v2Render();
+}
+function v2Set(kind, idx, field, val){
+  if(!V2CFG || !V2CFG[kind] || !V2CFG[kind][idx]) return;
+  V2CFG[kind][idx][field] = val;
+  v2Dirty(); v2Render(true);
+}
+function v2Toggle(kind, idx, field){
+  if(!V2CFG || !V2CFG[kind] || !V2CFG[kind][idx]) return;
+  V2CFG[kind][idx][field] = !V2CFG[kind][idx][field];
+  // ฐานเทียบเลือกได้ตัวเดียว
+  if(field==='is_baseline' && V2CFG[kind][idx][field]){
+    V2CFG[kind].forEach(function(r,i){ if(i!==idx) r.is_baseline=false; });
+  }
+  v2Dirty(); v2Render();
+}
+function v2Del(kind, idx){
+  if(!V2CFG || !V2CFG[kind]) return;
+  var r = V2CFG[kind][idx];
+  var name = r.type_name || r.item_name || r.status_name || r.adjust_name || '';
+  if(!confirm('ลบ "'+name+'" ?\n\nถ้ารอบนี้มียอดที่นับไว้แล้ว ระบบจะไม่ให้ลบ — ใช้ปุ่ม "ปิด" แทน')) return;
+  V2CFG[kind].splice(idx,1); v2Dirty(); v2Render();
+}
+
+function v2Save(){
+  if(!V2CFG){ v2Err('ยังไม่ได้โหลด config'); return; }
+  var btn=document.getElementById('v2SaveBtn'); btn.disabled=true; btn.textContent='กำลังบันทึก…';
+  post({action:'saveRoundConfig', round_id:v2RoundId(), config:V2CFG}).then(function(d){
+    btn.disabled=false; btn.textContent='💾 บันทึกการตั้งค่า';
+    if(d && d.status==='error'){ v2Err(d.message||'บันทึกไม่สำเร็จ'); return; }
+    v2Err(''); S.v2Dirty=false;
+    var m=document.getElementById('v2DirtyMark'); if(m) m.style.display='none';
+    if(d.config) V2CFG=d.config;
+    toast('บันทึกการตั้งค่าแล้ว','success'); v2Render();
+  }).catch(function(){
+    btn.disabled=false; btn.textContent='💾 บันทึกการตั้งค่า'; v2Err('บันทึกไม่สำเร็จ');
+  });
+}
+
+// ── render ─────────────────────────────────────────────
+function v2Act(kind,i,r){
+  return '<td style="display:flex;gap:6px;">'
+    + '<button class="btn btn-outline btn-sm" onclick="v2Toggle(\''+kind+'\','+i+',\'is_active\')">'+(r.is_active!==false?'เปิด':'ปิด')+'</button>'
+    + '<button class="btn btn-danger btn-sm" onclick="v2Del(\''+kind+'\','+i+')">ลบ</button></td>';
+}
+function v2Num(kind,i,field,val,id){
+  return '<td class="num"><input class="input mono" id="'+id+'" type="number" style="width:56px;text-align:center;" value="'+(val||0)+'" oninput="v2Set(\''+kind+'\','+i+',\''+field+'\',Number(this.value))"></td>';
+}
+function v2Chk(kind,i,field,on){
+  return '<td class="num"><input type="checkbox"'+(on?' checked':'')+' onchange="v2Toggle(\''+kind+'\','+i+',\''+field+'\')" style="width:17px;height:17px;cursor:pointer;"></td>';
+}
+
+function v2Render(keepFocus){
+  if(!document.getElementById('v2TypesTable')) return;
+  var focusId = (keepFocus && document.activeElement && document.activeElement.id) ? document.activeElement.id : '';
+  var lbl = document.getElementById('setupRoundLabel');
+  if(lbl) lbl.textContent = S.round ? (S.round.round_id+' · '+S.round.round_name) : 'ยังไม่มีรอบที่เปิดอยู่';
+
+  if(!V2CFG){
+    document.getElementById('v2TypesTable').innerHTML =
+      '<div class="empty">ยังไม่ได้โหลด — กด “โหลดใหม่” (ครั้งแรกต้องรัน <b>setupV2Sheets()</b> ใน Apps Script ก่อน)</div>';
+    return;
+  }
+
+  // 1 ชนิด
+  if(focusId.indexOf('v2ty_')!==0){
+    document.getElementById('v2TypesTable').innerHTML =
+      '<table><thead><tr><th style="width:56px;">ไอคอน</th><th>ชื่อชนิด</th><th class="num" style="width:70px;">ลำดับ</th><th class="num" style="width:80px;">รายการ</th><th class="num" style="width:80px;">สถานะ</th><th style="width:130px;"></th></tr></thead><tbody>'
+      + (V2CFG.types||[]).map(function(t,i){
+          var nItem=(V2CFG.items||[]).filter(function(x){return x.type_id===t.type_id;}).length;
+          var nSt=(V2CFG.count_statuses||[]).filter(function(x){return x.type_id===t.type_id;}).length;
+          var over = nItem > (V2LIM.max_items_per_type||4);
+          return '<tr>'
+            + '<td><input class="input" id="v2ty_ic_'+i+'" style="width:48px;text-align:center;" value="'+esc(t.icon||'')+'" oninput="v2Set(\'types\','+i+',\'icon\',this.value)"></td>'
+            + '<td><input class="input" id="v2ty_nm_'+i+'" value="'+esc(t.type_name||'')+'" oninput="v2Set(\'types\','+i+',\'type_name\',this.value)"></td>'
+            + v2Num('types',i,'sort',t.sort,'v2ty_so_'+i)
+            + '<td class="num"'+(over?' style="color:var(--danger);font-weight:700;"':'')+'>'+nItem+(over?' ⚠':'')+'</td>'
+            + '<td class="num">'+nSt+'</td>'
+            + v2Act('types',i,t)+'</tr>';
+        }).join('')
+      + '</tbody></table>';
+  }
+
+  // 2 รายการ
+  if(focusId.indexOf('v2it_')!==0){
+    document.getElementById('v2ItemsTable').innerHTML =
+      '<table><thead><tr><th>ชื่อรายการ</th><th style="width:170px;">ชนิด</th><th style="width:100px;">หน่วย</th><th style="width:70px;">สี</th><th class="num" style="width:70px;">ลำดับ</th><th style="width:130px;"></th></tr></thead><tbody>'
+      + (V2CFG.items||[]).map(function(it,i){
+          var opts=(V2CFG.types||[]).map(function(t){
+            return '<option value="'+esc(t.type_id||'')+'"'+(t.type_id===it.type_id?' selected':'')+'>'+esc((t.icon||'')+' '+t.type_name)+'</option>';
+          }).join('');
+          return '<tr>'
+            + '<td><input class="input" id="v2it_nm_'+i+'" value="'+esc(it.item_name||'')+'" oninput="v2Set(\'items\','+i+',\'item_name\',this.value)"></td>'
+            + '<td><select class="input" id="v2it_ty_'+i+'" onchange="v2Set(\'items\','+i+',\'type_id\',this.value)">'+opts+'</select></td>'
+            + '<td><input class="input" id="v2it_un_'+i+'" value="'+esc(it.unit||'')+'" placeholder="ใบ/ถัง/ชิ้น" oninput="v2Set(\'items\','+i+',\'unit\',this.value)"></td>'
+            + '<td><input type="color" value="'+esc(it.color||'#94a3b8')+'" style="width:40px;height:28px;padding:0;border:1px solid var(--border);border-radius:5px;background:none;cursor:pointer;" oninput="v2Set(\'items\','+i+',\'color\',this.value)"></td>'
+            + v2Num('items',i,'sort',it.sort,'v2it_so_'+i)
+            + v2Act('items',i,it)+'</tr>';
+        }).join('')
+      + '</tbody></table>';
+  }
+
+  // 3 สถานะการนับ (แยกตามชนิด)
+  if(focusId.indexOf('v2cs_')!==0){
+    var html='';
+    (V2CFG.types||[]).filter(function(t){return t.is_active!==false;}).forEach(function(t){
+      var rows=(V2CFG.count_statuses||[]).map(function(s,i){ return {s:s,i:i}; })
+        .filter(function(x){ return x.s.type_id===t.type_id; })
+        .sort(function(a,b){ return (a.s.sort||0)-(b.s.sort||0); })
+        .map(function(x){
+          var s=x.s, i=x.i;
+          return '<tr>'
+            + '<td><input class="input" id="v2cs_nm_'+i+'" value="'+esc(s.status_name||'')+'" oninput="v2Set(\'count_statuses\','+i+',\'status_name\',this.value)"></td>'
+            + v2Chk('count_statuses',i,'in_actual',s.in_actual)
+            + v2Chk('count_statuses',i,'add_back',s.add_back)
+            + v2Chk('count_statuses',i,'doc_hide',s.doc_hide)
+            + v2Num('count_statuses',i,'sort',s.sort,'v2cs_so_'+i)
+            + v2Act('count_statuses',i,s)+'</tr>';
+        }).join('');
+      html += '<div style="margin-bottom:14px;">'
+        + '<div style="display:flex;align-items:center;gap:8px;margin-bottom:6px;font-weight:700;font-size:13px;">'
+        +   esc((t.icon||'')+' '+t.type_name)
+        +   (t.type_id
+              ? '<button class="btn btn-outline btn-sm" style="margin-left:auto;" onclick="v2AddStatus(\''+esc(t.type_id)+'\')">+ เพิ่มสถานะ</button>'
+              : '<span style="margin-left:auto;font-size:11px;color:var(--warn);">บันทึกชนิดก่อนจึงเพิ่มสถานะได้</span>')
+        +   '</div>'
+        + '<table><thead><tr><th>ชื่อสถานะ</th><th class="num" style="width:95px;">นับเป็นยอดจริง</th><th class="num" style="width:80px;">บวกกลับ</th><th class="num" style="width:95px;">ซ่อนในเอกสาร</th><th class="num" style="width:70px;">ลำดับ</th><th style="width:130px;"></th></tr></thead>'
+        + '<tbody>'+(rows||'<tr><td colspan="6" style="color:var(--muted);">ยังไม่มีสถานะ</td></tr>')+'</tbody></table></div>';
+    });
+    var tids={}; (V2CFG.types||[]).forEach(function(t){ if(t.type_id) tids[t.type_id]=1; });
+    var orphan=(V2CFG.count_statuses||[]).filter(function(s){ return !tids[s.type_id]; });
+    if(orphan.length){
+      html += '<div class="bb-hint" style="border-left:3px solid var(--warn);">⚠ มี '+orphan.length
+           +  ' สถานะที่ไม่สังกัดชนิดใด — จะถูกทิ้งเมื่อบันทึก: '
+           +  esc(orphan.map(function(s){ return s.status_name; }).join(', '))+'</div>';
+    }
+    document.getElementById('v2StatusTables').innerHTML = html || '<div class="empty">เพิ่มชนิดก่อน</div>';
+  }
+
+  // 4 สถานะบัญชี
+  if(focusId.indexOf('v2bs_')!==0){
+    document.getElementById('v2BookTable').innerHTML =
+      '<table><thead><tr><th>ชื่อสถานะ</th><th class="num" style="width:100px;">ยอดคงค้าง</th><th class="num" style="width:90px;">ฐานเทียบ</th><th class="num" style="width:70px;">ลำดับ</th><th style="width:130px;"></th></tr></thead><tbody>'
+      + (V2CFG.book_statuses||[]).map(function(s,i){
+          return '<tr>'
+            + '<td><input class="input" id="v2bs_nm_'+i+'" value="'+esc(s.status_name||'')+'" oninput="v2Set(\'book_statuses\','+i+',\'status_name\',this.value)"></td>'
+            + v2Chk('book_statuses',i,'is_outstanding',s.is_outstanding)
+            + v2Chk('book_statuses',i,'is_baseline',s.is_baseline)
+            + v2Num('book_statuses',i,'sort',s.sort,'v2bs_so_'+i)
+            + v2Act('book_statuses',i,s)+'</tr>';
+        }).join('')
+      + '</tbody></table>';
+  }
+
+  // 5 รายการปรับปรุง
+  if(focusId.indexOf('v2aj_')!==0){
+    document.getElementById('v2AdjTable').innerHTML =
+      '<table><thead><tr><th>ชื่อรายการ</th><th class="num" style="width:120px;">ต้องแนบไฟล์</th><th class="num" style="width:70px;">ลำดับ</th><th style="width:130px;"></th></tr></thead><tbody>'
+      + ((V2CFG.adjustments||[]).map(function(a,i){
+          return '<tr>'
+            + '<td><input class="input" id="v2aj_nm_'+i+'" value="'+esc(a.adjust_name||'')+'" oninput="v2Set(\'adjustments\','+i+',\'adjust_name\',this.value)"></td>'
+            + v2Chk('adjustments',i,'require_file',a.require_file)
+            + v2Num('adjustments',i,'sort',a.sort,'v2aj_so_'+i)
+            + v2Act('adjustments',i,a)+'</tr>';
+        }).join('') || '<tr><td colspan="4" style="color:var(--muted);">ไม่มี — รอบนี้ไม่มีรายการปรับปรุงระดับ Site</td></tr>')
+      + '</tbody></table>';
+  }
+
+  if(document.getElementById('v2PreviewModal').classList.contains('open')) v2RenderPreview();
+}
+
+function v2OpenPreview(){
+  if(!V2CFG){ v2Err('ยังไม่ได้โหลด config'); return; }
+  var lbl=document.getElementById('v2PvRound');
+  if(lbl) lbl.textContent = S.round ? '· '+S.round.round_name : '';
+  v2RenderPreview();
+  openOverlay('v2PreviewModal');
+}
+function v2ClosePreview(){ closeOverlay('v2PreviewModal'); }
+
+/* ════════════════════════════════════════════════════════
+   Preview — จำลองสิ่งที่ผู้นับจะเห็นครบทุกขั้น
+   ใช้ตัวเลขสมมติที่คำนวณต่อกันจริง เพื่อพิสูจน์ว่า flag ที่ติ๊กแปลผลยังไง
+   ════════════════════════════════════════════════════════ */
+function v2PvActive(kind, typeId){
+  return (V2CFG[kind]||[])
+    .filter(function(r){ return r.is_active!==false && (!typeId || r.type_id===typeId); })
+    .sort(function(a,b){ return (a.sort||0)-(b.sort||0); });
+}
+// ตัวเลขสมมติ — คงที่ (ไม่สุ่มใหม่ทุก render) เพื่อให้เทียบสูตรได้
+function v2PvQty(a,b){ var h=0, s=String(a)+'|'+String(b); for(var i=0;i<s.length;i++) h=(h*31+s.charCodeAt(i))%997; return 20+(h%180); }
+function v2PvFmt(n){ return Number(n||0).toLocaleString('th-TH'); }
+function v2PvHead(txt, sub){
+  return '<div style="display:flex;align-items:baseline;gap:8px;margin:16px 0 8px;padding-bottom:5px;border-bottom:1px solid var(--border);">'
+       + '<span style="font-size:12px;font-weight:700;">'+esc(txt)+'</span>'
+       + (sub?'<span style="font-size:11px;color:var(--muted);">'+esc(sub)+'</span>':'')+'</div>';
+}
+function v2PvTable(headCells, rows){
+  return '<table style="width:100%;border-collapse:collapse;border:1px solid var(--border);border-radius:6px;overflow:hidden;margin-bottom:4px;">'
+       + '<thead><tr>'+headCells+'</tr></thead><tbody>'+rows+'</tbody></table>';
+}
+
+function v2RenderPreview(){
+  var box=document.getElementById('v2Preview'); if(!box || !V2CFG) return;
+  var types = v2PvActive('types');
+  if(!types.length){ box.innerHTML='<div class="hint">ยังไม่มีชนิด — เพิ่มในส่วนที่ 1</div>'; return; }
+
+  var bst = v2PvActive('book_statuses');
+  var adj = v2PvActive('adjustments');
+  var baseline = bst.filter(function(s){ return s.is_baseline; })[0] || null;
+  var outIds = bst.filter(function(s){ return s.is_outstanding; });
+
+  var html = '<div class="hint" style="margin-bottom:10px;">ตัวเลขข้างล่างเป็นค่าสมมติ '
+           + 'แต่คำนวณต่อกันจริงตาม flag ที่ตั้งไว้ — ใช้ตรวจว่าสูตรออกมาอย่างที่ต้องการหรือยัง</div>';
+
+  // ══ ขั้นที่ 2 — ฟอร์มนับ ══
+  html += v2PvHead('ขั้นที่ 2 · ฟอร์มนับ (ต่อ 1 Location)', 'ผู้นับกรอกตัวเลขในช่องเหล่านี้');
+  types.forEach(function(t){
+    var its = v2PvActive('items', t.type_id), sts = v2PvActive('count_statuses', t.type_id);
+    if(!its.length){ html += '<div class="hint" style="color:var(--warn);">⚠ '+esc(t.type_name)+' ยังไม่มีรายการ</div>'; return; }
+    if(!sts.length){ html += '<div class="hint" style="color:var(--warn);">⚠ '+esc(t.type_name)+' ยังไม่มีสถานะการนับ</div>'; return; }
+    var head = '<th style="text-align:left;font-size:10px;padding:6px 8px;">สถานะ</th>'
+      + its.map(function(i){ return '<th class="num" style="font-size:10px;padding:6px 8px;color:'+esc(i.color||'#94a3b8')+';">'+esc(i.item_name)+'</th>'; }).join('');
+    var rows = sts.map(function(s){
+      return '<tr><td style="font-size:12px;padding:5px 8px;">'+esc(s.status_name)
+        + (s.add_back?' <span class="badge ob">บวกกลับ</span>':'')
+        + (s.doc_hide?' <span class="badge">ไม่พิมพ์</span>':'')
+        + (!s.in_actual?' <span class="badge off">ไม่นับรวม</span>':'')+'</td>'
+        + its.map(function(){ return '<td class="num" style="padding:4px 8px;"><span style="display:inline-block;width:46px;height:22px;border:1px solid var(--border);border-radius:4px;background:var(--surface);"></span></td>'; }).join('')
+        + '</tr>';
+    }).join('');
+    var unit = its[0].unit||'';
+    html += '<div style="margin-bottom:12px;"><div style="font-size:12px;font-weight:700;margin-bottom:5px;">'
+         + esc((t.icon||'')+' '+t.type_name)+(unit?' <span style="color:var(--muted);font-weight:400;">หน่วย: '+esc(unit)+'</span>':'')+'</div>'
+         + v2PvTable(head, rows)+'</div>';
+  });
+
+  // ══ ขั้นที่ 3 — รายการปรับปรุงระดับ Site ══
+  if(adj.length){
+    html += v2PvHead('ขั้นที่ 3 · รายการปรับปรุงระดับ Site', 'กรอกครั้งเดียวต่อ Site ไม่แยก Location');
+    adj.forEach(function(a){
+      var allItems = v2PvActive('items');
+      html += '<div style="margin-bottom:10px;"><div style="font-size:12px;font-weight:700;margin-bottom:5px;">'
+           + esc(a.adjust_name)+(a.require_file?' <span class="badge ob">ต้องแนบไฟล์</span>':'')+'</div>'
+           + v2PvTable('<th style="text-align:left;font-size:10px;padding:6px 8px;">รายการ</th><th class="num" style="font-size:10px;padding:6px 8px;">จำนวน</th>',
+               allItems.map(function(i){
+                 return '<tr><td style="font-size:12px;padding:5px 8px;">'+esc(i.item_name)+' <span style="color:var(--muted);font-size:11px;">'+esc(i.unit||'')+'</span></td>'
+                      + '<td class="num" style="padding:4px 8px;"><span style="display:inline-block;width:46px;height:22px;border:1px solid var(--border);border-radius:4px;background:var(--surface);"></span></td></tr>';
+               }).join(''))+'</div>';
+    });
+  }
+
+  // ══ ขั้นที่ 4 — สรุป & กระทบยอด (ตัวเลขสมมติที่คำนวณจริง) ══
+  html += v2PvHead('ขั้นที่ 4 · สรุปยอด & กระทบยอด', 'แถวทั้งหมดสร้างจาก flag ที่ตั้งไว้');
+  if(!baseline) html += '<div class="hint" style="color:var(--danger);">⚠ ยังไม่ได้เลือก “ฐานเทียบ” — คำนวณส่วนต่างไม่ได้</div>';
+
+  types.forEach(function(t){
+    var its = v2PvActive('items', t.type_id), sts = v2PvActive('count_statuses', t.type_id);
+    if(!its.length || !sts.length) return;
+
+    // ยอดนับสมมติ + ยอดบัญชีสมมติ
+    var actual={}, addback={}, adjust={}, bookv={};
+    its.forEach(function(i){
+      actual[i.item_id]=0; addback[i.item_id]=0; adjust[i.item_id]=0; bookv[i.item_id]={};
+      sts.forEach(function(s){
+        var q=v2PvQty(i.item_id,s.status_id);
+        if(s.in_actual) actual[i.item_id]+=q;
+        if(s.add_back)  addback[i.item_id]+=q;
+      });
+      bst.forEach(function(s){ bookv[i.item_id][s.status_id]=v2PvQty(i.item_id,s.status_id)*3; });
+      adj.forEach(function(a){ adjust[i.item_id]+=v2PvQty(i.item_id,a.adjust_id)%40; });
+    });
+
+    var head='<th style="text-align:left;font-size:10px;padding:6px 8px;">รายการ</th>'
+      + its.map(function(i){ return '<th class="num" style="font-size:10px;padding:6px 8px;color:'+esc(i.color||'#94a3b8')+';">'+esc(i.item_name)+'</th>'; }).join('');
+
+    function row(label, fn, opt){
+      opt = opt||{};
+      return '<tr'+(opt.strong?' style="background:var(--surface2);"':'')+'>'
+        + '<td style="font-size:12px;padding:5px 8px;'+(opt.strong?'font-weight:700;':'')+(opt.indent?'padding-left:20px;':'')+'">'+esc(label)+'</td>'
+        + its.map(function(i){
+            var v=fn(i);
+            var color = opt.diff ? (v===0?'var(--success)':'var(--danger)') : '';
+            return '<td class="num" style="padding:5px 8px;font-size:12px;'+(opt.strong?'font-weight:700;':'')+(color?'color:'+color+';':'')+'">'
+                 + (opt.diff&&v>0?'+':'')+v2PvFmt(v)+'</td>';
+          }).join('')+'</tr>';
+    }
+
+    var rows = '';
+    bst.forEach(function(s){
+      rows += row(s.status_name + (s.is_baseline?' (ฐานเทียบ)':'') + (s.is_outstanding?'':' — ไม่นับคงค้าง'),
+                  function(i){ return bookv[i.item_id][s.status_id]; });
+    });
+    rows += row('รวมยอดคงค้าง (System)', function(i){
+      var sum=0; outIds.forEach(function(s){ sum+=bookv[i.item_id][s.status_id]; }); return sum;
+    }, {strong:true});
+    rows += row('รวมนับได้จริง (Actual)', function(i){ return actual[i.item_id]; }, {strong:true});
+    rows += row('ส่วนต่าง (Actual − ฐานเทียบ)', function(i){
+      return actual[i.item_id] - (baseline?bookv[i.item_id][baseline.status_id]:0);
+    }, {diff:true});
+    v2PvActive('count_statuses', t.type_id).filter(function(s){ return s.add_back; }).forEach(function(s){
+      rows += row('บวก ' + s.status_name, function(i){ return v2PvQty(i.item_id,s.status_id); }, {indent:true});
+    });
+    adj.forEach(function(a){
+      rows += row('บวก ' + a.adjust_name, function(i){ return v2PvQty(i.item_id,a.adjust_id)%40; }, {indent:true});
+    });
+    rows += row('ส่วนต่างสุทธิ', function(i){
+      var base = baseline?bookv[i.item_id][baseline.status_id]:0;
+      return actual[i.item_id] - base + addback[i.item_id] + adjust[i.item_id];
+    }, {strong:true, diff:true});
+
+    html += '<div style="margin-bottom:12px;"><div style="font-size:12px;font-weight:700;margin-bottom:5px;">'
+         + esc((t.icon||'')+' '+t.type_name)+'</div>'+v2PvTable(head, rows)+'</div>';
+  });
+
+  // ══ สรุปสูตร ══
+  html += '<div class="hint" style="margin-top:10px;padding-top:8px;border-top:1px solid var(--border);">'
+       + '<b>ยอดคงค้าง (System)</b> = '+esc(outIds.map(function(s){return s.status_name;}).join(' + ')||'⚠ ยังไม่ได้เลือก')+'<br>'
+       + '<b>ส่วนต่าง</b> = ยอดนับจริง − '+esc(baseline?baseline.status_name:'⚠ ยังไม่ได้เลือกฐานเทียบ')+'<br>'
+       + '<b>ส่วนต่างสุทธิ</b> = ส่วนต่าง + '+esc((function(){
+           var a=[]; types.forEach(function(t){ v2PvActive('count_statuses',t.type_id).forEach(function(s){ if(s.add_back && a.indexOf(s.status_name)<0) a.push(s.status_name); }); });
+           adj.forEach(function(x){ a.push(x.adjust_name); });
+           return a.join(' + ')||'(ไม่มีรายการบวกกลับ)';
+         })())+'</div>';
+
+  box.innerHTML = html;
 }
 
 /* ── Render: Actual vs System reconciliation ─────────── */
@@ -1733,6 +2205,10 @@ function confirmNewRound(){
 
 /* ── Tabs / overlay ──────────────────────────────────── */
 function switchTab(name){
+  if(S.tab==='setup' && name!=='setup' && S.v2Dirty){
+    if(!confirm('ยังไม่ได้บันทึกการตั้งค่ารอบ (v2) — ออกจากแท็บนี้เลยไหม')) return;
+    S.v2Dirty=false; V2CFG=null;
+  }
   if(S.tab==='types' && name!=='types' && S.typesDirty){
     if(!confirm('ยังไม่ได้บันทึกการตั้งค่าชนิดที่นับ — ออกจากแท็บนี้เลยไหม (การแก้ไขจะหายไป)')) return;
     S.typesDirty=false; loadData(false);
@@ -1742,6 +2218,7 @@ function switchTab(name){
   document.querySelectorAll('.panel').forEach(function(p){ p.classList.toggle('active', p.id==='panel-'+name); });
   if(name==='queue') startQueuePoll(); else stopQueuePoll();
   if(name==='types') renderTypes();
+  if(name==='setup'){ if(!V2CFG) v2LoadConfig(); else v2Render(); }
   if(name==='stats') loadStats();
 }
 function openOverlay(id){ _modalOpen=true; document.getElementById(id).classList.add('open'); }
