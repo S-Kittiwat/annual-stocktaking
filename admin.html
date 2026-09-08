@@ -44,6 +44,7 @@ button{font-family:var(--font);}
 .chip-site.on{border-color:var(--accent);background:rgba(56,189,248,.1);color:var(--accent);}
 .chip-tick{width:16px;height:16px;border-radius:50%;border:1.5px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:10px;flex:none;}
 .chip-site.on .chip-tick{background:var(--accent);border-color:var(--accent);color:#04263a;}
+.chip-new{font-size:9px;font-weight:700;padding:1px 6px;border-radius:8px;background:var(--warn);color:#3a2a04;}
 .chip-x{background:none;border:none;color:var(--muted2);font-size:16px;line-height:1;cursor:pointer;padding:0 0 0 3px;}
 .chip-x:hover{color:var(--danger);}
 .wiz-foot{display:flex;gap:10px;align-items:center;margin-top:16px;flex-wrap:wrap;}
@@ -1568,6 +1569,10 @@ function wizHide(){
 function wizTouch(){ /* ทำเครื่องหมายว่ามีการพิมพ์ — ไว้ขยายภายหลัง */ }
 
 function wizGo(step){
+  if(WIZ.step===3 && step!==3 && typeof wizSitesDirty==='function' && wizSitesDirty()){
+    if(!confirm('ยังไม่ได้บันทึกรายการ Site — ออกจากขั้นนี้เลยไหม (การแก้ไขจะหายไป)')) return;
+    WZ_SITES=null; WZ_DEL=[];
+  }
   WIZ.step = step;
   // ขั้นตั้งค่า (ตาราง 5 ชุด) ต้องการพื้นที่กว้างกว่าขั้นอื่น
   var ww=document.getElementById('wizWrap');
@@ -1639,77 +1644,97 @@ function wizSaveStep1(){
 }
 
 /* ── ขั้นที่ 3: เลือก Site ──────────────────────────────
-   เลือกในเครื่องก่อน (ไม่ยิง API ต่อการกด) แล้วบันทึกครั้งเดียว
+   ทุกอย่างทำในเครื่อง (เลือก / เพิ่ม / ลบ) ไม่ยิง API สักครั้ง
+   จนกว่าจะกด "บันทึกแล้วไปต่อ" → ส่งทีเดียวด้วย saveSitesBatch
    ─────────────────────────────────────────────────────── */
-var WZ_SEL = null;   // Set ของ site_id ที่เลือกไว้ (null = ยังไม่ได้เริ่ม)
+var WZ_SITES = null;   // สำเนาในเครื่อง [{site_id, site_name, is_active, is_new, locked}]
+var WZ_DEL   = [];     // site_id ที่สั่งลบ (ลบจริงตอนบันทึก)
+var WZ_TMP   = 0;
 
 function wizSyncSel(){
-  if(WZ_SEL === null){
-    WZ_SEL = {};
-    S.sites.forEach(function(s){ if(s.is_active) WZ_SEL[s.site_id]=1; });
-  }
+  if(WZ_SITES !== null) return;
+  WZ_DEL = [];
+  WZ_SITES = S.sites.map(function(s){
+    return { site_id:s.site_id, site_name:s.site_name, is_active:!!s.is_active, is_new:false,
+             // ลบไม่ได้ถ้าเคยเช็คอินหรือมีใบส่งผลแล้ว
+             locked: !!s.checkin_at || S.subs.some(function(x){ return x.site_id===s.site_id; }) };
+  });
 }
-function wizSelCount(){ return Object.keys(WZ_SEL||{}).length; }
+function wizSelCount(){ wizSyncSel(); return WZ_SITES.filter(function(s){ return s.is_active; }).length; }
+function wizSitesDirty(){
+  if(WZ_SITES===null) return false;
+  if(WZ_DEL.length) return true;
+  if(WZ_SITES.some(function(s){ return s.is_new; })) return true;
+  return WZ_SITES.some(function(s){
+    var o=S.sites.filter(function(x){ return x.site_id===s.site_id; })[0];
+    return o && !!o.is_active !== !!s.is_active;
+  });
+}
 
 function wizRenderSites(){
   wizSyncSel();
   var box=document.getElementById('wzChips');
   if(!box) return;
-  if(!S.sites.length){
-    box.innerHTML='<div class="empty" style="width:100%;">ยังไม่มี Site ในระบบ — เพิ่มด้านล่าง</div>';
+  if(!WZ_SITES.length){
+    box.innerHTML='<div class="empty" style="width:100%;">ยังไม่มี Site — เพิ่มด้านล่าง</div>';
   }else{
-    box.innerHTML = S.sites.map(function(s){
-      var on = !!WZ_SEL[s.site_id];
-      // ลบได้เฉพาะ Site ที่ยังไม่เคยมีข้อมูลนับ (backend ตรวจซ้ำอีกชั้น)
-      var canDel = !s.checkin_at && !S.subs.some(function(x){ return x.site_id===s.site_id; });
-      return '<span class="chip-site'+(on?' on':'')+'" onclick="wizToggleChip(\''+esc(s.site_id)+'\')">'
-        + '<span class="chip-tick">'+(on?'✓':'')+'</span>'+esc(s.site_name)
-        + (canDel ? '<button class="chip-x" title="ลบออกจากระบบ" onclick="event.stopPropagation();wizDelSite(\''+esc(s.site_id)+'\',\''+esc(s.site_name)+'\')">×</button>' : '')
+    box.innerHTML = WZ_SITES.map(function(s,i){
+      return '<span class="chip-site'+(s.is_active?' on':'')+'" onclick="wizToggleChip('+i+')">'
+        + '<span class="chip-tick">'+(s.is_active?'✓':'')+'</span>'+esc(s.site_name)
+        + (s.is_new ? '<span class="chip-new">ใหม่</span>' : '')
+        + (s.locked ? '' : '<button class="chip-x" title="ลบออกจากระบบ" onclick="event.stopPropagation();wizDelSite('+i+')">×</button>')
         + '</span>';
     }).join('');
   }
   var c=document.getElementById('wzSiteCount');
-  if(c) c.textContent = 'เลือกไว้ '+wizSelCount()+' จาก '+S.sites.length+' แห่ง';
+  if(c){
+    var pending=[];
+    if(WZ_SITES.filter(function(s){return s.is_new;}).length) pending.push('เพิ่ม '+WZ_SITES.filter(function(s){return s.is_new;}).length);
+    if(WZ_DEL.length) pending.push('ลบ '+WZ_DEL.length);
+    c.innerHTML = 'เลือกไว้ '+wizSelCount()+' จาก '+WZ_SITES.length+' แห่ง'
+      + (pending.length ? ' <span style="color:var(--warn);">· รอบันทึก: '+pending.join(', ')+'</span>' : '');
+  }
   wizRenderSteps();
 }
-function wizToggleChip(id){
+function wizToggleChip(i){
   wizSyncSel();
-  if(WZ_SEL[id]) delete WZ_SEL[id]; else WZ_SEL[id]=1;
+  if(!WZ_SITES[i]) return;
+  WZ_SITES[i].is_active = !WZ_SITES[i].is_active;
   wizRenderSites();
 }
 function wizAddSite(){
+  wizSyncSel();
   var inp=document.getElementById('wzSiteName'), name=inp.value.trim();
   if(!name) return;
-  if(S.sites.some(function(s){ return s.site_name===name; })){ toast('มี Site ชื่อนี้อยู่แล้ว','error'); return; }
+  if(WZ_SITES.some(function(s){ return s.site_name===name; })){ toast('มี Site ชื่อนี้อยู่แล้ว','error'); return; }
   inp.value='';
-  post({action:'saveSite', site_name:name}).then(function(d){
-    if(d && d.status==='error'){ toast(d.message||'เพิ่มไม่สำเร็จ','error'); return; }
-    return loadData(false).then(function(){
-      wizSyncSel();
-      var added=S.sites.filter(function(s){ return s.site_name===name; })[0];
-      if(added) WZ_SEL[added.site_id]=1;      // เพิ่มแล้วเลือกให้เลย
-      wizRenderSites(); toast('เพิ่ม '+name+' แล้ว','success');
-    });
-  });
+  WZ_SITES.push({ site_id:'tmp_'+(++WZ_TMP), site_name:name, is_active:true, is_new:true, locked:false });
+  wizRenderSites();
 }
-function wizDelSite(id, name){
-  if(!confirm('ลบ "'+name+'" ออกจากระบบถาวร?\n\nถ้าแค่ไม่ใช้ในรอบนี้ ให้กดที่ชิปเพื่อไม่เลือก แทนการลบ')) return;
-  post({action:'deleteSite', site_id:id}).then(function(d){
-    if(d && d.status==='error'){ toast(d.message||'ลบไม่ได้','error'); return; }
-    return loadData(false).then(function(){
-      if(WZ_SEL) delete WZ_SEL[id];
-      wizRenderSites(); toast('ลบแล้ว','success');
-    });
-  });
+function wizDelSite(i){
+  wizSyncSel();
+  var s=WZ_SITES[i]; if(!s) return;
+  if(!s.is_new && !confirm('ลบ "'+s.site_name+'" ออกจากระบบถาวรตอนกดบันทึก?\n\nถ้าแค่ไม่ใช้ในรอบนี้ ให้กดที่ชิปเพื่อไม่เลือก แทนการลบ')) return;
+  if(!s.is_new) WZ_DEL.push(s.site_id);
+  WZ_SITES.splice(i,1);
+  wizRenderSites();
 }
 function wizSaveSites(){
   wizSyncSel();
-  var ids=Object.keys(WZ_SEL);
-  if(!ids.length){ toast('เลือกอย่างน้อย 1 Site','error'); return; }
+  if(!wizSelCount()){ toast('เลือกอย่างน้อย 1 Site','error'); return; }
+  if(!wizSitesDirty()){ wizGo(4); return; }            // ไม่มีอะไรเปลี่ยน ไม่ต้องยิง
+
   var btn=document.getElementById('wzSiteSaveBtn'); btn.disabled=true; btn.textContent='กำลังบันทึก…';
-  post({action:'setActiveSites', site_ids:ids}).then(function(d){
+  post({ action:'saveSitesBatch',
+         sites: WZ_SITES.map(function(s){
+           return { site_id: s.is_new ? '' : s.site_id, site_name:s.site_name, is_active:s.is_active };
+         }),
+         delete_ids: WZ_DEL })
+  .then(function(d){
     btn.disabled=false; btn.textContent='บันทึกแล้วไปต่อ →';
     if(d && d.status==='error'){ toast(d.message||'บันทึกไม่สำเร็จ','error'); return; }
+    if(d && d.blocked) toast(d.message,'error');
+    WZ_SITES=null; WZ_DEL=[];                          // ให้ sync จากของจริงรอบหน้า
     return loadData(false).then(function(){ toast('บันทึกรายการ Site แล้ว','success'); wizGo(4); });
   }).catch(function(){
     btn.disabled=false; btn.textContent='บันทึกแล้วไปต่อ →'; toast('บันทึกไม่สำเร็จ','error');
@@ -1772,7 +1797,7 @@ function wizStart(){
     btn.disabled=false; btn.textContent='🚀 เริ่มรอบ — เปิดให้ผู้นับเข้าใช้';
     if(d && d.status==='error'){ toast(d.message||'เริ่มรอบไม่สำเร็จ','error'); wizCheckReady(); return; }
     toast('เริ่มรอบแล้ว','success');
-    WZ_SEL = null;
+    WZ_SITES = null; WZ_DEL = [];
     // คืน panel ตั้งค่ากลับที่เดิมก่อนออกจาก wizard
     var panel=document.getElementById('panel-setup'), wrap=document.querySelector('#app .wrap');
     if(panel && wrap && panel.parentNode!==wrap){ panel.classList.remove('active'); panel.style.display=''; wrap.appendChild(panel); }
