@@ -39,6 +39,13 @@ button{font-family:var(--font);}
 .wiz-step .n{width:19px;height:19px;border-radius:50%;background:var(--surface2);display:flex;align-items:center;justify-content:center;font-size:11px;flex:none;}
 .wiz-step.active .n{background:var(--accent);color:#04263a;}
 .wiz-step.done .n{background:var(--success);color:#04291d;}
+.chip-site{display:inline-flex;align-items:center;gap:7px;padding:8px 13px;border:1.5px solid var(--border);border-radius:22px;background:var(--surface);font-size:13px;font-weight:600;color:var(--muted);cursor:pointer;user-select:none;transition:all .12s;}
+.chip-site:hover{border-color:var(--muted2);color:var(--text);}
+.chip-site.on{border-color:var(--accent);background:rgba(56,189,248,.1);color:var(--accent);}
+.chip-tick{width:16px;height:16px;border-radius:50%;border:1.5px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:10px;flex:none;}
+.chip-site.on .chip-tick{background:var(--accent);border-color:var(--accent);color:#04263a;}
+.chip-x{background:none;border:none;color:var(--muted2);font-size:16px;line-height:1;cursor:pointer;padding:0 0 0 3px;}
+.chip-x:hover{color:var(--danger);}
 .wiz-foot{display:flex;gap:10px;align-items:center;margin-top:16px;flex-wrap:wrap;}
 .wiz-foot .btn:last-child{margin-left:auto;}
 .rv-row{display:flex;gap:12px;padding:9px 0;border-bottom:1px solid var(--border);font-size:13px;}
@@ -337,15 +344,17 @@ table.recon .grp{border-left:1px solid var(--border);}
 
     <!-- ขั้น 3 -->
     <div class="wiz-panel" id="wiz-3" style="display:none;">
-      <div class="eyebrow">ขั้นที่ 3 · Site ที่ร่วมนับ</div>
+      <div class="eyebrow">ขั้นที่ 3 · Site ที่ร่วมนับ <span class="ehint">— กดเลือกให้ครบ แล้วบันทึกทีเดียว</span></div>
+      <div class="bb-hint">กดที่ชิปเพื่อเลือก/ไม่เลือก · Site ที่เคยมีข้อมูลนับจะลบไม่ได้ (ปิดใช้งานได้อย่างเดียว)</div>
+      <div id="wzChips" style="display:flex;flex-wrap:wrap;gap:8px;margin:12px 0;"></div>
       <div class="add-row">
-        <input class="input" id="wzSiteName" placeholder="ชื่อ Site เช่น NDC-วังน้อย" onkeydown="if(event.key==='Enter')wizAddSite()">
-        <button class="btn btn-primary" onclick="wizAddSite()">+ เพิ่ม Site</button>
+        <input class="input" id="wzSiteName" placeholder="เพิ่ม Site อื่น เช่น NDC-วังน้อย" onkeydown="if(event.key==='Enter')wizAddSite()">
+        <button class="btn btn-outline" onclick="wizAddSite()">+ เพิ่ม</button>
       </div>
-      <div class="table-wrap" id="wzSitesTable"><div class="empty">ยังไม่มี Site</div></div>
       <div class="wiz-foot">
         <button class="btn btn-outline" onclick="wizGo(2)">← ย้อนกลับ</button>
-        <button class="btn btn-primary" onclick="wizGo(4)">ไปต่อ →</button>
+        <span id="wzSiteCount" class="hint"></span>
+        <button class="btn btn-primary" id="wzSiteSaveBtn" onclick="wizSaveSites()">บันทึกแล้วไปต่อ →</button>
       </div>
     </div>
 
@@ -1629,29 +1638,82 @@ function wizSaveStep1(){
   }
 }
 
+/* ── ขั้นที่ 3: เลือก Site ──────────────────────────────
+   เลือกในเครื่องก่อน (ไม่ยิง API ต่อการกด) แล้วบันทึกครั้งเดียว
+   ─────────────────────────────────────────────────────── */
+var WZ_SEL = null;   // Set ของ site_id ที่เลือกไว้ (null = ยังไม่ได้เริ่ม)
+
+function wizSyncSel(){
+  if(WZ_SEL === null){
+    WZ_SEL = {};
+    S.sites.forEach(function(s){ if(s.is_active) WZ_SEL[s.site_id]=1; });
+  }
+}
+function wizSelCount(){ return Object.keys(WZ_SEL||{}).length; }
+
 function wizRenderSites(){
-  var el=document.getElementById('wzSitesTable');
-  if(!S.sites.length){ el.innerHTML='<div class="empty">ยังไม่มี Site — เพิ่มอย่างน้อย 1 แห่ง</div>'; wizRenderSteps(); return; }
-  el.innerHTML='<table><thead><tr><th>ชื่อ Site</th><th class="num" style="width:110px;">สถานะ</th><th style="width:90px;"></th></tr></thead><tbody>'
-    + S.sites.map(function(s){
-        return '<tr><td>'+esc(s.site_name)+'</td>'
-          + '<td class="num">'+(s.is_active?'<span class="badge ob">เปิดใช้งาน</span>':'<span class="badge off">ปิด</span>')+'</td>'
-          + '<td><button class="btn btn-outline btn-sm" onclick="wizToggleSite(\''+esc(s.site_id)+'\','+(!s.is_active)+')">'
-          + (s.is_active?'ปิด':'เปิด')+'</button></td></tr>';
-      }).join('')
-    + '</tbody></table>';
+  wizSyncSel();
+  var box=document.getElementById('wzChips');
+  if(!box) return;
+  if(!S.sites.length){
+    box.innerHTML='<div class="empty" style="width:100%;">ยังไม่มี Site ในระบบ — เพิ่มด้านล่าง</div>';
+  }else{
+    box.innerHTML = S.sites.map(function(s){
+      var on = !!WZ_SEL[s.site_id];
+      // ลบได้เฉพาะ Site ที่ยังไม่เคยมีข้อมูลนับ (backend ตรวจซ้ำอีกชั้น)
+      var canDel = !s.checkin_at && !S.subs.some(function(x){ return x.site_id===s.site_id; });
+      return '<span class="chip-site'+(on?' on':'')+'" onclick="wizToggleChip(\''+esc(s.site_id)+'\')">'
+        + '<span class="chip-tick">'+(on?'✓':'')+'</span>'+esc(s.site_name)
+        + (canDel ? '<button class="chip-x" title="ลบออกจากระบบ" onclick="event.stopPropagation();wizDelSite(\''+esc(s.site_id)+'\',\''+esc(s.site_name)+'\')">×</button>' : '')
+        + '</span>';
+    }).join('');
+  }
+  var c=document.getElementById('wzSiteCount');
+  if(c) c.textContent = 'เลือกไว้ '+wizSelCount()+' จาก '+S.sites.length+' แห่ง';
   wizRenderSteps();
+}
+function wizToggleChip(id){
+  wizSyncSel();
+  if(WZ_SEL[id]) delete WZ_SEL[id]; else WZ_SEL[id]=1;
+  wizRenderSites();
 }
 function wizAddSite(){
   var inp=document.getElementById('wzSiteName'), name=inp.value.trim();
   if(!name) return;
-  post({action:'saveSite', site_name:name}).then(function(){
-    inp.value=''; return loadData(false);
-  }).then(function(){ wizRenderSites(); toast('เพิ่ม Site แล้ว','success'); });
+  if(S.sites.some(function(s){ return s.site_name===name; })){ toast('มี Site ชื่อนี้อยู่แล้ว','error'); return; }
+  inp.value='';
+  post({action:'saveSite', site_name:name}).then(function(d){
+    if(d && d.status==='error'){ toast(d.message||'เพิ่มไม่สำเร็จ','error'); return; }
+    return loadData(false).then(function(){
+      wizSyncSel();
+      var added=S.sites.filter(function(s){ return s.site_name===name; })[0];
+      if(added) WZ_SEL[added.site_id]=1;      // เพิ่มแล้วเลือกให้เลย
+      wizRenderSites(); toast('เพิ่ม '+name+' แล้ว','success');
+    });
+  });
 }
-function wizToggleSite(id, on){
-  post({action:'toggleSite', site_id:id, is_active:on}).then(function(){ return loadData(false); })
-  .then(function(){ wizRenderSites(); });
+function wizDelSite(id, name){
+  if(!confirm('ลบ "'+name+'" ออกจากระบบถาวร?\n\nถ้าแค่ไม่ใช้ในรอบนี้ ให้กดที่ชิปเพื่อไม่เลือก แทนการลบ')) return;
+  post({action:'deleteSite', site_id:id}).then(function(d){
+    if(d && d.status==='error'){ toast(d.message||'ลบไม่ได้','error'); return; }
+    return loadData(false).then(function(){
+      if(WZ_SEL) delete WZ_SEL[id];
+      wizRenderSites(); toast('ลบแล้ว','success');
+    });
+  });
+}
+function wizSaveSites(){
+  wizSyncSel();
+  var ids=Object.keys(WZ_SEL);
+  if(!ids.length){ toast('เลือกอย่างน้อย 1 Site','error'); return; }
+  var btn=document.getElementById('wzSiteSaveBtn'); btn.disabled=true; btn.textContent='กำลังบันทึก…';
+  post({action:'setActiveSites', site_ids:ids}).then(function(d){
+    btn.disabled=false; btn.textContent='บันทึกแล้วไปต่อ →';
+    if(d && d.status==='error'){ toast(d.message||'บันทึกไม่สำเร็จ','error'); return; }
+    return loadData(false).then(function(){ toast('บันทึกรายการ Site แล้ว','success'); wizGo(4); });
+  }).catch(function(){
+    btn.disabled=false; btn.textContent='บันทึกแล้วไปต่อ →'; toast('บันทึกไม่สำเร็จ','error');
+  });
 }
 
 function wizRenderReview(){
@@ -1710,6 +1772,7 @@ function wizStart(){
     btn.disabled=false; btn.textContent='🚀 เริ่มรอบ — เปิดให้ผู้นับเข้าใช้';
     if(d && d.status==='error'){ toast(d.message||'เริ่มรอบไม่สำเร็จ','error'); wizCheckReady(); return; }
     toast('เริ่มรอบแล้ว','success');
+    WZ_SEL = null;
     // คืน panel ตั้งค่ากลับที่เดิมก่อนออกจาก wizard
     var panel=document.getElementById('panel-setup'), wrap=document.querySelector('#app .wrap');
     if(panel && wrap && panel.parentNode!==wrap){ panel.classList.remove('active'); panel.style.display=''; wrap.appendChild(panel); }
