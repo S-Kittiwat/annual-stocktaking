@@ -328,7 +328,7 @@ table.recon .grp{border-left:1px solid var(--border);}
       </div>
       <div class="wiz-foot">
         <span id="wzRoundState" class="hint"></span>
-        <button class="btn btn-primary" onclick="wizSaveStep1()" id="wzBtn1">บันทึกแล้วไปต่อ →</button>
+        <button class="btn btn-primary" onclick="wizNextFromStep1()" id="wzBtn1">ไปต่อ →</button>
       </div>
     </div>
 
@@ -355,7 +355,7 @@ table.recon .grp{border-left:1px solid var(--border);}
       <div class="wiz-foot">
         <button class="btn btn-outline" onclick="wizGo(2)">← ย้อนกลับ</button>
         <span id="wzSiteCount" class="hint"></span>
-        <button class="btn btn-primary" id="wzSiteSaveBtn" onclick="wizSaveSites()">บันทึกแล้วไปต่อ →</button>
+        <button class="btn btn-primary" id="wzSiteSaveBtn" onclick="wizGo(4)">ไปต่อ →</button>
       </div>
     </div>
 
@@ -366,7 +366,7 @@ table.recon .grp{border-left:1px solid var(--border);}
       <div class="wiz-foot">
         <button class="btn btn-outline" onclick="wizGo(3)">← ย้อนกลับ</button>
         <button class="btn btn-outline" onclick="v2OpenPreview()">👁 ดูตัวอย่างหน้าผู้นับ</button>
-        <button class="btn btn-success" id="wzStartBtn" onclick="wizStart()">🚀 เริ่มรอบ — เปิดให้ผู้นับเข้าใช้</button>
+        <button class="btn btn-success" id="wzStartBtn" onclick="wizStart()">💾 บันทึกทั้งหมด &amp; เริ่มรอบ</button>
       </div>
     </div>
   </div>
@@ -879,7 +879,7 @@ function loadData(showSpin){
       // v2: config ชนิด/สถานะ — ถ้ากำลังแก้ค้างอยู่ อย่าดึงของ server มาทับ (บทเรียน 2.6)
       if(d.item_config && !S.typesDirty) applyItemConfig(d.item_config);
     }
-    if(wizNeeded()){ wizShow(); wizRenderSteps(); }
+    if(wizNeeded()){ if(!WIZ.saving){ wizShow(); wizRenderSteps(); } }
     else { if(document.getElementById('wizard').style.display==='block') wizHide(); renderAll(); }
     markSynced();
   }).catch(function(){ document.getElementById('syncText').textContent='ออฟไลน์'; });
@@ -1169,7 +1169,10 @@ function v2RoundId(){ return S.round ? S.round.round_id : ''; }
 
 function v2LoadConfig(){
   var rid = v2RoundId();
-  if(!rid){ v2Err('ยังไม่มีรอบที่เปิดอยู่ — เปิดรอบก่อนจึงตั้งค่าได้'); return; }
+  if(!rid){   // ยังไม่ได้สร้างรอบ (อยู่ใน wizard) → เริ่มจากค่าว่าง ตั้งในเครื่องไปก่อน
+    V2CFG = { types:[], items:[], count_statuses:[], book_statuses:[], adjustments:[], limits:V2LIM };
+    v2Err(''); v2Render(); return;
+  }
   post({action:'getRoundConfigV2', round_id:rid}).then(function(d){
     if(d && d.config){
       V2CFG = d.config;
@@ -1183,7 +1186,11 @@ function v2LoadConfig(){
 
 function v2UseTemplate(){
   if(!confirm('แทนที่การตั้งค่าของรอบนี้ด้วยเทมเพลตพาเลท (ไม้/พลาสติก 4 รายการ)?')) return;
-  post({action:'useTemplateV2', round_id:v2RoundId()}).then(function(d){
+  post({action:'useTemplateV2', round_id:v2RoundId(), preview_only:!v2RoundId()}).then(function(d){
+    if(!v2RoundId()){        // ยังไม่มีรอบ → เก็บไว้ในเครื่อง ยังไม่บันทึก
+      if(d && d.config){ V2CFG=d.config; v2Dirty(); v2Err(''); v2Render(); }
+      return;
+    }
     if(d && d.status==='error'){ v2Err(d.message||'ไม่สำเร็จ'); return; }
     toast('ใช้เทมเพลตแล้ว','success'); v2LoadConfig();
   });
@@ -1550,6 +1557,7 @@ function v2RenderPreview(){
    เพื่อให้ config v2 มี round_id ผูก แต่ผู้นับยังไม่เห็น
    ════════════════════════════════════════════════════════════════ */
 var WIZ = { step:1, ready:null };
+var WZ_ROUND = { year:'', name:'', doc:'', loaded:false };   // ขั้น 1 เก็บในเครื่อง ยังไม่แตะระบบ
 
 function wizNeeded(){
   // ต้องตั้งรอบ ถ้ายังไม่มีรอบ หรือมีแต่ยังไม่ได้กด "เริ่มรอบ"
@@ -1569,10 +1577,7 @@ function wizHide(){
 function wizTouch(){ /* ทำเครื่องหมายว่ามีการพิมพ์ — ไว้ขยายภายหลัง */ }
 
 function wizGo(step){
-  if(WIZ.step===3 && step!==3 && typeof wizSitesDirty==='function' && wizSitesDirty()){
-    if(!confirm('ยังไม่ได้บันทึกรายการ Site — ออกจากขั้นนี้เลยไหม (การแก้ไขจะหายไป)')) return;
-    WZ_SITES=null; WZ_DEL=[];
-  }
+  if(WIZ.step===1 && step!==1 && document.getElementById('wzYear')) wizReadStep1();  // เก็บค่าที่พิมพ์ไว้ก่อนย้ายขั้น
   WIZ.step = step;
   // ขั้นตั้งค่า (ตาราง 5 ชุด) ต้องการพื้นที่กว้างกว่าขั้นอื่น
   var ww=document.getElementById('wizWrap');
@@ -1584,6 +1589,9 @@ function wizGo(step){
   var slot=document.getElementById('wizCfgSlot'), panel=document.getElementById('panel-setup');
   if(step===2 && panel && slot && panel.parentNode!==slot){
     slot.appendChild(panel); panel.classList.add('active'); panel.style.display='';
+    // โหมด wizard: ยังไม่บันทึกทีละหน้า → ซ่อนปุ่มบันทึก/ยกเลิกของแท็บนี้
+    var sb=document.getElementById('v2SaveBtn');
+    if(sb && sb.parentNode) sb.parentNode.style.display='none';
     if(!V2CFG) v2LoadConfig(); else v2Render();
   }
   if(step===1) wizFillStep1();
@@ -1606,41 +1614,33 @@ function wizRenderSteps(){
 
 function wizFillStep1(){
   var y=document.getElementById('wzYear'), n=document.getElementById('wzName'), d=document.getElementById('wzDocDate');
-  if(S.round && S.round.round_id){
-    if(!y.value) y.value = S.round.year||'';
-    if(!n.value) n.value = S.round.round_name||'';
-    if(!d.value) d.value = (S.docMeta&&S.docMeta.doc_date)||'';
-    document.getElementById('wzRoundState').textContent='รอบร่าง '+S.round.round_id+' — กดบันทึกอีกครั้งเพื่ออัปเดตข้อมูล';
-    document.getElementById('wzBtn1').textContent='บันทึกแล้วไปต่อ →';
-  }else{
-    if(!y.value) y.value = new Date().getFullYear()+543;
-    document.getElementById('wzRoundState').textContent='ยังไม่ได้สร้างรอบ';
-    document.getElementById('wzBtn1').textContent='สร้างรอบ (ร่าง) →';
+  // มีรอบร่างค้างอยู่ (เคยตั้งค้างไว้) → ดึงค่ามาเป็นตั้งต้น
+  if(!WZ_ROUND.loaded){
+    WZ_ROUND.loaded = true;
+    if(S.round && S.round.round_id){
+      WZ_ROUND.year = WZ_ROUND.year || S.round.year || '';
+      WZ_ROUND.name = WZ_ROUND.name || S.round.round_name || '';
+      WZ_ROUND.doc  = WZ_ROUND.doc  || (S.docMeta && S.docMeta.doc_date) || '';
+    }
+    if(!WZ_ROUND.year) WZ_ROUND.year = String(new Date().getFullYear()+543);
   }
+  y.value = WZ_ROUND.year || '';
+  n.value = WZ_ROUND.name || '';
+  d.value = WZ_ROUND.doc  || '';
+  var st=document.getElementById('wzRoundState');
+  if(st) st.textContent = (S.round && S.round.round_id)
+    ? 'มีรอบร่างค้างอยู่: '+S.round.round_id+' — จะถูกใช้ต่อเมื่อกดเริ่มรอบ'
+    : 'ยังไม่บันทึกอะไรลงระบบ จนกว่าจะกด “เริ่มรอบ” ในขั้นที่ 4';
 }
-function wizSaveStep1(){
-  var year=document.getElementById('wzYear').value.trim();
-  var name=document.getElementById('wzName').value.trim();
-  var doc =document.getElementById('wzDocDate').value.trim();
-  if(!year || !name){ toast('กรอกปีและชื่อรอบก่อน','error'); return; }
-  var btn=document.getElementById('wzBtn1'); btn.disabled=true; btn.textContent='กำลังบันทึก…';
-
-  if(S.round && S.round.round_id){
-    // รอบร่างมีอยู่แล้ว → อัปเดตชื่อ/วันที่เอกสาร
-    post({action:'saveDocMeta', doc_date:doc, doc_year:year}).then(function(){
-      S.docMeta = S.docMeta||{}; S.docMeta.doc_date=doc; S.docMeta.doc_year=year;
-      btn.disabled=false; toast('บันทึกแล้ว','success');
-      return loadData(false);
-    }).then(function(){ wizGo(2); });
-  }else{
-    post({action:'newRound', year:year, round_name:name, doc_date:doc, doc_year:year, as_draft:true})
-    .then(function(d){
-      btn.disabled=false;
-      if(d && d.status==='error'){ toast(d.message||'สร้างรอบไม่สำเร็จ','error'); return; }
-      toast('สร้างรอบร่างแล้ว — ผู้นับยังไม่เห็นจนกว่าจะกดเริ่มรอบ','success');
-      return loadData(false).then(function(){ V2CFG=null; wizGo(2); });
-    }).catch(function(){ btn.disabled=false; toast('สร้างรอบไม่สำเร็จ','error'); });
-  }
+function wizReadStep1(){
+  WZ_ROUND.year = document.getElementById('wzYear').value.trim();
+  WZ_ROUND.name = document.getElementById('wzName').value.trim();
+  WZ_ROUND.doc  = document.getElementById('wzDocDate').value.trim();
+}
+function wizNextFromStep1(){
+  wizReadStep1();
+  if(!WZ_ROUND.year || !WZ_ROUND.name){ toast('กรอกปีและชื่อรอบก่อน','error'); return; }
+  wizGo(2);
 }
 
 /* ── ขั้นที่ 3: เลือก Site ──────────────────────────────
@@ -1745,20 +1745,21 @@ function wizRenderReview(){
   var box=document.getElementById('wzReview');
   var cfg=V2CFG||{}, types=(cfg.types||[]).filter(function(t){return t.is_active!==false;});
   var items=(cfg.items||[]).filter(function(i){return i.is_active!==false;});
-  var sites=activeSites();
+  wizSyncSel();
+  var sites=(WZ_SITES||[]).filter(function(s){ return s.is_active; });
   var bl=(cfg.book_statuses||[]).filter(function(s){return s.is_baseline;})[0];
   var ob=(cfg.book_statuses||[]).filter(function(s){return s.is_outstanding;});
 
   function row(k,v){ return '<div class="rv-row"><div class="rv-key">'+esc(k)+'</div><div>'+v+'</div></div>'; }
 
   var html='<div class="card" style="padding:16px;">'
-    + row('ปี (พ.ศ.)', esc(String((S.round&&S.round.year)||'—')))
-    + row('ชื่อรอบ', '<b>'+esc((S.round&&S.round.round_name)||'—')+'</b>')
-    + row('วันที่เอกสาร', esc((S.docMeta&&S.docMeta.doc_date)||'—'))
-    + row('Site ที่ร่วมนับ', sites.length ? esc(sites.map(function(s){return s.site_name;}).join(', ')) + ' <span class="hint">('+sites.length+' แห่ง)</span>' : '<span style="color:var(--danger);">ยังไม่มี</span>')
+    + row('ปี (พ.ศ.)', esc(WZ_ROUND.year||'—'))
+    + row('ชื่อรอบ', '<b>'+esc(WZ_ROUND.name||'—')+'</b>')
+    + row('วันที่เอกสาร', esc(WZ_ROUND.doc||'—'))
+    + row('Site ที่ร่วมนับ', sites.length ? esc(sites.map(function(s){return s.site_name;}).join(', ')) + ' <span class="hint">('+sites.length+' แห่ง)</span>' : '<span style="color:var(--danger);">ยังไม่ได้เลือก</span>')
     + row('ชนิดที่นับ', types.length ? types.map(function(t){
         var its=items.filter(function(i){return i.type_id===t.type_id;});
-        var sts=(cfg.count_statuses||[]).filter(function(s){return s.type_id===t.type_id && s.is_active!==false;});
+        var sts=(cfg.count_statuses||[]).filter(function(x){return x.type_id===t.type_id && x.is_active!==false;});
         return '<div style="margin-bottom:4px;">'+esc((t.icon||'')+' '+t.type_name)+' — '
              + esc(its.map(function(i){return i.item_name;}).join(', '))
              + ' <span class="hint">('+its.length+' รายการ · '+sts.length+' สถานะ · หน่วย '+esc((its[0]||{}).unit||'—')+')</span></div>';
@@ -1768,43 +1769,131 @@ function wizRenderReview(){
     + row('รายการปรับปรุง', (cfg.adjustments||[]).length ? esc(cfg.adjustments.map(function(a){return a.adjust_name;}).join(', ')) : '<span class="hint">ไม่มี</span>')
     + '</div>';
 
-  box.innerHTML = html + '<div id="wzReadyBox" style="margin-top:12px;"></div>';
+  box.innerHTML = html
+    + '<div class="bb-hint" style="margin-top:10px;">ทั้งหมดนี้ยังอยู่ในเครื่อง — จะถูกบันทึกเข้าระบบพร้อมกันเมื่อกดปุ่มด้านล่าง</div>'
+    + '<div id="wzReadyBox" style="margin-top:12px;"></div>';
   wizCheckReady();
 }
+
+/* ตรวจความพร้อมจากข้อมูลในเครื่องล้วน (ยังไม่มีอะไรอยู่บน server ให้ตรวจ)
+   ใช้กติกาชุดเดียวกับ validateRoundConfig_ ฝั่ง backend ซึ่งจะตรวจซ้ำอีกชั้นตอนบันทึก */
+function wizLocalErrors(){
+  var e=[], cfg=V2CFG||{};
+  if(!WZ_ROUND.year) e.push('ยังไม่ได้ระบุปี');
+  if(!WZ_ROUND.name) e.push('ยังไม่ได้ตั้งชื่อรอบ');
+  if(!WZ_ROUND.doc)  e.push('ยังไม่ได้ระบุวันที่เอกสาร');
+
+  var types=(cfg.types||[]).filter(function(t){return t.is_active!==false;});
+  var items=(cfg.items||[]).filter(function(i){return i.is_active!==false;});
+  var cst  =(cfg.count_statuses||[]).filter(function(x){return x.is_active!==false;});
+  var bst  =(cfg.book_statuses||[]).filter(function(x){return x.is_active!==false;});
+
+  if(!types.length) e.push('ยังไม่ได้ตั้งชนิดที่นับ');
+  if(!items.length) e.push('ยังไม่มีรายการที่นับ');
+  var per={}, tid={};
+  types.forEach(function(t){ tid[t.type_id]=1; });
+  items.forEach(function(i){
+    if(!tid[i.type_id]){ e.push('รายการ "'+i.item_name+'" อ้างชนิดที่ไม่มีอยู่'); return; }
+    per[i.type_id]=(per[i.type_id]||0)+1;
+    if(!String(i.unit||'').trim()) e.push('รายการ "'+i.item_name+'" ยังไม่ได้ระบุหน่วย');
+  });
+  var maxI=(V2LIM.max_items_per_type||4);
+  types.forEach(function(t){
+    if(!per[t.type_id]) e.push('ชนิด "'+t.type_name+'" ยังไม่มีรายการ');
+    else if(per[t.type_id]>maxI) e.push('ชนิด "'+t.type_name+'" มี '+per[t.type_id]+' รายการ — เกินเพดาน '+maxI);
+    if(!cst.filter(function(x){return x.type_id===t.type_id;}).length) e.push('ชนิด "'+t.type_name+'" ยังไม่มีสถานะการนับ');
+  });
+  if(cst.length && !cst.filter(function(x){return x.in_actual;}).length) e.push('ต้องมีสถานะการนับอย่างน้อย 1 ตัวที่นับเป็นยอดจริง');
+  if(!bst.length) e.push('ยังไม่ได้ตั้งสถานะยอดตามบัญชี');
+  else{
+    if(!bst.filter(function(x){return x.is_outstanding;}).length) e.push('ต้องมีสถานะบัญชีอย่างน้อย 1 ตัวที่นับเป็นยอดคงค้าง');
+    var nb=bst.filter(function(x){return x.is_baseline;}).length;
+    if(nb===0) e.push('ต้องเลือกสถานะบัญชี 1 ตัวเป็น "ฐานเทียบ"');
+    if(nb>1)   e.push('"ฐานเทียบ" เลือกได้ตัวเดียว');
+  }
+  wizSyncSel();
+  if(!(WZ_SITES||[]).filter(function(x){return x.is_active;}).length) e.push('ยังไม่ได้เลือก Site');
+  return e;
+}
+
 function wizCheckReady(){
   var box=document.getElementById('wzReadyBox'), btn=document.getElementById('wzStartBtn');
-  if(!box) return;
-  box.innerHTML='<div class="hint">กำลังตรวจความพร้อม…</div>';
-  post({action:'getRoundReadiness', round_id:S.round?S.round.round_id:''}).then(function(d){
-    var errs=(d&&d.errors)||[];
-    WIZ.ready = errs.length===0;
-    if(errs.length){
-      box.innerHTML='<div style="background:rgba(248,113,113,.1);border:1px solid var(--danger);border-radius:8px;padding:11px 13px;font-size:12.5px;color:var(--danger);">'
-        + '<b>ยังเริ่มรอบไม่ได้</b><ul style="margin:6px 0 0 18px;">'
-        + errs.map(function(e){ return '<li>'+esc(e)+'</li>'; }).join('')+'</ul></div>';
-      btn.disabled=true; btn.style.opacity='.5';
-    }else{
-      box.innerHTML='<div style="background:rgba(52,211,153,.1);border:1px solid var(--success);border-radius:8px;padding:11px 13px;font-size:12.5px;color:var(--success);">'
-        + '✓ ตั้งค่าครบแล้ว พร้อมเริ่มรอบ</div>';
-      btn.disabled=false; btn.style.opacity='1';
-    }
-  }).catch(function(){ box.innerHTML='<div class="hint">ตรวจความพร้อมไม่สำเร็จ</div>'; });
+  if(!box || WIZ.saving) return;   // กำลังบันทึกอยู่ อย่าทับข้อความความคืบหน้า
+  var errs=wizLocalErrors();
+  WIZ.ready = errs.length===0;
+  if(errs.length){
+    box.innerHTML='<div style="background:rgba(248,113,113,.1);border:1px solid var(--danger);border-radius:8px;padding:11px 13px;font-size:12.5px;color:var(--danger);">'
+      + '<b>ยังเริ่มรอบไม่ได้</b><ul style="margin:6px 0 0 18px;">'
+      + errs.map(function(x){ return '<li>'+esc(x)+'</li>'; }).join('')+'</ul></div>';
+    btn.disabled=true; btn.style.opacity='.5';
+  }else{
+    box.innerHTML='<div style="background:rgba(52,211,153,.1);border:1px solid var(--success);border-radius:8px;padding:11px 13px;font-size:12.5px;color:var(--success);">'
+      + '✓ ตั้งค่าครบแล้ว พร้อมบันทึกและเริ่มรอบ</div>';
+    btn.disabled=false; btn.style.opacity='1';
+  }
 }
+
+/* บันทึกทุกอย่างเรียงกันในครั้งเดียว — บอกความคืบหน้าทีละขั้น
+   ถ้าล้มกลางทาง จะบอกว่าล้มตรงไหน และกดซ้ำได้โดยไม่สร้างรอบซ้ำ */
 function wizStart(){
-  if(!confirm('เริ่มรอบนี้ — ผู้นับทุก Site จะเข้าใช้งานได้ทันที\n\nหลังจากนี้ ชื่อต่าง ๆ ยังแก้ได้ปกติ แต่การเพิ่ม/ลบรายการหรือสถานะ จะต้องปลดล็อกก่อน\n\nยืนยัน?')) return;
-  var btn=document.getElementById('wzStartBtn'); btn.disabled=true; btn.textContent='กำลังเริ่มรอบ…';
-  post({action:'startRound', round_id:S.round.round_id}).then(function(d){
-    btn.disabled=false; btn.textContent='🚀 เริ่มรอบ — เปิดให้ผู้นับเข้าใช้';
-    if(d && d.status==='error'){ toast(d.message||'เริ่มรอบไม่สำเร็จ','error'); wizCheckReady(); return; }
-    toast('เริ่มรอบแล้ว','success');
-    WZ_SITES = null; WZ_DEL = [];
-    // คืน panel ตั้งค่ากลับที่เดิมก่อนออกจาก wizard
+  if(!confirm('บันทึกการตั้งค่าทั้งหมดและเริ่มรอบ — ผู้นับทุก Site จะเข้าใช้งานได้ทันที\n\nหลังจากนี้ ชื่อต่าง ๆ ยังแก้ได้ปกติ แต่การเพิ่ม/ลบรายการหรือสถานะ จะต้องปลดล็อกก่อน\n\nยืนยัน?')) return;
+
+  var btn=document.getElementById('wzStartBtn'), box=document.getElementById('wzReadyBox');
+  btn.disabled=true; WIZ.saving=true;
+  var steps=['สร้างรอบ','บันทึกการตั้งค่า','บันทึกรายการ Site','เริ่มรอบ'], at=0;
+  function say(msg, err){
+    box.innerHTML='<div style="background:'+(err?'rgba(248,113,113,.1)':'rgba(56,189,248,.1)')
+      +';border:1px solid '+(err?'var(--danger)':'var(--accent)')+';border-radius:8px;padding:11px 13px;font-size:12.5px;color:'
+      +(err?'var(--danger)':'var(--accent)')+';white-space:pre-line;">'+esc(msg)+'</div>';
+  }
+  function fail(msg){
+    WIZ.saving=false;
+    say('ล้มเหลวที่ขั้น "'+steps[at]+'"\n'+msg+'\n\nแก้แล้วกดปุ่มอีกครั้งได้ — ระบบจะทำต่อจากจุดที่ค้าง', true);
+    btn.disabled=false; btn.textContent='💾 บันทึกทั้งหมด & เริ่มรอบ';
+  }
+  btn.textContent='กำลังบันทึก…';
+  say('⏳ '+steps[0]+'…');
+
+  // 1) สร้างรอบ (ถ้ายังไม่มีรอบร่างค้างอยู่)
+  var p = (S.round && S.round.round_id)
+    ? post({action:'saveDocMeta', doc_date:WZ_ROUND.doc, doc_year:WZ_ROUND.year}).then(function(){ return { status:'ok' }; })
+    : post({action:'newRound', year:WZ_ROUND.year, round_name:WZ_ROUND.name,
+            doc_date:WZ_ROUND.doc, doc_year:WZ_ROUND.year, as_draft:true});
+
+  p.then(function(d){
+    if(d && d.status==='error') throw new Error(d.message||'สร้างรอบไม่สำเร็จ');
+    return loadData(false);
+  }).then(function(){
+    at=1; say('⏳ '+steps[1]+'…');
+    return post({action:'saveRoundConfig', round_id:S.round.round_id, config:V2CFG});
+  }).then(function(d){
+    if(d && d.status==='error') throw new Error(d.message||'บันทึกการตั้งค่าไม่สำเร็จ');
+    if(d && d.config) V2CFG=d.config;
+    at=2; say('⏳ '+steps[2]+'…');
+    wizSyncSel();
+    return post({ action:'saveSitesBatch',
+      sites: WZ_SITES.map(function(x){ return { site_id: x.is_new ? '' : x.site_id, site_name:x.site_name, is_active:x.is_active }; }),
+      delete_ids: WZ_DEL });
+  }).then(function(d){
+    if(d && d.status==='error') throw new Error(d.message||'บันทึกรายการ Site ไม่สำเร็จ');
+    if(d && d.blocked) toast(d.message,'error');
+    WZ_SITES=null; WZ_DEL=[];
+    at=3; say('⏳ '+steps[3]+'…');
+    return post({action:'startRound', round_id:S.round.round_id});
+  }).then(function(d){
+    if(d && d.status==='error') throw new Error(d.message||'เริ่มรอบไม่สำเร็จ');
+    say('✓ เรียบร้อย กำลังเข้าหน้าหลัก…');
     var panel=document.getElementById('panel-setup'), wrap=document.querySelector('#app .wrap');
     if(panel && wrap && panel.parentNode!==wrap){ panel.classList.remove('active'); panel.style.display=''; wrap.appendChild(panel); }
-    return loadData(true).then(function(){ wizHide(); switchTab('dashboard'); });
-  }).catch(function(){
-    btn.disabled=false; btn.textContent='🚀 เริ่มรอบ — เปิดให้ผู้นับเข้าใช้'; toast('เริ่มรอบไม่สำเร็จ','error');
-  });
+    var sb2=document.getElementById('v2SaveBtn'); if(sb2 && sb2.parentNode) sb2.parentNode.style.display='';
+    WZ_ROUND={ year:'', name:'', doc:'', loaded:false };
+    WIZ.saving=false;
+    return loadData(true).then(function(){
+      btn.disabled=false; btn.textContent='💾 บันทึกทั้งหมด & เริ่มรอบ';
+      toast('เริ่มรอบแล้ว','success');
+      wizHide(); switchTab('dashboard');
+    });
+  }).catch(function(err){ fail(String(err && err.message || err)); });
 }
 
 /* ── Render: Actual vs System reconciliation ─────────── */
