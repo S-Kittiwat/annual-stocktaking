@@ -1228,9 +1228,9 @@ function v2LoadConfig(){
   var rid = v2RoundId();
   if(!rid){   // ยังไม่ได้สร้างรอบ (อยู่ใน wizard) → เริ่มจากค่าว่าง ตั้งในเครื่องไปก่อน
     V2CFG = { types:[], items:[], count_statuses:[], book_statuses:[], adjustments:[], limits:V2LIM };
-    v2Err(''); v2Render(); return;
+    v2Err(''); v2Render(); return Promise.resolve(V2CFG);
   }
-  post({action:'getRoundConfigV2', round_id:rid}).then(function(d){
+  return post({action:'getRoundConfigV2', round_id:rid}).then(function(d){
     if(d && d.config){
       V2CFG = d.config;
       if(d.config.limits) V2LIM = d.config.limits;
@@ -1238,6 +1238,7 @@ function v2LoadConfig(){
     S.v2Dirty=false;
     var m=document.getElementById('v2DirtyMark'); if(m) m.style.display='none';
     v2Err(''); v2Render();
+    return V2CFG;
   }).catch(function(){ v2Err('โหลด config ไม่สำเร็จ'); });
 }
 
@@ -2109,6 +2110,7 @@ var BOOK_DRAFT = null;   // ยอดระบบ BOOK_DRAFT[site_id][item_id][s
 var SITE_DEL   = [];
 var SITE_OPEN  = '';     // Site ที่กางแผงแก้ไขอยู่
 var SITE_TMP   = 0;
+var SITE_CFG_LOADING = false;
 
 function siteSync(){
   if(SITE_DRAFT !== null) return;
@@ -2218,7 +2220,9 @@ function siteEditorHtml(d,idx){
     + '</div>';
 
   if(!items.length){
-    h += '<div class="bb-hint" style="margin-top:12px;">ยังตั้งค่ารายการที่นับไม่เสร็จ — ใส่ยอดระบบไม่ได้</div>';
+    h += SITE_CFG_LOADING
+      ? '<div class="bb-hint" style="margin-top:12px;"><span class="spinner"></span> กำลังโหลดรายการที่นับ…</div>'
+      : '<div class="bb-hint" style="margin-top:12px;">ยังไม่ได้ตั้งค่ารายการที่นับของรอบนี้ — ไปที่แท็บ “ตั้งค่ารอบ” ก่อน จึงจะใส่ยอดระบบได้</div>';
   }else{
     h += '<div class="eyebrow" style="margin-top:14px;">ยอดระบบ (ตามบัญชี)</div>'
       +  '<div class="table-wrap"><table class="bb-grid"><thead><tr><th style="text-align:left;">สถานะ \\ รายการ</th>'
@@ -2749,7 +2753,15 @@ function settingsGo(sub){
   });
 
   if(sub==='setup'){ if(!V2CFG) v2LoadConfig(); else v2Render(); v2ApplyLock(); }
-  if(sub==='sites') renderSites();
+  if(sub==='sites'){
+    // ตารางยอดระบบสร้างจาก config ของรอบ — โหลดให้ก่อนถ้ายังไม่มี
+    if(!V2CFG && v2RoundId()){
+      SITE_CFG_LOADING = true; renderSites();
+      var pr = v2LoadConfig();
+      if(pr && pr.then) pr.then(function(){ SITE_CFG_LOADING=false; renderSites(); });
+      else { SITE_CFG_LOADING=false; renderSites(); }
+    } else renderSites();
+  }
   if(sub==='agents') renderAgents();
 }
 
