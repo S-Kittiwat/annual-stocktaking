@@ -40,9 +40,16 @@ button{font-family:var(--font);}
 .site-editor-row td{padding:0 !important;background:var(--bg);}
 .site-editor{padding:16px;border-left:3px solid var(--accent);}
 .se-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;}
-.bb-grid th{font-size:11px;} .bb-grid td{font-size:12.5px;padding:5px 8px;}
-.bb-grid tfoot td{font-weight:700;background:var(--surface2);}
-.bb-in{padding:5px 6px !important;}
+.bb-grid{width:100%;border-collapse:collapse;table-layout:fixed;}
+.bb-grid th,.bb-grid td{text-align:center;vertical-align:middle;padding:0 8px;height:42px;font-size:12.5px;}
+.bb-grid th{font-size:11px;line-height:1.3;white-space:nowrap;}
+.bb-grid th:first-child,.bb-grid td:first-child{text-align:left;width:38%;}
+.bb-grid tbody td:first-child{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;}
+.bb-grid tfoot td{font-weight:700;background:var(--surface2);font-family:var(--mono);}
+.bb-grid tfoot td:first-child{font-family:var(--font);}
+.bb-unit{color:var(--muted);font-weight:400;font-size:10px;}
+/* ช่องกรอกกับตัวเลขแถวรวม ต้องอยู่ตรงกลางคอลัมน์เดียวกันพอดี */
+.bb-in{width:100% !important;max-width:110px;margin:0 auto;display:block;padding:6px 8px !important;text-align:center;}
 @media(max-width:640px){.se-grid{grid-template-columns:1fr;}}
 .subtabbar{display:flex;gap:6px;margin-bottom:18px;flex-wrap:wrap;border-bottom:1px solid var(--border);padding-bottom:10px;}
 .subtab{background:var(--surface);border:1px solid var(--border);border-radius:20px;color:var(--muted);font-family:var(--font);font-size:12.5px;font-weight:600;padding:7px 14px;cursor:pointer;white-space:nowrap;}
@@ -2226,12 +2233,16 @@ function siteEditorHtml(d,idx){
   }else{
     h += '<div class="eyebrow" style="margin-top:14px;">ยอดระบบ (ตามบัญชี)</div>'
       +  '<div class="table-wrap"><table class="bb-grid"><thead><tr><th style="text-align:left;">สถานะ \\ รายการ</th>'
-      +  items.map(function(i){ return '<th class="num" style="color:'+esc(i.color||'#94a3b8')+';">'+esc(i.item_name)+'<div class="hint" style="font-weight:400;">'+esc(i.unit||'')+'</div></th>'; }).join('')
+      +  items.map(function(i){
+             return '<th style="color:'+esc(i.color||'#94a3b8')+';">'+esc(i.item_name)
+                  + (i.unit ? ' <span class="bb-unit">('+esc(i.unit)+')</span>' : '')+'</th>';
+           }).join('')
       +  '</tr></thead><tbody>';
     bsts.forEach(function(st){
-      h += '<tr><td>'+esc(st.status_name)+(st.is_baseline?' <span class="badge ob">ฐานเทียบ</span>':(st.is_outstanding?' <span class="badge">คงค้าง</span>':''))+'</td>'
+      h += '<tr><td title="'+esc(st.status_name)+'">'+esc(st.status_name)
+        +  (st.is_baseline?' <span class="badge ob">ฐานเทียบ</span>':(st.is_outstanding?' <span class="badge">คงค้าง</span>':''))+'</td>'
         +  items.map(function(it){
-             return '<td class="num"><input class="input mono bb-in" type="number" style="width:92px;text-align:center;" value="'
+             return '<td><input class="input mono bb-in" type="number" value="'
                + siteBookVal(d.site_id,it.item_id,st.status_id)
                + '" oninput="siteBookSet(\''+esc(d.site_id)+'\',\''+esc(it.item_id)+'\',\''+esc(st.status_id)+'\',this.value)"></td>';
            }).join('')
@@ -2240,7 +2251,7 @@ function siteEditorHtml(d,idx){
     h += '</tbody><tfoot><tr><td>รวมยอดคงค้าง</td>'
       +  items.map(function(it){
            var sum=0; bsts.forEach(function(st){ if(st.is_outstanding) sum+=siteBookVal(d.site_id,it.item_id,st.status_id); });
-           return '<td class="num" id="bbsum_'+esc(it.item_id)+'">'+v2PvFmt(sum)+'</td>';
+           return '<td id="bbsum_'+esc(it.item_id)+'">'+v2PvFmt(sum)+'</td>';
          }).join('')
       +  '</tr></tfoot></table></div>';
   }
