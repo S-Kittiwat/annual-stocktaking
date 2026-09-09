@@ -32,6 +32,23 @@ button{font-family:var(--font);}
 .sync-dot{width:7px;height:7px;border-radius:50%;background:var(--success);box-shadow:0 0 0 0 rgba(52,211,153,.5);}
 .sync-dot.live{animation:pulse 2s infinite;}
 @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(52,211,153,.45);}70%{box-shadow:0 0 0 6px rgba(52,211,153,0);}100%{box-shadow:0 0 0 0 rgba(52,211,153,0);}}
+#panel-setup.readonly .input,#panel-setup.readonly select,#panel-setup.readonly input[type=color]{opacity:.75;cursor:not-allowed;}
+#panel-setup.readonly .btn:disabled{opacity:.4;}
+.site-row{cursor:pointer;}
+.site-row:hover td{background:var(--surface2);}
+.site-row.open td{background:rgba(56,189,248,.07);}
+.site-editor-row td{padding:0 !important;background:var(--bg);}
+.site-editor{padding:16px;border-left:3px solid var(--accent);}
+.se-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;}
+.bb-grid th{font-size:11px;} .bb-grid td{font-size:12.5px;padding:5px 8px;}
+.bb-grid tfoot td{font-weight:700;background:var(--surface2);}
+.bb-in{padding:5px 6px !important;}
+@media(max-width:640px){.se-grid{grid-template-columns:1fr;}}
+.subtabbar{display:flex;gap:6px;margin-bottom:18px;flex-wrap:wrap;border-bottom:1px solid var(--border);padding-bottom:10px;}
+.subtab{background:var(--surface);border:1px solid var(--border);border-radius:20px;color:var(--muted);font-family:var(--font);font-size:12.5px;font-weight:600;padding:7px 14px;cursor:pointer;white-space:nowrap;}
+.subtab:hover{color:var(--text);border-color:var(--muted2);}
+.subtab.active{background:rgba(56,189,248,.1);border-color:var(--accent);color:var(--accent);}
+#settingsSlot .panel.active,#panel-settings #panel-misc.active{display:block;}
 /* ── ตัวช่วยตั้งรอบ ── */
 .wiz-step{flex:1;padding:9px 12px;border:1px solid var(--border);border-radius:var(--rs);background:var(--surface);font-size:12px;font-weight:600;color:var(--muted);display:flex;align-items:center;gap:7px;cursor:pointer;}
 .wiz-step.active{border-color:var(--accent);color:var(--accent);background:rgba(56,189,248,.07);}
@@ -346,7 +363,7 @@ table.recon .grp{border-left:1px solid var(--border);}
     <!-- ขั้น 3 -->
     <div class="wiz-panel" id="wiz-3" style="display:none;">
       <div class="eyebrow">ขั้นที่ 3 · Site ที่ร่วมนับ <span class="ehint">— กดเลือกให้ครบ แล้วบันทึกทีเดียว</span></div>
-      <div class="bb-hint">กดที่ชิปเพื่อเลือก/ไม่เลือก · Site ที่เคยมีข้อมูลนับจะลบไม่ได้ (ปิดใช้งานได้อย่างเดียว)</div>
+      <div class="bb-hint">กดที่ชิปเพื่อเลือก/ไม่เลือก · Site ที่เคยมีข้อมูลนับจะลบไม่ได้ (ปิดใช้งานได้อย่างเดียว)<br>ยอดระบบของแต่ละ Site ใส่ทีหลังได้ในช่วง “เตรียมระบบ” หลังตั้งค่าเสร็จ</div>
       <div id="wzChips" style="display:flex;flex-wrap:wrap;gap:8px;margin:12px 0;"></div>
       <div class="add-row">
         <input class="input" id="wzSiteName" placeholder="เพิ่ม Site อื่น เช่น NDC-วังน้อย" onkeydown="if(event.key==='Enter')wizAddSite()">
@@ -365,7 +382,7 @@ table.recon .grp{border-left:1px solid var(--border);}
       <div id="wzReview"></div>
       <div class="wiz-foot">
         <button class="btn btn-outline" onclick="wizGo(3)">← ย้อนกลับ</button>
-        <button class="btn btn-outline" onclick="v2OpenPreview()">👁 ดูตัวอย่างหน้าผู้นับ</button>
+        <button class="btn btn-outline" data-safe="1" onclick="v2OpenPreview()">👁 ดูตัวอย่างหน้าผู้นับ</button>
         <button class="btn btn-success" id="wzStartBtn" onclick="wizStart()">💾 บันทึกทั้งหมด &amp; เริ่มรอบ</button>
       </div>
     </div>
@@ -375,18 +392,27 @@ table.recon .grp{border-left:1px solid var(--border);}
 <div id="app" style="display:none;">
   <div class="tabbar">
     <button class="tab active" data-tab="dashboard" onclick="switchTab('dashboard')">📊 ภาพรวม</button>
-    <button class="tab" data-tab="sites" onclick="switchTab('sites')">⚙️ ตั้งค่า Site</button>
-    <button class="tab" data-tab="types" onclick="switchTab('types')">🧩 ชนิดที่นับ</button>
-    <button class="tab" data-tab="setup" onclick="switchTab('setup')">🎛️ ตั้งค่ารอบ (v2)</button>
     <button class="tab" data-tab="queue" onclick="switchTab('queue')">🔔 คิว recheck</button>
-    <button class="tab" data-tab="agents" onclick="switchTab('agents')">👥 ผู้ใช้</button>
-    <button class="tab" data-tab="stats" onclick="switchTab('stats')">🏆 หอเกียรติยศ</button>
+    <button class="tab" data-tab="settings" onclick="switchTab('settings')">⚙️ การตั้งค่า</button>
   </div>
 
   <div class="wrap">
 
     <!-- ─── Dashboard ─── -->
     <div class="panel active" id="panel-dashboard">
+      <!-- ช่วงเตรียมระบบ: ผู้นับยังเข้าใช้ไม่ได้ จนกว่า Admin จะกดเปิด -->
+      <div id="prepBanner" style="display:none;background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.45);border-radius:12px;padding:14px 16px;margin-bottom:16px;">
+        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">
+          <div style="flex:1;min-width:260px;">
+            <div style="font-size:14px;font-weight:700;color:var(--warn);">🛠️ กำลังเตรียมระบบ — ผู้นับยังเข้าใช้งานไม่ได้</div>
+            <div class="hint" style="margin-top:3px;">ใส่ยอดระบบให้ครบก่อน แล้วค่อยกดเปิดให้ผู้นับเริ่มงาน</div>
+          </div>
+          <button class="btn btn-outline" onclick="switchTab('settings');settingsGo('sites')">ไปใส่ยอดระบบ</button>
+          <button class="btn btn-success" id="btnGoLive" onclick="goLive()">▶ เปิดให้ผู้นับเริ่มงาน</button>
+        </div>
+        <div id="prepList" style="margin-top:12px;"></div>
+      </div>
+
       <div class="eyebrow">รอบการนับปัจจุบัน</div>
       <div class="card round-card">
         <div class="round-meta">
@@ -397,8 +423,9 @@ table.recon .grp{border-left:1px solid var(--border);}
           </div>
         </div>
         <div class="round-actions">
-          <button class="btn btn-outline" onclick="openNewRound()">+ เปิดรอบใหม่</button>
-          <button class="btn btn-warn" id="btnToggleRound" onclick="toggleRound()">⏸ ปิดรอบ</button>
+          <button class="btn btn-outline" id="btnStatsView" onclick="openStats()" style="display:none;">🏆 หอเกียรติยศ</button>
+          <button class="btn btn-success" id="btnFinish" onclick="finishRound()">🏁 จบงาน</button>
+          <button class="btn btn-outline" id="btnNewRound" onclick="openNewRound()" style="display:none;">+ เปิดรอบใหม่</button>
         </div>
       </div>
 
@@ -429,24 +456,32 @@ table.recon .grp{border-left:1px solid var(--border);}
     </div>
 
     <!-- ─── Sites ─── -->
-    <div class="panel" id="panel-sites">
-      <div class="eyebrow">เพิ่ม Site <span class="ehint">— Site ที่เปิดใช้งานจะไปแสดงให้ผู้นับเลือกในขั้นที่ 1</span></div>
-      <div class="add-row">
-        <input class="input" id="newSiteName" placeholder="ชื่อ Site เช่น NDC-วังน้อย" onkeydown="if(event.key==='Enter')addSite()">
-        <button class="btn btn-primary" onclick="addSite()">+ เพิ่ม Site</button>
+    <!-- ─── การตั้งค่า (รวมทุกอย่างไว้ที่เดียว) ─── -->
+    <div class="panel" id="panel-settings">
+      <div class="subtabbar">
+        <button class="subtab active" data-sub="sites"  onclick="settingsGo('sites')">🏭 Site &amp; ยอดระบบ</button>
+        <button class="subtab" data-sub="agents" onclick="settingsGo('agents')">👥 ผู้ใช้งาน</button>
+        <button class="subtab" data-sub="setup"  onclick="settingsGo('setup')">🎛️ ตั้งค่ารอบ</button>
       </div>
-      <div class="eyebrow">รายการ Site + ยอดในระบบ (Book Balance)</div>
-      <div class="bb-hint">📒 กด “ใส่ยอด” ที่ Site เพื่อกรอกยอดระบบ PCS + เลขที่เอกสาร · หน่วย: จำนวนพาเลท · ยอดคงค้างในบัญชีเช่า = คงเหลือ + ระหว่างโอนออก</div>
+      <div id="settingsSlot"></div>
+
+    </div>
+
+    <div class="panel" id="panel-sites">
+      <div id="siteDirtyBar" style="display:none;align-items:center;gap:10px;flex-wrap:wrap;background:rgba(251,191,36,.1);border:1px solid rgba(251,191,36,.45);border-radius:10px;padding:10px 14px;font-size:12.5px;margin-bottom:14px;">
+        <span id="siteDirtyText" style="color:var(--warn);"></span>
+        <button class="btn btn-outline btn-sm" style="margin-left:auto;" onclick="siteCancelAll()">ยกเลิก</button>
+        <button class="btn btn-success btn-sm" id="siteSaveAllBtn" onclick="siteSaveAll()">💾 บันทึกทั้งหมด</button>
+      </div>
+
+      <div class="eyebrow">รายการ Site <span class="ehint">— กดที่แถวเพื่อแก้ไขข้อมูลและใส่ยอดระบบ</span></div>
       <div class="table-wrap" id="sitesTable"><div class="empty"><span class="spinner"></span></div></div>
 
-      <div id="bookEditor" style="display:none;margin-top:16px;padding:14px;border:1.5px solid var(--border,#e2e2e2);border-radius:10px;background:rgba(0,0,0,.02);">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
-          <div style="font-weight:700;">ใส่ยอดระบบ — <span id="bookEditorSite" style="color:var(--accent,#b8893d);"></span></div>
-          <button class="btn btn-outline btn-sm" onclick="closeBookEditor()">✕ ปิด</button>
-        </div>
-        <div class="bb-grid-wrap" id="bookGridWrap"></div>
-        <button class="btn btn-success" id="bookSaveBtn" onclick="saveBook()" style="margin-top:10px;">💾 บันทึก Book Balance</button>
+      <div class="add-row" style="margin-top:12px;">
+        <input class="input" id="newSiteName" placeholder="เพิ่ม Site เช่น NDC-วังน้อย" onkeydown="if(event.key==='Enter')siteAdd()">
+        <button class="btn btn-outline" onclick="siteAdd()">+ เพิ่ม</button>
       </div>
+      <div class="hint" style="margin-top:8px;">แก้อะไรก็ค้างไว้ในเครื่องก่อน กด “บันทึกทั้งหมด” ครั้งเดียวเมื่อพอใจ</div>
     </div>
 
     <!-- ─── ชนิดที่นับ (v2 Phase 1: config-driven) ─── -->
@@ -483,9 +518,10 @@ table.recon .grp{border-left:1px solid var(--border);}
         · ค่าที่ตั้งผูกกับรอบนี้เท่านั้น รอบเก่าไม่กระทบ
       </div>
 
+      <div id="v2LockBar" style="display:none;align-items:center;gap:10px;flex-wrap:wrap;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 14px;font-size:12.5px;margin-bottom:14px;"></div>
       <div class="eyebrow">รอบปัจจุบัน <span class="ehint" id="setupRoundLabel">—</span></div>
       <div class="add-row" style="flex-wrap:wrap;">
-        <button class="btn btn-outline" onclick="v2LoadConfig()">↻ โหลดใหม่</button>
+        <button class="btn btn-outline" data-safe="1" onclick="v2LoadConfig()">↻ โหลดใหม่</button>
         <button class="btn btn-outline" onclick="v2UseTemplate()">📋 ใช้เทมเพลตพาเลท</button>
         <button class="btn btn-success" id="v2SaveBtn" onclick="v2Save()">💾 บันทึกการตั้งค่า</button>
         <span id="v2DirtyMark" style="font-size:12px;color:var(--warn);display:none;align-self:center;">● ยังไม่บันทึก</span>
@@ -526,7 +562,7 @@ table.recon .grp{border-left:1px solid var(--border);}
       <button class="btn btn-outline btn-sm" style="margin-top:8px;" onclick="v2Add('adjustments')">+ เพิ่มรายการปรับปรุง</button>
 
       <div style="margin-top:20px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;">
-        <button class="btn btn-outline" onclick="v2OpenPreview()">👁 ดูตัวอย่างหน้าผู้นับ</button>
+        <button class="btn btn-outline" data-safe="1" onclick="v2OpenPreview()">👁 ดูตัวอย่างหน้าผู้นับ</button>
         <span class="hint">ดูว่าผู้นับจะเห็นอะไร และ flag ที่ตั้งไว้แปลเป็นสูตรอย่างไร</span>
       </div>
     </div>
@@ -561,7 +597,10 @@ table.recon .grp{border-left:1px solid var(--border);}
 
     <!-- ─── Leaderboard ─── -->
     <div class="panel" id="panel-stats">
-      <div class="eyebrow">สถิติสนุก ๆ ของรอบนี้</div>
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:4px;">
+        <div class="eyebrow" style="margin:0;">🏆 หอเกียรติยศ — สถิติสนุก ๆ ของรอบนี้</div>
+        <button class="btn btn-outline btn-sm" style="margin-left:auto;" onclick="switchTab('dashboard')">← กลับหน้าภาพรวม</button>
+      </div>
       <div id="statsBody"><div class="empty"><span class="spinner"></span></div></div>
     </div>
 
@@ -876,6 +915,8 @@ function loadData(showSpin){
       S.docnos  = d.docnos  || {};
       S.docMeta = d.docMeta || {};
       S.agents  = d.agents  || [];
+      S.statsOpen = !!d.stats_open;
+      if(!siteDirty()) S.booksV2 = d.books_v2 || {};   // อย่าทับยอดที่กำลังกรอกค้างไว้
       // v2: config ชนิด/สถานะ — ถ้ากำลังแก้ค้างอยู่ อย่าดึงของ server มาทับ (บทเรียน 2.6)
       if(d.item_config && !S.typesDirty) applyItemConfig(d.item_config);
     }
@@ -888,12 +929,13 @@ function startPolling(){
   if(_pollTimer) clearInterval(_pollTimer);
   _pollTimer = setInterval(function(){
     if(_modalOpen) return;                 // don't clobber input mid-edit
-    if(S.tab==='sites' && S.bookSite) return; // don't wipe book entry in progress
-    if(S.tab==='sites' && S._editSite) return; // อย่า re-render ทับตอนกำลังแก้ไข site แบบ inline
-    if(S.tab==='types' && S.typesDirty) return; // อย่าทับ config ที่กำลังแก้ค้างไว้
-    if(S.tab==='setup') return;                 // แท็บตั้งค่า v2: ไม่ poll ทับเลย
+    if(S.tab==='settings' && SETTINGS_SUB==='sites' && typeof siteDirty==='function' && siteDirty()) return; // กำลังแก้ Site/ยอด
+    if(S.tab==='settings'){
+      if(SETTINGS_SUB==='types' && S.typesDirty) return;  // config เดิมที่แก้ค้างไว้
+      if(SETTINGS_SUB==='setup') return;                  // ตั้งค่ารอบ v2: ไม่ทับเลย
+    }
     if(document.getElementById('wizard').style.display==='block') return;  // อยู่ในตัวช่วยตั้งรอบ
-    if(S.tab==='stats') loadStats();           // แท็บหอเกียรติยศ: รีเฟรชสถิติตามรอบ poll
+    if(S.tab==='stats') loadStats();           // หน้าหอเกียรติยศ: รีเฟรชสถิติตามรอบ poll
     loadData(false);
   }, POLL_MS);
 }
@@ -903,7 +945,7 @@ function markSynced(){
 }
 
 /* ── Render: everything ──────────────────────────────── */
-function renderAll(){ renderDashboard(); renderSiteStatus(); renderRecon(); renderSites(); renderAgents(); renderQueueHistory(); renderTypes(); }
+function renderAll(){ renderDashboard(); renderSiteStatus(); renderRecon(); renderSites(); renderAgents(); renderQueueHistory(); }
 function renderQueueHistory(){
   var el=document.getElementById('allTableQ'); if(!el) return;
   var subs=curSubs().slice().sort(function(a,b){return (b.submitted_at||'').localeCompare(a.submitted_at||'');});
@@ -930,7 +972,22 @@ function renderDashboard(){
   var st = document.getElementById('roundState');
   st.textContent = r.is_open ? '● เปิดรับการนับ' : '● ปิดรอบแล้ว';
   st.className = 'round-state ' + (r.is_open ? 'open' : 'closed');
-  document.getElementById('btnToggleRound').textContent = r.is_open ? '⏸ ปิดรอบ' : '▶ เปิดรอบ';
+  var tgl=document.getElementById('miscToggleRoundBtn');
+  if(tgl) tgl.textContent = r.is_open ? '⏸ ปิดรอบ' : '▶ เปิดรอบ';
+  var ph=roundPhase();
+  var fin=document.getElementById('btnFinish'), sv=document.getElementById('btnStatsView');
+  var nr=document.getElementById('btnNewRound');
+  if(fin) fin.style.display = (ph==='live') ? '' : 'none';
+  if(sv)  sv.style.display  = (ph==='closed') ? '' : 'none';
+  if(nr)  nr.style.display  = (ph==='closed') ? '' : 'none';
+  var st=document.getElementById('roundState');
+  if(st){
+    st.textContent = ph==='preparing' ? '🛠️ กำลังเตรียมระบบ'
+                   : ph==='live'      ? '● เปิดรับการนับ'
+                   : ph==='closed'    ? '■ จบงานแล้ว' : '● รอตั้งค่า';
+    st.className = 'round-state ' + (ph==='live' ? 'open' : 'closed');
+  }
+  renderPrep();
 
   var subs = curSubs();
   var pending  = subs.filter(function(c){return c.status==='pending';}).length;
@@ -1250,13 +1307,16 @@ function v2Del(kind, idx){
 function v2Save(){
   if(!V2CFG){ v2Err('ยังไม่ได้โหลด config'); return; }
   var btn=document.getElementById('v2SaveBtn'); btn.disabled=true; btn.textContent='กำลังบันทึก…';
-  post({action:'saveRoundConfig', round_id:v2RoundId(), config:V2CFG}).then(function(d){
+  post({action:'saveRoundConfig', round_id:v2RoundId(), config:V2CFG,
+        reason:V2_REASON, by:(myUserName||'admin')}).then(function(d){
     btn.disabled=false; btn.textContent='💾 บันทึกการตั้งค่า';
     if(d && d.status==='error'){ v2Err(d.message||'บันทึกไม่สำเร็จ'); return; }
     v2Err(''); S.v2Dirty=false;
     var m=document.getElementById('v2DirtyMark'); if(m) m.style.display='none';
     if(d.config) V2CFG=d.config;
-    toast('บันทึกการตั้งค่าแล้ว','success'); v2Render();
+    toast('บันทึกการตั้งค่าแล้ว','success');
+    if(V2_UNLOCK){ V2_UNLOCK=false; V2_REASON=''; }     // แก้เสร็จแล้วล็อกกลับทันที
+    v2Render(); v2ApplyLock();
   }).catch(function(){
     btn.disabled=false; btn.textContent='💾 บันทึกการตั้งค่า'; v2Err('บันทึกไม่สำเร็จ');
   });
@@ -1392,6 +1452,7 @@ function v2Render(keepFocus){
   }
 
   if(document.getElementById('v2PreviewModal').classList.contains('open')) v2RenderPreview();
+  v2ApplyLock();
 }
 
 function v2OpenPreview(){
@@ -2039,217 +2100,249 @@ function exportReconCSV(){
 }
 
 /* ── Render: Sites ───────────────────────────────────── */
+/* ════════════════════════════════════════════════════════════════
+   หน้า Site — แสดงผลกับแก้ไขแยกกันชัดเจน
+   ทุกการแก้ (ข้อมูล Site + ยอดระบบ) ค้างในเครื่อง บันทึกทีเดียว
+   ════════════════════════════════════════════════════════════════ */
+var SITE_DRAFT = null;   // สำเนาที่แก้ได้ [{site_id,site_name,is_active,start_time,drive_link,is_new,locked}]
+var BOOK_DRAFT = null;   // ยอดระบบ BOOK_DRAFT[site_id][item_id][status_id] = qty
+var SITE_DEL   = [];
+var SITE_OPEN  = '';     // Site ที่กางแผงแก้ไขอยู่
+var SITE_TMP   = 0;
+
+function siteSync(){
+  if(SITE_DRAFT !== null) return;
+  SITE_DEL = [];
+  SITE_DRAFT = (S.sites||[]).map(function(x){
+    return { site_id:x.site_id, site_name:x.site_name, is_active:!!x.is_active,
+             start_time:x.start_time||'', drive_link:x.drive_link||'', is_new:false,
+             locked: !!x.checkin_at || (S.subs||[]).some(function(y){ return y.site_id===x.site_id; }) };
+  });
+  BOOK_DRAFT = JSON.parse(JSON.stringify(S.booksV2 || {}));
+}
+function siteCfg(){ return V2CFG || null; }
+function siteItems(){ var c=siteCfg(); return c ? c.items.filter(function(i){return i.is_active!==false;}).sort(function(a,b){return (a.sort||0)-(b.sort||0);}) : []; }
+function siteBookStatuses(){ var c=siteCfg(); return c ? c.book_statuses.filter(function(s){return s.is_active!==false;}).sort(function(a,b){return (a.sort||0)-(b.sort||0);}) : []; }
+
+function siteBookVal(sid,itemId,stId){
+  return ((BOOK_DRAFT[sid]||{})[itemId]||{})[stId] || 0;
+}
+function siteBookFilled(sid){
+  var items=siteItems(); if(!items.length) return 0;
+  var b=BOOK_DRAFT[sid]||{};
+  return items.filter(function(i){
+    var row=b[i.item_id]||{};
+    return Object.keys(row).some(function(k){ return Number(row[k])>0; });
+  }).length;
+}
+function siteDirty(){
+  if(SITE_DRAFT===null) return false;
+  if(SITE_DEL.length) return true;
+  if(SITE_DRAFT.some(function(x){ return x.is_new; })) return true;
+  var changed = SITE_DRAFT.some(function(d){
+    var o=(S.sites||[]).filter(function(x){ return x.site_id===d.site_id; })[0];
+    return o && (o.site_name!==d.site_name || !!o.is_active!==!!d.is_active
+                 || (o.start_time||'')!==d.start_time || (o.drive_link||'')!==d.drive_link);
+  });
+  if(changed) return true;
+  return JSON.stringify(BOOK_DRAFT) !== JSON.stringify(S.booksV2||{});
+}
+function siteMark(){
+  var bar=document.getElementById('siteDirtyBar'), txt=document.getElementById('siteDirtyText');
+  if(!bar) return;
+  if(!siteDirty()){ bar.style.display='none'; return; }
+  var parts=[];
+  var nNew=SITE_DRAFT.filter(function(x){return x.is_new;}).length;
+  if(nNew) parts.push('เพิ่ม '+nNew);
+  if(SITE_DEL.length) parts.push('ลบ '+SITE_DEL.length);
+  if(JSON.stringify(BOOK_DRAFT)!==JSON.stringify(S.booksV2||{})) parts.push('ยอดระบบ');
+  bar.style.display='flex';
+  txt.textContent='● มีการแก้ไขที่ยังไม่บันทึก'+(parts.length?' — '+parts.join(', '):'');
+}
+
+/* ── ชั้นแสดงผล ── */
 function renderSites(){
-  var el = document.getElementById('sitesTable');
-  if(!S.sites.length){ el.innerHTML = '<div class="empty">ยังไม่มี Site — เพิ่ม Site แรกด้านบน</div>'; return; }
-  var stMap = {
-    idle:'<span class="status-badge sb-idle">— ยังไม่นับ</span>',
-    pending:'<span class="status-badge sb-pending">⏳ รออนุมัติ</span>',
-    approved:'<span class="status-badge sb-locked">🔒 อนุมัติ/ล็อค</span>',
-    rejected:'<span class="status-badge sb-rejected">↩ ตีกลับ</span>'
-  };
-  var editing = S._editSite || null;
-  var roundOpen = !!(S.round && S.round.is_open);
-  var rows = S.sites.map(function(s){
-    var hasBook = !!S.books[s.site_id];
-    var docNo = (S.docnos && S.docnos[s.site_id]) || '';
-    var bookBadge = hasBook ? '<span class="status-badge sb-locked">ใส่ยอดแล้ว ✓</span>' : '<span class="status-badge sb-idle">ยังไม่ใส่</span>';
-    var sidJs = esc(s.site_id).replace(/'/g,"\\'");
-    var isEdit = (editing === s.site_id);
+  var el=document.getElementById('sitesTable'); if(!el) return;
+  siteSync();
+  if(!SITE_DRAFT.length){ el.innerHTML='<div class="empty">ยังไม่มี Site — เพิ่มด้านล่าง</div>'; siteMark(); return; }
 
-    if (isEdit) {
-      var docField = roundOpen
-        ? '<input id="editDocNo" type="text" value="'+esc(docNo)+'" placeholder="เช่น PE-2569-001" style="padding:4px 6px;font-size:12px;width:130px;">'
-        : '<span style="font-size:11px;color:var(--muted,#999);">ต้องเปิดรอบก่อน</span>';
-      return '<tr style="background:rgba(184,137,61,.07);">'
-        +'<td style="font-weight:600;">'+esc(s.site_name)+'</td>'
-        +'<td>'+bookBadge+'</td>'
-        +'<td>'+docField+'</td>'
-        +'<td><input id="editStartTime" type="text" inputmode="numeric" maxlength="5" placeholder="hh:mm" value="'+esc(s.start_time||'')+'" style="padding:4px 6px;font-size:12px;width:70px;text-align:center;"></td>'
-        +'<td><input id="editDriveLink" type="text" placeholder="วางลิงก์ Google Drive" value="'+esc(s.drive_link||'')+'" style="padding:4px 6px;font-size:12px;width:180px;"></td>'
-        +'<td><div class="toggle '+(S._editActive?'on':'')+'" onclick="toggleEditActive(this)" title="เปิด/ปิดการใช้งาน (บันทึกพร้อมปุ่ม 💾)"></div></td>'
-        +'<td style="white-space:nowrap;">'
-          +'<button id="btnSaveSite" class="btn-sm" onclick="saveSiteRow(\''+sidJs+'\')">💾 บันทึก</button> '
-          +'<button class="btn-sm" onclick="cancelEditSite()" style="background:#e5e7eb;border:1px solid #cbd5e1;color:#334155;font-weight:600;">✕ ยกเลิก</button>'
-        +'</td>'
-      +'</tr>';
+  var items=siteItems(), hasCfg=items.length>0;
+  var stMap={ idle:'<span class="status-badge sb-idle">— ยังไม่นับ</span>',
+              pending:'<span class="status-badge sb-pending">⏳ รออนุมัติ</span>',
+              approved:'<span class="status-badge sb-locked">🔒 อนุมัติแล้ว</span>',
+              rejected:'<span class="status-badge sb-rejected">↩ ตีกลับ</span>',
+              reopened:'<span class="status-badge sb-rejected">↩ เปิดแก้</span>' };
+
+  var html='<table><thead><tr>'
+    + '<th>Site</th><th class="num" style="width:110px;">ใช้งาน</th>'
+    + '<th class="num" style="width:130px;">ยอดระบบ</th>'
+    + '<th class="num" style="width:100px;">เริ่มนับ</th>'
+    + '<th class="num" style="width:130px;">สถานะการนับ</th>'
+    + '<th style="width:90px;"></th></tr></thead><tbody>';
+
+  SITE_DRAFT.forEach(function(d,idx){
+    var filled=hasCfg?siteBookFilled(d.site_id):0;
+    var bookCell = !hasCfg ? '<span class="hint">—</span>'
+      : (filled>=items.length ? '<span class="status-badge sb-locked">ครบ</span>'
+         : filled===0 ? '<span class="status-badge sb-rejected">ยังไม่ใส่</span>'
+                      : '<span class="status-badge sb-pending">'+filled+'/'+items.length+'</span>');
+    var st = d.is_new ? '<span class="hint">ใหม่</span>' : (stMap[siteState(d.site_id)]||stMap.idle);
+    html += '<tr class="site-row'+(SITE_OPEN===d.site_id?' open':'')+'" onclick="siteToggleRow(\''+esc(d.site_id)+'\')">'
+      + '<td><b>'+esc(d.site_name)+'</b>'+(d.is_new?' <span class="chip-new">ใหม่</span>':'')+'</td>'
+      + '<td class="num">'+(d.is_active?'<span class="status-badge sb-locked">เปิด</span>':'<span class="status-badge sb-idle">ปิด</span>')+'</td>'
+      + '<td class="num">'+bookCell+'</td>'
+      + '<td class="num">'+esc(d.start_time||'—')+'</td>'
+      + '<td class="num">'+st+'</td>'
+      + '<td><button class="btn btn-outline btn-sm" onclick="event.stopPropagation();siteToggleRow(\''+esc(d.site_id)+'\')">'
+      + (SITE_OPEN===d.site_id?'ปิด':'แก้ไข')+'</button></td></tr>';
+    if(SITE_OPEN===d.site_id){
+      html += '<tr class="site-editor-row"><td colspan="6">'+siteEditorHtml(d,idx)+'</td></tr>';
     }
+  });
+  html+='</tbody></table>';
+  el.innerHTML=html;
+  siteMark();
+}
 
-    var docCell  = docNo ? ('📄 '+esc(docNo)) : '<span style="color:var(--muted,#999);">—</span>';
-    var timeCell = s.start_time ? esc(s.start_time) : '<span style="color:var(--muted,#999);">—</span>';
-    var linkCell = s.drive_link
-      ? '<a href="'+esc(s.drive_link)+'" target="_blank" rel="noopener" style="font-size:12px;">เปิดลิงก์ ↗</a>'
-      : '<span style="color:var(--muted,#999);">—</span>';
-    var dis = (editing && !isEdit) ? 'disabled' : '';   // แก้ทีละแถว
-    return '<tr>'
-      +'<td style="font-weight:600;">'+esc(s.site_name)+'</td>'
-      +'<td>'+bookBadge+'</td>'
-      +'<td style="font-size:12px;">'+docCell+'</td>'
-      +'<td style="font-size:12px;text-align:center;">'+timeCell+'</td>'
-      +'<td style="font-size:12px;">'+linkCell+'</td>'
-      +'<td>'+(s.is_active
-          ? '<span class="status-badge sb-locked">🟢 เปิด</span>'
-          : '<span class="status-badge sb-idle">⚪ ปิด</span>')+'</td>'
-      +'<td style="white-space:nowrap;">'
-        +'<button class="btn-sm" onclick="startEditSite(\''+sidJs+'\')" '+dis+'>✏️ แก้ไข</button> '
-        +'<button class="btn-sm" onclick="openBookEditor(\''+sidJs+'\')">ใส่ยอด</button> '
-        +'<button class="btn-sm btn-sm-reject" onclick="deleteSite(\''+sidJs+'\')">ลบ</button>'
-      +'</td>'
-    +'</tr>';
-  }).join('');
-  el.innerHTML = '<table><thead><tr><th>ชื่อ Site</th><th>ยอดระบบ</th><th>เลขเอกสาร</th><th>⏰ เวลาเริ่ม</th><th>📁 ลิงก์เอกสาร (Drive)</th><th>ใช้งาน</th><th>จัดการ</th></tr></thead><tbody>'+rows+'</tbody></table>';
-  if(S.bookSite){ // ถ้ากำลังเปิด editor อยู่ อัปหัวข้อชื่อ site ให้ตรง
-    var s = S.sites.filter(function(x){return x.site_id===S.bookSite;})[0];
-    var lbl = document.getElementById('bookEditorSite'); if(lbl && s) lbl.textContent = s.site_name;
+/* ── ชั้นแก้ไข ── */
+function siteEditorHtml(d,idx){
+  var items=siteItems(), bsts=siteBookStatuses();
+  var h='<div class="site-editor">'
+    + '<div class="se-grid">'
+    +   '<div class="field"><label>ชื่อ Site</label><input class="input" id="se_name_'+idx+'" value="'+esc(d.site_name)+'" oninput="siteSet('+idx+',\'site_name\',this.value)"></div>'
+    +   '<div class="field"><label>เวลาเริ่มนับ</label><input class="input" id="se_time_'+idx+'" placeholder="เช่น 08:30" value="'+esc(d.start_time)+'" oninput="siteSet('+idx+',\'start_time\',this.value)"></div>'
+    +   '<div class="field"><label>ลิงก์ Drive (ถ้ามี)</label><input class="input" id="se_link_'+idx+'" value="'+esc(d.drive_link)+'" oninput="siteSet('+idx+',\'drive_link\',this.value)"></div>'
+    +   '<div class="field"><label>สถานะ</label>'
+    +     '<button class="btn '+(d.is_active?'btn-outline':'btn-warn')+' btn-sm" style="align-self:flex-start;" onclick="siteToggleActive('+idx+')">'
+    +     (d.is_active?'✓ เปิดใช้งาน (กดเพื่อปิด)':'ปิดอยู่ (กดเพื่อเปิด)')+'</button></div>'
+    + '</div>';
+
+  if(!items.length){
+    h += '<div class="bb-hint" style="margin-top:12px;">ยังตั้งค่ารายการที่นับไม่เสร็จ — ใส่ยอดระบบไม่ได้</div>';
+  }else{
+    h += '<div class="eyebrow" style="margin-top:14px;">ยอดระบบ (ตามบัญชี)</div>'
+      +  '<div class="table-wrap"><table class="bb-grid"><thead><tr><th style="text-align:left;">สถานะ \\ รายการ</th>'
+      +  items.map(function(i){ return '<th class="num" style="color:'+esc(i.color||'#94a3b8')+';">'+esc(i.item_name)+'<div class="hint" style="font-weight:400;">'+esc(i.unit||'')+'</div></th>'; }).join('')
+      +  '</tr></thead><tbody>';
+    bsts.forEach(function(st){
+      h += '<tr><td>'+esc(st.status_name)+(st.is_baseline?' <span class="badge ob">ฐานเทียบ</span>':(st.is_outstanding?' <span class="badge">คงค้าง</span>':''))+'</td>'
+        +  items.map(function(it){
+             return '<td class="num"><input class="input mono bb-in" type="number" style="width:92px;text-align:center;" value="'
+               + siteBookVal(d.site_id,it.item_id,st.status_id)
+               + '" oninput="siteBookSet(\''+esc(d.site_id)+'\',\''+esc(it.item_id)+'\',\''+esc(st.status_id)+'\',this.value)"></td>';
+           }).join('')
+        +  '</tr>';
+    });
+    h += '</tbody><tfoot><tr><td>รวมยอดคงค้าง</td>'
+      +  items.map(function(it){
+           var sum=0; bsts.forEach(function(st){ if(st.is_outstanding) sum+=siteBookVal(d.site_id,it.item_id,st.status_id); });
+           return '<td class="num" id="bbsum_'+esc(it.item_id)+'">'+v2PvFmt(sum)+'</td>';
+         }).join('')
+      +  '</tr></tfoot></table></div>';
+  }
+
+  h += '<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">'
+    +  (d.locked ? '<span class="hint">Site นี้มีข้อมูลการนับแล้ว — ลบไม่ได้</span>'
+                 : '<button class="btn btn-danger btn-sm" onclick="siteDelete('+idx+')">ลบ Site นี้</button>')
+    +  '<button class="btn btn-outline btn-sm" style="margin-left:auto;" onclick="siteToggleRow(\'\')">ปิดแผง</button>'
+    +  '</div></div>';
+  return h;
+}
+
+function siteToggleRow(id){ SITE_OPEN = (SITE_OPEN===id ? '' : id); renderSites(); }
+function siteSet(idx,field,val){
+  siteSync();
+  if(!SITE_DRAFT[idx]) return;
+  SITE_DRAFT[idx][field]=val;
+  siteMark();
+  // อัปเดตเฉพาะชื่อในแถวสรุป ไม่ re-render ทับช่องที่กำลังพิมพ์
+  if(field==='site_name'){
+    var row=document.querySelectorAll('#sitesTable tbody tr.site-row')[idx];
+    if(row) row.cells[0].innerHTML='<b>'+esc(val)+'</b>'+(SITE_DRAFT[idx].is_new?' <span class="chip-new">ใหม่</span>':'');
   }
 }
-
-function _normTime(v){
-  v=String(v||'').trim(); if(!v) return '';
-  v=v.replace(/[.\uFF0E]/g,':').replace(/\s/g,'');        // 19.00 → 19:00
-  if(/^\d{3,4}$/.test(v)){ v=('000'+v).slice(-4); v=v.slice(0,2)+':'+v.slice(2); }  // 1900 → 19:00
-  var m=v.match(/^(\d{1,2}):(\d{1,2})$/); if(!m) return null;
-  var h=+m[1], mi=+m[2]; if(h>23||mi>59) return null;
-  return ('0'+h).slice(-2)+':'+('0'+mi).slice(-2);
+function siteToggleActive(idx){
+  siteSync();
+  SITE_DRAFT[idx].is_active=!SITE_DRAFT[idx].is_active;
+  renderSites();
 }
-function startEditSite(id){
-  var s=S.sites.filter(function(x){return x.site_id===id;})[0];
-  S._editActive = s ? !!s.is_active : true;   // ค่าเริ่มต้นของ toggle ในโหมดแก้ไข
-  S._editSite=id; renderSites();
-}
-function cancelEditSite(){ S._editSite=null; renderSites(); }
-// สลับสถานะใช้งานในโหมดแก้ไข — เก็บไว้ในตัวแปร แล้วบันทึกพร้อมปุ่ม 💾 (ไม่ re-render กันค่าที่พิมพ์หาย)
-function toggleEditActive(el){ S._editActive=!S._editActive; if(el) el.classList.toggle('on', S._editActive); }
-function saveSiteRow(id){
-  var roundOpen = !!(S.round && S.round.is_open);
-  var tEl=document.getElementById('editStartTime');
-  var lEl=document.getElementById('editDriveLink');
-  var dEl=document.getElementById('editDocNo');
-  var timeVal=_normTime(tEl?tEl.value:'');
-  if(timeVal===null){ toast('รูปแบบเวลาไม่ถูกต้อง — พิมพ์ hh:mm','error'); return; }
-  var payload={ action:'saveSiteFields', site_id:id, start_time:timeVal, drive_link:(lEl?String(lEl.value).trim():''), is_active:!!S._editActive };
-  if(roundOpen && dEl){ payload.doc_no = String(dEl.value).trim(); }   // เลขเอกสารเซฟเฉพาะเมื่อมีรอบเปิด
-  var btn=document.getElementById('btnSaveSite'); if(btn){ btn.disabled=true; btn.textContent='กำลังบันทึก…'; }
-  post(payload).then(function(d){
-    var s=S.sites.filter(function(x){return x.site_id===id;})[0];
-    if(s){ if(d.start_time!==undefined) s.start_time=d.start_time; if(d.drive_link!==undefined) s.drive_link=d.drive_link; if(d.is_active!==undefined) s.is_active=d.is_active; }
-    if(d.doc_no!==undefined){ if(!S.docnos) S.docnos={}; S.docnos[id]=d.doc_no; }
-    S._editSite=null;
-    toast('✓ บันทึกแล้ว','success');
-    renderSites(); renderSiteStatus(); renderDashboard();
-  }).catch(function(){
-    if(btn){ btn.disabled=false; btn.textContent='💾 บันทึก'; }
-    toast('บันทึกไม่สำเร็จ','error');
+function siteBookSet(sid,itemId,stId,val){
+  siteSync();
+  if(!BOOK_DRAFT[sid]) BOOK_DRAFT[sid]={};
+  if(!BOOK_DRAFT[sid][itemId]) BOOK_DRAFT[sid][itemId]={};
+  BOOK_DRAFT[sid][itemId][stId]=Number(val)||0;
+  // อัปเดตแถวรวมสด ๆ โดยไม่ re-render (กันทับช่องที่พิมพ์อยู่)
+  var bsts=siteBookStatuses();
+  siteItems().forEach(function(it){
+    var sum=0; bsts.forEach(function(st){ if(st.is_outstanding) sum+=siteBookVal(sid,it.item_id,st.status_id); });
+    var cell=document.getElementById('bbsum_'+it.item_id);
+    if(cell) cell.textContent=v2PvFmt(sum);
   });
+  siteMark();
 }
-function saveSiteLink(id,val){
-  var v=String(val||'').trim();
-  post({action:'setSiteLink', site_id:id, drive_link:v}).then(function(){
-    var s=S.sites.filter(function(x){return x.site_id===id;})[0]; if(s) s.drive_link=v;
-    toast('📁 บันทึกลิงก์เอกสารแล้ว','success'); renderSites();
-  }).catch(function(){ toast('บันทึกไม่สำเร็จ','error'); });
+function siteAdd(){
+  siteSync();
+  var inp=document.getElementById('newSiteName'), name=inp.value.trim();
+  if(!name){ toast('กรอกชื่อ Site ก่อน','error'); return; }
+  if(SITE_DRAFT.some(function(x){ return x.site_name===name; })){ toast('มี Site ชื่อนี้อยู่แล้ว','error'); return; }
+  inp.value='';
+  var tmp='tmp_'+(++SITE_TMP);
+  SITE_DRAFT.push({ site_id:tmp, site_name:name, is_active:true, start_time:'', drive_link:'', is_new:true, locked:false });
+  SITE_OPEN=tmp; renderSites();
 }
-function saveSiteTime(id,val){
-  var v=String(val||'').trim();
-  if(v){
-    v=v.replace(/[.\uFF0E]/g,':').replace(/\s/g,'');       // 19.00 → 19:00
-    if(/^\d{3,4}$/.test(v)){ v=('000'+v).slice(-4); v=v.slice(0,2)+':'+v.slice(2); } // 1900 → 19:00
-    var m=v.match(/^(\d{1,2}):(\d{1,2})$/);
-    if(!m){ toast('รูปแบบเวลาไม่ถูกต้อง — พิมพ์ hh:mm','error'); loadData(false); return; }
-    var h=+m[1], mi=+m[2];
-    if(h>23||mi>59){ toast('เวลาไม่ถูกต้อง (00:00–23:59)','error'); loadData(false); return; }
-    v=('0'+h).slice(-2)+':'+('0'+mi).slice(-2);
-  }
-  post({action:'setSiteTime', site_id:id, start_time:v}).then(function(){
-    var s=S.sites.filter(function(x){return x.site_id===id;})[0]; if(s) s.start_time=v;
-    toast('⏰ ตั้งเวลาเริ่มแล้ว','success'); renderSites(); renderSiteStatus();
-  }).catch(function(){ toast('บันทึกไม่สำเร็จ','error'); });
+function siteDelete(idx){
+  siteSync();
+  var d=SITE_DRAFT[idx]; if(!d) return;
+  if(d.locked){ toast('Site นี้มีข้อมูลการนับแล้ว ลบไม่ได้','error'); return; }
+  if(!d.is_new && !confirm('ลบ "'+d.site_name+'" ออกจากระบบตอนกดบันทึก?')) return;
+  if(!d.is_new) SITE_DEL.push(d.site_id);
+  delete BOOK_DRAFT[d.site_id];
+  SITE_DRAFT.splice(idx,1);
+  if(SITE_OPEN===d.site_id) SITE_OPEN='';
+  renderSites();
 }
-function openBookEditor(siteId){
-  S.bookSite = siteId;
-  var s = S.sites.filter(function(x){return x.site_id===siteId;})[0];
-  document.getElementById('bookEditorSite').textContent = s ? s.site_name : '';
-  document.getElementById('bookEditor').style.display = 'block';
-  renderBookGrid();
-  document.getElementById('bookEditor').scrollIntoView({behavior:'smooth', block:'nearest'});
+function siteCancelAll(){
+  if(!confirm('ยกเลิกการแก้ไขทั้งหมดที่ยังไม่บันทึก?')) return;
+  SITE_DRAFT=null; BOOK_DRAFT=null; SITE_DEL=[]; SITE_OPEN='';
+  renderSites(); toast('ยกเลิกแล้ว','info');
 }
-function closeBookEditor(){
-  S.bookSite = '';
-  document.getElementById('bookEditor').style.display = 'none';
-}
+function siteSaveAll(){
+  siteSync();
+  if(!siteDirty()){ toast('ไม่มีอะไรเปลี่ยน','info'); return; }
+  var btn=document.getElementById('siteSaveAllBtn'); btn.disabled=true; btn.textContent='กำลังบันทึก…';
 
-/* ── Render: Book Balance ────────────────────────────── */
-function renderBookSelect(){
-  var sel = document.getElementById('bookSiteSelect');
-  var act = activeSites();
-  var prev = S.bookSite;
-  sel.innerHTML = '<option value="">— เลือก Site —</option>' + act.map(function(s){
-    var has = S.books[s.site_id] ? ' ✓' : '';
-    return '<option value="'+esc(s.site_id)+'">'+esc(s.site_name)+has+'</option>';
-  }).join('');
-  if(prev && act.some(function(s){return s.site_id===prev;})) sel.value = prev;
-  else { S.bookSite=''; renderBookGrid(); }
-}
-function onBookSiteChange(){ S.bookSite = document.getElementById('bookSiteSelect').value; renderBookGrid(); }
-function renderBookGrid(){
-  var wrap = document.getElementById('bookGridWrap');
-  if(!S.bookSite){ wrap.innerHTML=''; return; }
-  var book = S.books[S.bookSite] || {};
-
-  var head = '<tr><th>สถานะ \\ รายการ</th>' + PROVIDERS.map(function(p){
-    var t = typeById(p.kind);
-    return '<th class="prov-head '+p.cls+'"'+provStyle(p)+' title="'+esc(t?t.type_name:'')+'">'+esc(p.label)+'</th>';
-  }).join('') + '</tr>';
-  var body = BOOK_STATUS_CFG.map(function(st){
-    var cells = PROVIDERS.map(function(p){
-      var v = (book[p.key] && book[p.key][st.key]!=null) ? book[p.key][st.key] : '';
-      return '<td><input class="bb-input" type="number" min="0" inputmode="numeric" data-p="'+p.key+'" data-s="'+st.key+'" value="'+v+'" oninput="recalcBook()"></td>';
-    }).join('');
-    return '<tr><td style="font-weight:600;">'+esc(st.label)+(st.in_book?' <span style="font-size:10px;color:var(--accent);">• นับเป็นยอดคงค้าง</span>':'')+'</td>'+cells+'</tr>';
-  }).join('');
-  // ยอดคงค้างในบัญชีเช่า = ผลรวมสถานะที่ติ๊ก in_book ในแท็บ "ชนิดที่นับ"
-  var _obLabel = BOOK_STATUS_CFG.filter(function(s){return s.in_book;}).map(function(s){return s.label;}).join(' + ');
-  var foot = '<tr class="bb-foot"><td title="'+esc(_obLabel)+'">รวมยอดคงค้างในบัญชีเช่า</td>'
-    + PROVIDERS.map(function(p){return '<td class="'+p.cls+'"'+provStyle(p)+' data-rent="'+p.key+'">0</td>';}).join('')
-    + '</tr>';
-  var _docNo = (S.docnos && S.docnos[S.bookSite]) || '';
-  var docNoField = '<div class="field" style="margin-bottom:12px;"><label>📄 เลขที่เอกสาร (เฉพาะ Site นี้)</label>'
-    + '<input class="input" id="docNoInput" value="'+String(_docNo).replace(/"/g,'&quot;')+'" placeholder="เช่น PE-2569-001" style="max-width:240px;"></div>';
-  wrap.innerHTML = docNoField + '<table class="bb"><thead>'+head+'</thead><tbody>'+body+'</tbody><tfoot>'+foot+'</tfoot></table>';
-  recalcBook();
-}
-function recalcBook(){
-  var wrap = document.getElementById('bookGridWrap');
-  var inputs = wrap.querySelectorAll('.bb-input');
-  var val = {};                                  // val[provider][status]
-  PROVIDERS.forEach(function(p){ val[p.key]={}; });
-  inputs.forEach(function(i){ val[i.dataset.p][i.dataset.s] = Number(i.value)||0; });
-  PROVIDERS.forEach(function(p){
-    var outstanding = 0;                                     // ยอดคงค้างในบัญชีเช่า (flag in_book)
-    bookOutstandingKeys().forEach(function(k){ outstanding += Number(val[p.key][k]||0); });
-    var e = wrap.querySelector('[data-rent="'+p.key+'"]');
-    if(e) e.textContent = outstanding.toLocaleString();
+  post({ action:'saveSitesBatch',
+         sites: SITE_DRAFT.map(function(x){
+           return { site_id: x.is_new ? '' : x.site_id, site_name:x.site_name, is_active:x.is_active,
+                    start_time:x.start_time||'', drive_link:x.drive_link||'' };
+         }),
+         delete_ids: SITE_DEL })
+  .then(function(d){
+    if(d && d.status==='error') throw new Error(d.message||'บันทึกข้อมูล Site ไม่สำเร็จ');
+    if(d && d.blocked) toast(d.message,'error');
+    // Site ใหม่เพิ่งได้ id จริง — จับคู่ด้วยชื่อเพื่อย้ายยอดที่กรอกไว้
+    var created=(d&&d.created)||[];
+    created.forEach(function(c){
+      var draft=SITE_DRAFT.filter(function(x){ return x.is_new && x.site_name===c.site_name; })[0];
+      if(draft && BOOK_DRAFT[draft.site_id]){
+        BOOK_DRAFT[c.site_id]=BOOK_DRAFT[draft.site_id];
+        delete BOOK_DRAFT[draft.site_id];
+      }
+    });
+    // ทิ้งยอดของ Site ที่ยังเป็น tmp (ไม่ได้ถูกสร้าง)
+    Object.keys(BOOK_DRAFT).forEach(function(k){ if(k.indexOf('tmp_')===0) delete BOOK_DRAFT[k]; });
+    return post({ action:'saveBooksBatchV2', round_id:S.round?S.round.round_id:'', books:BOOK_DRAFT });
+  }).then(function(d){
+    if(d && d.status==='error') throw new Error(d.message||'บันทึกยอดระบบไม่สำเร็จ');
+    SITE_DRAFT=null; BOOK_DRAFT=null; SITE_DEL=[];
+    return loadData(false);
+  }).then(function(){
+    btn.disabled=false; btn.textContent='💾 บันทึกทั้งหมด';
+    renderSites(); toast('บันทึกแล้ว','success');
+  }).catch(function(err){
+    btn.disabled=false; btn.textContent='💾 บันทึกทั้งหมด';
+    toast(String(err && err.message || err),'error');
   });
-}
-function saveBook(){
-  if(!S.bookSite) return;
-  var book = {};
-  PROVIDERS.forEach(function(p){ book[p.key]={}; BOOK_STATUS_CFG.forEach(function(s){ book[p.key][s.key]=0; }); });
-  document.getElementById('bookGridWrap').querySelectorAll('.bb-input').forEach(function(i){
-    book[i.dataset.p][i.dataset.s] = Number(i.value)||0;
-  });
-  var site = S.bookSite;
-  var docNoEl = document.getElementById('docNoInput');
-  var docNo = docNoEl ? docNoEl.value.trim() : '';
-  var btn = document.getElementById('bookSaveBtn'); btn.disabled=true; btn.textContent='กำลังบันทึก…';
-  post({action:'saveBookBalance', site_id:site, book:book, doc_no:docNo}).then(function(){
-    S.books[site] = book;
-    if(!S.docnos) S.docnos={};
-    S.docnos[site] = docNo;
-    btn.disabled=false; btn.innerHTML='💾 บันทึก Book Balance';
-    renderSites(); renderBookGrid();
-    toast('💾 บันทึก Book Balance + เลขที่เอกสารแล้ว','success');
-  }).catch(function(){ btn.disabled=false; btn.innerHTML='💾 บันทึก Book Balance'; toast('บันทึกไม่สำเร็จ','error'); });
 }
 
 // ข้อ 6: บันทึกวันที่/ปีของรอบ (ใช้ทั้งรอบ)
@@ -2593,32 +2686,6 @@ function confirmReview(){
 function closeReview(){ S.rv=null; closeOverlay('reviewModal'); }
 
 /* ── Sites actions ───────────────────────────────────── */
-function addSite(){
-  var inp=document.getElementById('newSiteName'); var name=inp.value.trim();
-  if(!name){ toast('กรอกชื่อ Site ก่อน','error'); return; }
-  post({action:'saveSite', site_name:name}).then(function(d){
-    var site = (d&&d.site) ? d.site : {site_id:'S'+Date.now(), site_name:name, is_active:true};
-    S.sites.push(site); inp.value=''; renderAll();
-    toast('+ เพิ่ม "'+name+'" แล้ว','success');
-  }).catch(function(){ toast('เพิ่ม Site ไม่สำเร็จ','error'); });
-}
-function toggleSite(id){
-  var s=S.sites.find(function(x){return x.site_id===id;}); if(!s) return;
-  var next=!s.is_active;
-  post({action:'toggleSite', site_id:id, is_active:next}).then(function(){
-    s.is_active=next; renderAll();
-  }).catch(function(){ toast('เปลี่ยนสถานะไม่สำเร็จ','error'); });
-}
-function deleteSite(id){
-  var s=S.sites.find(function(x){return x.site_id===id;}); if(!s) return;
-  if(siteState(id)!=='idle'){ toast('Site นี้มีผลการนับแล้ว ลบไม่ได้ — ปิดการใช้งานแทน','error'); return; }
-  if(!confirm('ลบ Site "'+s.site_name+'" ?')) return;
-  post({action:'deleteSite', site_id:id}).then(function(){
-    S.sites=S.sites.filter(function(x){return x.site_id!==id;}); renderAll();
-    toast('ลบ Site แล้ว','info');
-  }).catch(function(){ toast('ลบไม่สำเร็จ','error'); });
-}
-
 /* ── Round actions ───────────────────────────────────── */
 function toggleRound(){
   var open=S.round&&S.round.is_open;
@@ -2651,21 +2718,174 @@ function confirmNewRound(){
 }
 
 /* ── Tabs / overlay ──────────────────────────────────── */
-function switchTab(name){
-  if(S.tab==='setup' && name!=='setup' && S.v2Dirty){
-    if(!confirm('ยังไม่ได้บันทึกการตั้งค่ารอบ (v2) — ออกจากแท็บนี้เลยไหม')) return;
+/* ════════════════════════════════════════════════════════════════
+   การตั้งค่า — รวมหน้าย่อยไว้ที่เดียว
+   panel เดิมถูกย้าย DOM เข้ามาใน slot (id เดิมทั้งหมด ฟังก์ชัน render เดิมใช้ได้)
+   ════════════════════════════════════════════════════════════════ */
+var SETTINGS_SUB = 'sites';
+
+function settingsGo(sub){
+  // เตือนถ้ายังไม่บันทึกก่อนออกจากหน้าย่อยที่แก้ค้างไว้
+  if(SETTINGS_SUB==='setup' && sub!=='setup' && S.v2Dirty){
+    if(!confirm('ยังไม่ได้บันทึกการตั้งค่ารอบ — ออกจากหน้านี้เลยไหม')) return;
     S.v2Dirty=false; V2CFG=null;
   }
-  if(S.tab==='types' && name!=='types' && S.typesDirty){
-    if(!confirm('ยังไม่ได้บันทึกการตั้งค่าชนิดที่นับ — ออกจากแท็บนี้เลยไหม (การแก้ไขจะหายไป)')) return;
+  if(SETTINGS_SUB==='types' && sub!=='types' && S.typesDirty){
+    if(!confirm('ยังไม่ได้บันทึกการตั้งค่าชนิดที่นับ — ออกจากหน้านี้เลยไหม')) return;
     S.typesDirty=false; loadData(false);
+  }
+  SETTINGS_SUB = sub;
+
+  document.querySelectorAll('#panel-settings .subtab').forEach(function(b){
+    b.classList.toggle('active', b.dataset.sub===sub);
+  });
+
+  var slot=document.getElementById('settingsSlot');
+  ['sites','agents','setup'].forEach(function(k){
+    var el=document.getElementById('panel-'+k);
+    if(!el) return;
+    if(el.parentNode!==slot) slot.appendChild(el);       // ย้ายเข้ามาครั้งแรก
+    el.classList.toggle('active', k===sub);
+  });
+
+  if(sub==='setup'){ if(!V2CFG) v2LoadConfig(); else v2Render(); v2ApplyLock(); }
+  if(sub==='sites') renderSites();
+  if(sub==='agents') renderAgents();
+}
+
+/* ════════════════════════════════════════════════════════════════
+   ล็อกหน้าตั้งค่ารอบหลังตั้งค่าเสร็จ
+   อ่านอย่างเดียวเป็นค่าตั้งต้น · แก้ได้เมื่อกดปลดล็อกและใส่เหตุผล
+   (เหตุผลถูกบันทึกลงชีต v2_ChangeLog)
+   ════════════════════════════════════════════════════════════════ */
+var V2_UNLOCK = false, V2_REASON = '';
+
+function v2Locked(){ return !!(S.round && S.round.is_started) && !V2_UNLOCK; }
+
+function v2ApplyLock(){
+  var p=document.getElementById('panel-setup'); if(!p) return;
+  var locked=v2Locked();
+  p.classList.toggle('readonly', locked);
+  p.querySelectorAll('input,select,button').forEach(function(el){
+    if(el.id==='v2UnlockBtn' || el.closest('#v2LockBar')) return;
+    if(el.dataset && el.dataset.safe==='1') return;      // ปุ่มอ่านอย่างเดียว (พรีวิว/โหลดใหม่) ใช้ได้เสมอ
+    el.disabled = locked;
+  });
+  var bar=document.getElementById('v2LockBar');
+  if(bar){
+    bar.innerHTML = locked
+      ? '<span>🔒 <b>รอบนี้ตั้งค่าเสร็จแล้ว</b> — ดูได้อย่างเดียว เพื่อไม่ให้ยอดที่นับไปแล้วเพี้ยน</span>'
+        + '<button class="btn btn-outline btn-sm" id="v2UnlockBtn" style="margin-left:auto;" onclick="v2Unlock()">🔓 แก้ไขกรณีจำเป็น</button>'
+      : (S.round && S.round.is_started
+          ? '<span style="color:var(--warn);">🔓 <b>โหมดแก้ไขกรณีจำเป็น</b> — เหตุผล: '+esc(V2_REASON)+'</span>'
+            + '<button class="btn btn-outline btn-sm" id="v2UnlockBtn" style="margin-left:auto;" onclick="v2Relock()">ยกเลิก</button>'
+          : '<span class="hint">รอบนี้ยังตั้งค่าไม่เสร็จ — แก้ไขได้ตามปกติ</span>');
+    bar.style.display='flex';
+  }
+}
+function v2Unlock(){
+  var affected=(S.subs||[]).length;
+  var warn='แก้ไขการตั้งค่าของรอบที่เริ่มไปแล้ว\n\n';
+  if(affected) warn+='⚠ มี '+affected+' Site ที่ส่งผลนับแล้ว — การแก้อาจทำให้ยอดในใบเหล่านั้นเปลี่ยนความหมาย\n\n';
+  warn+='ระบุเหตุผล (จะถูกบันทึกไว้ตรวจสอบ):';
+  var reason=prompt(warn,'');
+  if(reason===null) return;
+  if(!String(reason).trim()){ toast('ต้องระบุเหตุผล','error'); return; }
+  V2_REASON=String(reason).trim(); V2_UNLOCK=true;
+  v2Render(); v2ApplyLock();
+  toast('ปลดล็อกแล้ว — อย่าลืมกดบันทึก','success');
+}
+function v2Relock(){
+  if(S.v2Dirty && !confirm('ยกเลิกการแก้ไขที่ยังไม่บันทึก?')) return;
+  V2_UNLOCK=false; V2_REASON=''; S.v2Dirty=false; V2CFG=null;
+  v2LoadConfig(); setTimeout(v2ApplyLock,300);
+}
+
+/* ── ช่วงเตรียมระบบ ─────────────────────────────────────
+   จบ wizard → รอบอยู่สถานะ "เตรียมการ" (ผู้นับยังเข้าไม่ได้)
+   Admin ใส่ยอดระบบ แล้วกดเปิดเองเมื่อพร้อม
+   ───────────────────────────────────────────────────── */
+function roundPhase(){
+  if(!S.round || !S.round.round_id) return 'none';
+  if(S.round.phase) return S.round.phase;
+  if(!S.round.is_started) return 'draft';
+  return S.round.is_open ? 'live' : 'preparing';
+}
+function renderPrep(){
+  var bn=document.getElementById('prepBanner'); if(!bn) return;
+  if(roundPhase()!=='preparing'){ bn.style.display='none'; return; }
+  bn.style.display='block';
+  post({action:'getPrepStatus', round_id:S.round.round_id}).then(function(d){
+    var box=document.getElementById('prepList'); if(!box) return;
+    var sites=(d&&d.sites)||[];
+    if(!sites.length){ box.innerHTML='<div class="hint">ยังไม่มี Site ที่เปิดใช้งาน</div>'; return; }
+    var ready=sites.filter(function(x){ return x.ready; }).length;
+    box.innerHTML='<div style="font-size:12px;color:var(--muted);margin-bottom:6px;">ใส่ยอดระบบแล้ว '
+      + ready+' / '+sites.length+' Site</div>'
+      + '<div style="display:flex;flex-wrap:wrap;gap:7px;">'
+      + sites.map(function(x){
+          return '<span class="chip-site'+(x.ready?' on':'')+'" style="cursor:default;">'
+            + '<span class="chip-tick">'+(x.ready?'✓':'')+'</span>'+esc(x.site_name)
+            + (x.ready?'':' <span class="hint">'+x.items_filled+'/'+x.items_total+'</span>')+'</span>';
+        }).join('')+'</div>';
+    var b=document.getElementById('btnGoLive');
+    if(b) b.textContent = (ready===sites.length) ? '▶ เปิดให้ผู้นับเริ่มงาน' : '▶ เปิดให้ผู้นับเริ่มงาน ('+(sites.length-ready)+' Site ยังไม่มียอด)';
+  }).catch(function(){});
+}
+function goLive(){
+  var msg='เปิดให้ผู้นับเริ่มงาน?\n\nผู้นับทุก Site จะเข้าใช้งานได้ทันที\nSite ที่ยังไม่ได้ใส่ยอดระบบ จะยังติดอยู่ที่ขั้นแรกจนกว่ายอดจะพร้อม';
+  if(!confirm(msg)) return;
+  var b=document.getElementById('btnGoLive'); b.disabled=true; b.textContent='กำลังเปิด…';
+  post({action:'goLiveRound', round_id:S.round.round_id}).then(function(d){
+    b.disabled=false;
+    if(d && d.status==='error'){ toast(d.message||'เปิดไม่สำเร็จ','error'); return; }
+    toast('เปิดให้ผู้นับเริ่มงานแล้ว','success');
+    return loadData(true);
+  }).catch(function(){ b.disabled=false; toast('เปิดไม่สำเร็จ','error'); });
+}
+
+/* ── จบงาน: ปิดรอบ + เปิดหอเกียรติยศ + พาไปดู ── */
+function finishRound(){
+  var pending=(S.subs||[]).filter(function(x){ return x.status!=='approved'; }).length;
+  var msg='จบงานรอบนี้?\n\n• ปิดรอบ — ผู้นับจะส่งผลเพิ่มไม่ได้\n• เปิดหอเกียรติยศให้ทุก Site ดูสรุป';
+  if(pending) msg+='\n\n⚠ ยังมี '+pending+' Site ที่ยังไม่อนุมัติ';
+  if(!confirm(msg)) return;
+
+  var btn=document.getElementById('btnFinish'); btn.disabled=true; btn.textContent='กำลังจบงาน…';
+  post({action:'toggleRound', is_open:false}).then(function(d){
+    if(d && d.status==='error') throw new Error(d.message||'ปิดรอบไม่สำเร็จ');
+    return post({action:'setStatsOpen', open:true});
+  }).then(function(d){
+    if(d && d.status==='error') throw new Error(d.message||'เปิดหอเกียรติยศไม่สำเร็จ');
+    S.statsOpen=true;
+    return loadData(true);
+  }).then(function(){
+    btn.disabled=false; btn.textContent='🏁 จบงาน';
+    toast('จบงานแล้ว','success');
+    openStats();
+  }).catch(function(err){
+    btn.disabled=false; btn.textContent='🏁 จบงาน';
+    toast(String(err && err.message || err),'error');
+  });
+}
+function openStats(){ switchTab('stats'); }
+
+function switchTab(name){
+  if(S.tab==='settings' && name!=='settings'){
+    if(SETTINGS_SUB==='setup' && S.v2Dirty){
+      if(!confirm('ยังไม่ได้บันทึกการตั้งค่ารอบ — ออกจากแท็บนี้เลยไหม')) return;
+      S.v2Dirty=false; V2CFG=null;
+    }
+    if(SETTINGS_SUB==='types' && S.typesDirty){
+      if(!confirm('ยังไม่ได้บันทึกการตั้งค่าชนิดที่นับ — ออกจากแท็บนี้เลยไหม')) return;
+      S.typesDirty=false; loadData(false);
+    }
   }
   S.tab=name;
   document.querySelectorAll('.tab').forEach(function(t){ t.classList.toggle('active', t.dataset.tab===name); });
   document.querySelectorAll('.panel').forEach(function(p){ p.classList.toggle('active', p.id==='panel-'+name); });
   if(name==='queue') startQueuePoll(); else stopQueuePoll();
-  if(name==='types') renderTypes();
-  if(name==='setup'){ if(!V2CFG) v2LoadConfig(); else v2Render(); }
+  if(name==='settings') settingsGo(SETTINGS_SUB);
   if(name==='stats') loadStats();
 }
 function openOverlay(id){ _modalOpen=true; document.getElementById(id).classList.add('open'); }
