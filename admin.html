@@ -2240,7 +2240,7 @@ function renderSites(){
     + '<th>Site</th><th style="width:130px;">เลขที่เอกสาร</th>'
     + '<th class="num" style="width:130px;">ยอดระบบ</th>'
     + '<th class="num" style="width:90px;">เริ่มนับ</th>'
-    + '<th class="num" style="width:90px;">ไฟล์แนบ</th>'
+    + '<th class="num" style="width:90px;">โฟลเดอร์</th>'
     + '<th class="num" style="width:130px;">สถานะการนับ</th>'
     + '<th style="width:90px;"></th></tr></thead><tbody>';
 
@@ -2258,8 +2258,8 @@ function renderSites(){
       +   (d.is_active?'':' <span class="status-badge sb-idle">ปิด</span>')+'</td>'
       + '<td class="num">'+bookCell+'</td>'
       + '<td class="num">'+esc(d.start_time||'—')+'</td>'
-      + '<td class="num">'+((SITE_FILES[d.site_id]||[]).length
-            ? '<span class="status-badge sb-locked">'+SITE_FILES[d.site_id].length+' ไฟล์</span>'
+      + '<td class="num">'+(SITE_FOLDER[d.site_id]
+            ? '<a href="'+esc(SITE_FOLDER[d.site_id])+'" target="_blank" onclick="event.stopPropagation()">📁 เปิด</a>'
             : '<span class="hint">—</span>')+'</td>'
       + '<td class="num">'+st+'</td>'
       + '<td><button class="btn btn-outline btn-sm" onclick="event.stopPropagation();siteToggleRow(\''+esc(d.site_id)+'\')">'
@@ -2280,7 +2280,10 @@ function siteEditorHtml(d,idx){
     + '<div class="se-grid">'
     +   '<div class="field"><label>ชื่อ Site</label><input class="input" id="se_name_'+idx+'" value="'+esc(d.site_name)+'" oninput="siteSet('+idx+',\'site_name\',this.value)"></div>'
     +   '<div class="field"><label>เลขที่เอกสาร</label><input class="input mono" id="se_doc_'+idx+'" placeholder="เช่น PE2026_028" value="'+esc(d.doc_no||'')+'" oninput="siteSet('+idx+',\'doc_no\',this.value)"></div>'
-    +   '<div class="field"><label>เวลาเริ่มนับ</label><input class="input" id="se_time_'+idx+'" type="time" step="60" value="'+esc(d.start_time)+'" oninput="siteSet('+idx+',\'start_time\',this.value)"></div>'
+    +   '<div class="field"><label>เวลาเริ่มนับ <span style="color:var(--muted);font-weight:400;">(24 ชม.)</span></label>'
+    +     '<input class="input mono" id="se_time_'+idx+'" inputmode="numeric" maxlength="5" placeholder="--:--" '
+    +       'style="max-width:110px;text-align:center;letter-spacing:1px;" value="'+esc(d.start_time)+'" '
+    +       'oninput="siteTimeInput(this,'+idx+')" onblur="siteTimeBlur(this,'+idx+')"></div>'
     +   '<div class="field"><label>ใช้ในรอบนี้</label>'
     +     '<button class="btn btn-outline btn-sm" style="align-self:flex-start;" onclick="siteToggleActive('+idx+')">'
     +     'เอาออกจากรอบนี้</button>'
@@ -2317,15 +2320,12 @@ function siteEditorHtml(d,idx){
       +  '</tr></tfoot></table></div>';
   }
 
-  // ── ไฟล์แนบ (หน้าจอ PCS ฯลฯ) — ต่อท้ายเล่มตอนรวมเอกสาร ──
+  // ── ไฟล์แนบท้ายเล่ม — Admin วางไฟล์เองใน Drive ──
   h += '<div class="eyebrow" style="margin-top:16px;">ไฟล์แนบท้ายเล่ม '
-    +  '<span class="ehint">— หน้าจอระบบ PCS หรือเอกสารประกอบ (PDF / รูป) · อัปที่นี่ได้เลย ไม่ต้องไปวางใน Drive · '
-    +  'ลำดับที่แสดง = ลำดับหน้าในเล่ม · อัปแล้วบันทึกทันที · ใส่ป้ายกำกับว่าไฟล์ไหนคือหน้าจอของอะไร</span>'
-    +  (d.is_new?'':'<button class="btn btn-outline btn-sm" style="float:right;" onclick="loadSiteFiles(\''+esc(d.site_id)+'\')" title="โหลดรายการใหม่">↻</button>')
-    +  '</div>'
+    +  '<span class="ehint">— หน้าจอระบบ PCS หรือเอกสารประกอบ · วางไฟล์ในโฟลเดอร์นี้ได้เลย</span></div>'
     +  '<div id="sf_box_'+esc(d.site_id)+'">'+(d.is_new
-         ? '<div class="hint">บันทึก Site ก่อน จึงจะแนบไฟล์ได้</div>'
-         : '<div class="hint"><span class="spinner"></span> กำลังโหลด…</div>')+'</div>';
+         ? '<div class="hint">บันทึก Site ก่อน จึงจะมีโฟลเดอร์</div>'
+         : '<div class="hint">กด “เปิดโฟลเดอร์” เพื่อวางไฟล์</div>')+'</div>';
 
   h += '<div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;align-items:center;">'
     +  (d.locked ? '<span class="hint">Site นี้มีข้อมูลการนับแล้ว — ลบไม่ได้</span>'
@@ -2345,100 +2345,7 @@ function siteToggleRow(id){
 }
 
 /* ── ไฟล์แนบท้ายเล่มของแต่ละ Site ─────────────────────── */
-var SITE_FILES = {};   // SITE_FILES[site_id] = [...]
 
-var SITE_FOLDER = {};   // ลิงก์โฟลเดอร์ของแต่ละ Site
-
-function loadSiteFiles(sid){
-  post({action:'listSiteFiles', round_id:S.round?S.round.round_id:'', site_id:sid}).then(function(d){
-    SITE_FILES[sid] = (d && d.files) || [];
-    if(d && d.folder_url) SITE_FOLDER[sid]=d.folder_url;
-    drawSiteFiles(sid);
-  }).catch(function(){ drawSiteFiles(sid); });
-}
-function drawSiteFiles(sid){
-  var box=document.getElementById('sf_box_'+sid); if(!box) return;
-  var list=SITE_FILES[sid]||[];
-  var up='<input type="file" id="sf_in_'+esc(sid)+'" accept=".pdf,.png,.jpg,.jpeg" multiple style="display:none;" onchange="siteFileUpload(this,\''+esc(sid)+'\')">';
-  box.innerHTML = up
-    + (list.length
-        ? '<div class="sf-list">'+list.map(function(f,i){
-            var isImg=/^image\//.test(f.mime||'');
-            return '<div class="sf-item">'
-              + '<span class="sf-no">'+(i+1)+'</span>'
-              + '<span class="sf-ic">'+(isImg?'🖼':'📄')+'</span>'
-              + '<input class="input sf-note" id="sfn_'+esc(f.file_id)+'" value="'+esc(f.note||'')+'" '
-              +   'placeholder="ระบุแหล่งที่มา เช่น PCS ไม้ LOSCAM" '
-              +   'onchange="siteFileNote(\''+esc(sid)+'\',\''+esc(f.file_id)+'\',this.value)">'
-              + '<a href="'+esc(f.url||'#')+'" target="_blank" class="sf-name" title="'+esc(f.filename)+'">'+esc(f.filename)+'</a>'
-              + '<span class="hint">'+Math.round((f.size||0)/1024)+' KB</span>'
-              + '<button class="btn btn-outline btn-sm" '+(i===0?'disabled':'')+' onclick="siteFileMove(\''+esc(sid)+'\','+i+',-1)">↑</button>'
-              + '<button class="btn btn-outline btn-sm" '+(i===list.length-1?'disabled':'')+' onclick="siteFileMove(\''+esc(sid)+'\','+i+',1)">↓</button>'
-              + '<button class="btn btn-danger btn-sm" onclick="siteFileDel(\''+esc(sid)+'\',\''+esc(f.file_id)+'\')">ลบ</button>'
-              + '</div>';
-          }).join('')+'</div>'
-        : '<div class="hint">ยังไม่มีไฟล์แนบ</div>')
-    + '<div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;align-items:center;">'
-    +   '<button class="btn btn-outline btn-sm" onclick="document.getElementById(\'sf_in_'+esc(sid)+'\').click()">⬆ เพิ่มไฟล์ (PDF / รูป)</button>'
-    +   (SITE_FOLDER[sid] ? '<a class="btn btn-outline btn-sm" href="'+esc(SITE_FOLDER[sid])+'" target="_blank">📁 เปิดโฟลเดอร์ของ Site นี้</a>' : '')
-    + '</div>';
-}
-function siteFileUpload(input, sid){
-  var files=[].slice.call(input.files||[]); if(!files.length) return;
-  input.value='';
-  var box=document.getElementById('sf_box_'+sid);
-  if(box) box.innerHTML='<div class="hint"><span class="spinner"></span> กำลังอัปโหลด '+files.length+' ไฟล์…</div>';
-  // อัปทีละไฟล์ต่อกัน — กัน GAS ชนกันเองและคุมลำดับได้
-  var chain=Promise.resolve();
-  files.forEach(function(file){
-    chain=chain.then(function(){
-      return new Promise(function(res){
-        var rd=new FileReader();
-        rd.onload=function(){
-          post({action:'addSiteFile', round_id:S.round?S.round.round_id:'', site_id:sid,
-                filename:file.name, data:rd.result, note:''})
-          .then(function(d){
-            if(d && d.status==='error') toast(d.message||'อัปโหลดไม่สำเร็จ','error');
-            else SITE_FILES[sid]=d.files||[];
-            res();
-          }).catch(function(){ toast('อัปโหลด '+file.name+' ไม่สำเร็จ','error'); res(); });
-        };
-        rd.readAsDataURL(file);
-      });
-    });
-  });
-  chain.then(function(){ drawSiteFiles(sid); renderSites(); toast('อัปโหลดเสร็จ','success'); });
-}
-// ป้ายกำกับบันทึกตอนออกจากช่อง ไม่ยิงทุกตัวอักษร
-function siteFileNote(sid, fid, note){
-  var list=SITE_FILES[sid]||[];
-  var f=list.filter(function(x){ return x.file_id===fid; })[0];
-  if(!f || (f.note||'')===note) return;
-  f.note=note;
-  post({action:'updateSiteFileNote', round_id:S.round?S.round.round_id:'', site_id:sid, file_id:fid, note:note})
-  .then(function(d){
-    if(d && d.status==='error'){ toast(d.message||'บันทึกป้ายกำกับไม่สำเร็จ','error'); return; }
-    if(d && d.files) SITE_FILES[sid]=d.files;
-  }).catch(function(){ toast('บันทึกป้ายกำกับไม่สำเร็จ','error'); });
-}
-
-function siteFileDel(sid, fid){
-  if(!confirm('ลบไฟล์นี้?')) return;
-  post({action:'deleteSiteFile', round_id:S.round?S.round.round_id:'', site_id:sid, file_id:fid})
-  .then(function(d){
-    if(d && d.status==='error'){ toast(d.message||'ลบไม่สำเร็จ','error'); return; }
-    SITE_FILES[sid]=d.files||[]; drawSiteFiles(sid); renderSites();
-  });
-}
-function siteFileMove(sid, idx, dir){
-  var list=SITE_FILES[sid]||[]; var to=idx+dir;
-  if(to<0 || to>=list.length) return;
-  var tmp=list[idx]; list[idx]=list[to]; list[to]=tmp;
-  drawSiteFiles(sid);
-  post({action:'reorderSiteFiles', round_id:S.round?S.round.round_id:'', site_id:sid,
-        file_ids:list.map(function(f){ return f.file_id; })})
-  .then(function(d){ if(d && d.files) SITE_FILES[sid]=d.files; });
-}
 function siteSet(idx,field,val){
   siteSync();
   if(!SITE_DRAFT[idx]) return;
@@ -2446,10 +2353,44 @@ function siteSet(idx,field,val){
   siteMark();
   // อัปเดตเฉพาะชื่อในแถวสรุป ไม่ re-render ทับช่องที่กำลังพิมพ์
   if(field==='site_name'){
-    var row=document.querySelectorAll('#sitesTable tbody tr.site-row')[idx];
-    if(row) row.cells[0].innerHTML='<b>'+esc(val)+'</b>'+(SITE_DRAFT[idx].is_new?' <span class="chip-new">ใหม่</span>':'');
+    var rowEls=document.querySelectorAll('#sitesTable tbody tr.site-row');
+    for(var k=0;k<rowEls.length;k++){
+      if(rowEls[k].getAttribute('onclick').indexOf(SITE_DRAFT[idx].site_id)>=0){
+        rowEls[k].cells[0].innerHTML='<b>'+esc(val)+'</b>'+(SITE_DRAFT[idx].is_new?' <span class="chip-new">ใหม่</span>':'');
+        break;
+      }
+    }
   }
 }
+
+/* ช่องเวลา 24 ชม. — พิมพ์ตัวเลขล้วน ระบบใส่ : ให้
+   เก็บลง draft เฉพาะตอนครบ hh:mm เพื่อไม่ให้ค่าหายระหว่างพิมพ์ */
+function siteTimeInput(el, idx){
+  var v=String(el.value).replace(/[^0-9]/g,'').slice(0,4);
+  if(v.length>=3) v=v.slice(0,2)+':'+v.slice(2);
+  el.value=v;
+  if(/^\d{2}:\d{2}$/.test(v)){
+    var hh=+v.slice(0,2), mm=+v.slice(3);
+    if(hh<24 && mm<60){ siteSet(idx,'start_time',v); el.style.borderColor=''; }
+  }
+}
+function siteTimeBlur(el, idx){
+  var v=String(el.value).trim();
+  if(!v){ siteSet(idx,'start_time',''); el.style.borderColor=''; return; }
+  var m=v.replace(/[^0-9]/g,'');
+  if(m.length===3) m='0'+m;                    // 830 → 08:30
+  if(m.length===4){
+    var hh=+m.slice(0,2), mm=+m.slice(2);
+    if(hh<24 && mm<60){
+      var ok=('0'+hh).slice(-2)+':'+('0'+mm).slice(-2);
+      el.value=ok; siteSet(idx,'start_time',ok); el.style.borderColor='';
+      return;
+    }
+  }
+  el.style.borderColor='var(--danger)';
+  toast('เวลาไม่ถูกต้อง — ใส่แบบ 24 ชม. เช่น 08:30','error');
+}
+
 function siteToggleActive(idx){
   siteSync();
   var d=SITE_DRAFT[idx]; if(!d) return;
@@ -2471,6 +2412,41 @@ function siteBookSet(sid,itemId,stId,val){
   });
   siteMark();
 }
+
+var SITE_FOLDER = {};   // ลิงก์โฟลเดอร์ของแต่ละ Site
+
+/* ไฟล์แนบท้ายเล่ม — ไม่อัปผ่านระบบแล้ว
+   Admin เปิดโฟลเดอร์ของ Site นั้นแล้ววางไฟล์เอง (เร็วกว่าอัปผ่านเว็บมาก)
+   ตอนรวมเล่ม ระบบจะอ่านไฟล์ทั้งหมดในโฟลเดอร์นี้ เรียงตามชื่อไฟล์ */
+function loadSiteFiles(sid){
+  if(SITE_FOLDER[sid]){ drawSiteFiles(sid); return; }
+  post({action:'getSiteFolder', round_id:S.round?S.round.round_id:'', site_id:sid}).then(function(d){
+    if(d && d.folder) SITE_FOLDER[sid]=d.folder.url;
+    drawSiteFiles(sid);
+  }).catch(function(){ drawSiteFiles(sid); });
+}
+function drawSiteFiles(sid){
+  var box=document.getElementById('sf_box_'+sid); if(!box) return;
+  var url=SITE_FOLDER[sid];
+  box.innerHTML =
+      '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;">'
+    +   (url ? '<a class="btn btn-outline btn-sm" href="'+esc(url)+'" target="_blank">📁 เปิดโฟลเดอร์ของ Site นี้</a>'
+            : '<button class="btn btn-outline btn-sm" onclick="siteMakeFolder(\''+esc(sid)+'\')">📁 สร้าง/เปิดโฟลเดอร์</button>')
+    +   '<span class="hint">วางไฟล์ PDF หรือรูปในโฟลเดอร์นี้ · ตั้งชื่อไฟล์นำหน้าด้วยเลขลำดับ เช่น '
+    +   '<span class="mono">1_PCS-LOSCAM.pdf</span> เพื่อคุมลำดับหน้าในเล่ม</span>'
+    + '</div>';
+}
+function siteMakeFolder(sid){
+  var box=document.getElementById('sf_box_'+sid);
+  if(box) box.innerHTML='<div class="hint"><span class="spinner"></span> กำลังเตรียมโฟลเดอร์…</div>';
+  post({action:'getSiteFolder', round_id:S.round?S.round.round_id:'', site_id:sid}).then(function(d){
+    if(d && d.status==='error'){ toast(d.message||'สร้างโฟลเดอร์ไม่สำเร็จ','error'); drawSiteFiles(sid); return; }
+    if(d && d.folder){ SITE_FOLDER[sid]=d.folder.url; w_open(d.folder.url); }
+    drawSiteFiles(sid);
+  }).catch(function(){ toast('สร้างโฟลเดอร์ไม่สำเร็จ','error'); drawSiteFiles(sid); });
+}
+function w_open(url){ try{ window.open(url,'_blank'); }catch(e){} }
+
 /* กล่องเพิ่ม Site — เลือกจากที่มีในระบบ หรือสร้างใหม่
    Site ที่ "ปิดใช้งาน" ในรอบนี้จะมาโผล่ที่นี่ ไม่ไปรกในตารางหลัก */
 function siteOpenAdd(){
@@ -3186,7 +3162,7 @@ function storageSave(){
   post({action:'setStorageRoot', folder:v}).then(function(d){
     if(d && d.status==='error'){ toast(d.message||'ตั้งโฟลเดอร์ไม่สำเร็จ','error'); return; }
     toast(v?'เปลี่ยนโฟลเดอร์แล้ว':'กลับไปใช้โฟลเดอร์เริ่มต้นแล้ว','success');
-    SITE_FILES={};      // ลิงก์โฟลเดอร์เดิมใช้ไม่ได้แล้ว
+    SITE_FOLDER={};     // ลิงก์โฟลเดอร์เดิมใช้ไม่ได้แล้ว
     loadStorage();
   }).catch(function(){ toast('ตั้งโฟลเดอร์ไม่สำเร็จ','error'); });
 }
