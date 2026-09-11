@@ -37,7 +37,8 @@ button{font-family:var(--font);}
 .sf-list{display:flex;flex-direction:column;gap:6px;}
 .sf-item{display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12.5px;}
 .sf-no{width:20px;text-align:center;font-family:var(--mono);color:var(--muted);font-size:11px;}
-.sf-name{flex:1;color:var(--text);text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.sf-note{width:210px;flex:none;padding:4px 8px !important;font-size:12px;}
+.sf-name{flex:1;max-width:240px;color:var(--text);text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 .sf-name:hover{color:var(--accent);text-decoration:underline;}
 .doc-sec{font-size:12px;font-weight:700;margin:16px 0 8px;padding-bottom:4px;border-bottom:1px solid var(--border);}
 .doc-sec:first-child{margin-top:0;}
@@ -496,7 +497,10 @@ table.recon .grp{border-left:1px solid var(--border);}
           · ไฟล์ผูกกับรอบนี้เท่านั้น รอบหน้าอัปใหม่ได้
         </div>
 
-        <div class="eyebrow">แม่แบบของรอบนี้</div>
+        <div class="eyebrow">ที่เก็บไฟล์ใน Drive <span class="ehint">— แม่แบบ ไฟล์แนบ และเอกสารทั้งหมดของรอบ</span></div>
+        <div class="card" style="padding:16px;" id="storageBox"><div class="empty"><span class="spinner"></span></div></div>
+
+        <div class="eyebrow" style="margin-top:18px;">แม่แบบของรอบนี้</div>
         <div class="card" style="padding:16px;" id="docTplBox"><div class="empty"><span class="spinner"></span></div></div>
 
         <div class="eyebrow" style="margin-top:18px;">แท็กที่ระบบเติมให้ได้ <span class="ehint">— กดที่แท็กเพื่อคัดลอก แล้วนำไปวางในไฟล์ Word</span></div>
@@ -2316,7 +2320,7 @@ function siteEditorHtml(d,idx){
   // ── ไฟล์แนบ (หน้าจอ PCS ฯลฯ) — ต่อท้ายเล่มตอนรวมเอกสาร ──
   h += '<div class="eyebrow" style="margin-top:16px;">ไฟล์แนบท้ายเล่ม '
     +  '<span class="ehint">— หน้าจอระบบ PCS หรือเอกสารประกอบ (PDF / รูป) · อัปที่นี่ได้เลย ไม่ต้องไปวางใน Drive · '
-    +  'ลำดับที่แสดง = ลำดับหน้าในเล่ม · อัปแล้วบันทึกทันที</span>'
+    +  'ลำดับที่แสดง = ลำดับหน้าในเล่ม · อัปแล้วบันทึกทันที · ใส่ป้ายกำกับว่าไฟล์ไหนคือหน้าจอของอะไร</span>'
     +  (d.is_new?'':'<button class="btn btn-outline btn-sm" style="float:right;" onclick="loadSiteFiles(\''+esc(d.site_id)+'\')" title="โหลดรายการใหม่">↻</button>')
     +  '</div>'
     +  '<div id="sf_box_'+esc(d.site_id)+'">'+(d.is_new
@@ -2343,9 +2347,12 @@ function siteToggleRow(id){
 /* ── ไฟล์แนบท้ายเล่มของแต่ละ Site ─────────────────────── */
 var SITE_FILES = {};   // SITE_FILES[site_id] = [...]
 
+var SITE_FOLDER = {};   // ลิงก์โฟลเดอร์ของแต่ละ Site
+
 function loadSiteFiles(sid){
   post({action:'listSiteFiles', round_id:S.round?S.round.round_id:'', site_id:sid}).then(function(d){
     SITE_FILES[sid] = (d && d.files) || [];
+    if(d && d.folder_url) SITE_FOLDER[sid]=d.folder_url;
     drawSiteFiles(sid);
   }).catch(function(){ drawSiteFiles(sid); });
 }
@@ -2360,7 +2367,10 @@ function drawSiteFiles(sid){
             return '<div class="sf-item">'
               + '<span class="sf-no">'+(i+1)+'</span>'
               + '<span class="sf-ic">'+(isImg?'🖼':'📄')+'</span>'
-              + '<a href="'+esc(f.url||'#')+'" target="_blank" class="sf-name">'+esc(f.filename)+'</a>'
+              + '<input class="input sf-note" id="sfn_'+esc(f.file_id)+'" value="'+esc(f.note||'')+'" '
+              +   'placeholder="ระบุแหล่งที่มา เช่น PCS ไม้ LOSCAM" '
+              +   'onchange="siteFileNote(\''+esc(sid)+'\',\''+esc(f.file_id)+'\',this.value)">'
+              + '<a href="'+esc(f.url||'#')+'" target="_blank" class="sf-name" title="'+esc(f.filename)+'">'+esc(f.filename)+'</a>'
               + '<span class="hint">'+Math.round((f.size||0)/1024)+' KB</span>'
               + '<button class="btn btn-outline btn-sm" '+(i===0?'disabled':'')+' onclick="siteFileMove(\''+esc(sid)+'\','+i+',-1)">↑</button>'
               + '<button class="btn btn-outline btn-sm" '+(i===list.length-1?'disabled':'')+' onclick="siteFileMove(\''+esc(sid)+'\','+i+',1)">↓</button>'
@@ -2368,7 +2378,10 @@ function drawSiteFiles(sid){
               + '</div>';
           }).join('')+'</div>'
         : '<div class="hint">ยังไม่มีไฟล์แนบ</div>')
-    + '<button class="btn btn-outline btn-sm" style="margin-top:8px;" onclick="document.getElementById(\'sf_in_'+esc(sid)+'\').click()">⬆ เพิ่มไฟล์ (PDF / รูป)</button>';
+    + '<div style="display:flex;gap:8px;margin-top:8px;flex-wrap:wrap;align-items:center;">'
+    +   '<button class="btn btn-outline btn-sm" onclick="document.getElementById(\'sf_in_'+esc(sid)+'\').click()">⬆ เพิ่มไฟล์ (PDF / รูป)</button>'
+    +   (SITE_FOLDER[sid] ? '<a class="btn btn-outline btn-sm" href="'+esc(SITE_FOLDER[sid])+'" target="_blank">📁 เปิดโฟลเดอร์ของ Site นี้</a>' : '')
+    + '</div>';
 }
 function siteFileUpload(input, sid){
   var files=[].slice.call(input.files||[]); if(!files.length) return;
@@ -2383,7 +2396,7 @@ function siteFileUpload(input, sid){
         var rd=new FileReader();
         rd.onload=function(){
           post({action:'addSiteFile', round_id:S.round?S.round.round_id:'', site_id:sid,
-                filename:file.name, data:rd.result})
+                filename:file.name, data:rd.result, note:''})
           .then(function(d){
             if(d && d.status==='error') toast(d.message||'อัปโหลดไม่สำเร็จ','error');
             else SITE_FILES[sid]=d.files||[];
@@ -2396,6 +2409,19 @@ function siteFileUpload(input, sid){
   });
   chain.then(function(){ drawSiteFiles(sid); renderSites(); toast('อัปโหลดเสร็จ','success'); });
 }
+// ป้ายกำกับบันทึกตอนออกจากช่อง ไม่ยิงทุกตัวอักษร
+function siteFileNote(sid, fid, note){
+  var list=SITE_FILES[sid]||[];
+  var f=list.filter(function(x){ return x.file_id===fid; })[0];
+  if(!f || (f.note||'')===note) return;
+  f.note=note;
+  post({action:'updateSiteFileNote', round_id:S.round?S.round.round_id:'', site_id:sid, file_id:fid, note:note})
+  .then(function(d){
+    if(d && d.status==='error'){ toast(d.message||'บันทึกป้ายกำกับไม่สำเร็จ','error'); return; }
+    if(d && d.files) SITE_FILES[sid]=d.files;
+  }).catch(function(){ toast('บันทึกป้ายกำกับไม่สำเร็จ','error'); });
+}
+
 function siteFileDel(sid, fid){
   if(!confirm('ลบไฟล์นี้?')) return;
   post({action:'deleteSiteFile', round_id:S.round?S.round.round_id:'', site_id:sid, file_id:fid})
@@ -3111,7 +3137,59 @@ function v2Relock(){
    แม่แบบเอกสาร — Admin อัปโหลด .docx ที่มีแท็กแทนที่
    ระบบตรวจว่าแท็กในไฟล์ตรงกับที่เติมให้ได้หรือไม่ แล้วเตือนถ้าไม่ตรง
    ════════════════════════════════════════════════════════════════ */
-var DOC_TPL = null, DOC_TAGS = null;
+var DOC_TPL = null, DOC_TAGS = null, STORAGE = null;
+
+/* ── ที่เก็บไฟล์ ─────────────────────────────────────────
+   ระบบสร้างโครง <โฟลเดอร์แม่>/<รอบ>/<Site>/ ให้เอง
+   Admin ชี้โฟลเดอร์แม่ได้ ถ้าไม่ตั้งจะใช้โฟลเดอร์เดิมของระบบ
+   ─────────────────────────────────────────────────────── */
+function loadStorage(){
+  post({action:'getStorageRoot'}).then(function(d){ STORAGE=d||null; drawStorage(); })
+    .catch(function(){ var b=document.getElementById('storageBox'); if(b) b.innerHTML='<div class="empty">โหลดข้อมูลที่เก็บไฟล์ไม่สำเร็จ</div>'; });
+}
+function drawStorage(){
+  var box=document.getElementById('storageBox'); if(!box || !STORAGE) return;
+  var f=STORAGE.folder;
+  var roundName=S.round?(S.round.round_id+' '+S.round.round_name):'(รอบปัจจุบัน)';
+  box.innerHTML =
+      '<div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;">'
+    +   '<div style="flex:1;min-width:240px;">'
+    +     '<div style="font-size:13px;font-weight:700;">📁 '+esc(f?f.name:'ยังตั้งไม่ได้')
+    +       (STORAGE.is_default?' <span class="badge">ค่าเริ่มต้นของระบบ</span>':'')+'</div>'
+    +     '<div class="hint">'+(STORAGE.error?'<span style="color:var(--danger);">'+esc(STORAGE.error)+'</span>':'โฟลเดอร์แม่')+'</div>'
+    +   '</div>'
+    +   (f&&f.url?'<a class="btn btn-outline btn-sm" href="'+esc(f.url)+'" target="_blank">เปิดโฟลเดอร์</a>':'')
+    +   '<button class="btn btn-outline btn-sm" onclick="storageEdit()">เปลี่ยนโฟลเดอร์</button>'
+    + '</div>'
+    + '<div class="bb-hint" style="margin-top:12px;">ระบบจะแยกเก็บให้เองเป็น<br>'
+    +   '<span class="mono">'+esc(f?f.name:'โฟลเดอร์แม่')+' / '+esc(roundName)+' / ชื่อ Site / ไฟล์</span></div>'
+    + '<div id="storageEditBox" style="display:none;margin-top:12px;">'
+    +   '<div class="add-row">'
+    +     '<input class="input" id="storageInput" placeholder="วางลิงก์โฟลเดอร์ Drive หรือ ID">'
+    +     '<button class="btn btn-primary" onclick="storageSave()">บันทึก</button>'
+    +     '<button class="btn btn-outline" onclick="storageEdit()">ยกเลิก</button>'
+    +   '</div>'
+    +   '<div class="hint" style="margin-top:6px;">บัญชีที่รันสคริปต์ต้องมีสิทธิ์แก้ไขโฟลเดอร์นี้ · เว้นว่างแล้วบันทึก = กลับไปใช้ค่าเริ่มต้น</div>'
+    + '</div>';
+}
+function storageEdit(){
+  var b=document.getElementById('storageEditBox'); if(!b) return;
+  b.style.display = b.style.display==='block' ? 'none' : 'block';
+  if(b.style.display==='block'){
+    var i=document.getElementById('storageInput');
+    if(i && STORAGE && STORAGE.folder && !STORAGE.is_default) i.value=STORAGE.folder.id;
+  }
+}
+function storageSave(){
+  var v=document.getElementById('storageInput').value.trim();
+  if(v && !confirm('เปลี่ยนโฟลเดอร์ที่เก็บไฟล์\n\nไฟล์ที่อัปไปแล้วยังอยู่ที่เดิม ไม่ได้ย้ายตาม\nไฟล์ใหม่จะไปเก็บที่โฟลเดอร์นี้แทน\n\nยืนยัน?')) return;
+  post({action:'setStorageRoot', folder:v}).then(function(d){
+    if(d && d.status==='error'){ toast(d.message||'ตั้งโฟลเดอร์ไม่สำเร็จ','error'); return; }
+    toast(v?'เปลี่ยนโฟลเดอร์แล้ว':'กลับไปใช้โฟลเดอร์เริ่มต้นแล้ว','success');
+    SITE_FILES={};      // ลิงก์โฟลเดอร์เดิมใช้ไม่ได้แล้ว
+    loadStorage();
+  }).catch(function(){ toast('ตั้งโฟลเดอร์ไม่สำเร็จ','error'); });
+}
 
 // เวลาไทยเสมอ ไม่อิงโซนเครื่องผู้ใช้
 function fmtDT(iso){
@@ -3124,6 +3202,7 @@ function fmtDT(iso){
 
 function renderDocTpl(){
   var box=document.getElementById('docTplBox'); if(!box) return;
+  loadStorage();
   post({action:'getDocTemplate', round_id:S.round?S.round.round_id:''}).then(function(d){
     DOC_TPL = (d && d.template) || null;
     drawDocTplBox();
