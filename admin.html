@@ -514,11 +514,11 @@ table.recon .grp{border-left:1px solid var(--border);}
       <div class="eyebrow">รายการ Site <span class="ehint">— กดที่แถวเพื่อแก้ไขข้อมูลและใส่ยอดระบบ</span></div>
       <div class="table-wrap" id="sitesTable"><div class="empty"><span class="spinner"></span></div></div>
 
-      <div class="add-row" style="margin-top:12px;">
-        <input class="input" id="newSiteName" placeholder="เพิ่ม Site เช่น NDC-วังน้อย" onkeydown="if(event.key==='Enter')siteAdd()">
-        <button class="btn btn-outline" onclick="siteAdd()">+ เพิ่ม</button>
+      <div style="margin-top:12px;">
+        <button class="btn btn-outline" id="siteAddBtn" onclick="siteOpenAdd()">+ เพิ่ม Site</button>
       </div>
-      <div class="hint" style="margin-top:8px;">แก้อะไรก็ค้างไว้ในเครื่องก่อน กด “บันทึกทั้งหมด” ครั้งเดียวเมื่อพอใจ</div>
+      <div id="siteAddBox" style="display:none;margin-top:10px;" class="card"></div>
+      <div class="hint" style="margin-top:8px;">แก้อะไรก็ค้างไว้ในเครื่องก่อน กด “บันทึกทั้งหมด” ครั้งเดียวเมื่อพอใจ (หรือบันทึกทีละ Site ในแผงแก้ไข)</div>
     </div>
 
     <!-- ─── ชนิดที่นับ (v2 Phase 1: config-driven) ─── -->
@@ -2156,7 +2156,8 @@ function siteSync(){
   SITE_DEL = [];
   SITE_DRAFT = (S.sites||[]).map(function(x){
     return { site_id:x.site_id, site_name:x.site_name, is_active:!!x.is_active,
-             start_time:x.start_time||'', drive_link:x.drive_link||'', is_new:false,
+             start_time:x.start_time||'', drive_link:x.drive_link||'',
+             doc_no:(S.docnos||{})[x.site_id]||'', is_new:false,
              locked: !!x.checkin_at || (S.subs||[]).some(function(y){ return y.site_id===x.site_id; }) };
   });
   BOOK_DRAFT = JSON.parse(JSON.stringify(S.booksV2 || {}));
@@ -2183,7 +2184,8 @@ function siteDirty(){
   var changed = SITE_DRAFT.some(function(d){
     var o=(S.sites||[]).filter(function(x){ return x.site_id===d.site_id; })[0];
     return o && (o.site_name!==d.site_name || !!o.is_active!==!!d.is_active
-                 || (o.start_time||'')!==d.start_time || (o.drive_link||'')!==d.drive_link);
+                 || (o.start_time||'')!==d.start_time || (o.drive_link||'')!==d.drive_link
+                 || ((S.docnos||{})[d.site_id]||'')!==(d.doc_no||''));
   });
   if(changed) return true;
   return JSON.stringify(BOOK_DRAFT) !== JSON.stringify(S.booksV2||{});
@@ -2202,10 +2204,26 @@ function siteMark(){
 }
 
 /* ── ชั้นแสดงผล ── */
+// ตารางนี้แสดงเฉพาะ Site ที่ใช้ในรอบนี้เท่านั้น
+// Site อื่นที่มีในระบบจะไปโผล่ในกล่อง "+ เพิ่ม Site" ให้เลือกกลับมาใช้
+function siteVisible(){
+  siteSync();
+  return SITE_DRAFT.map(function(d,i){ return {d:d, i:i}; })
+    .filter(function(x){ return x.d.is_active || x.d.is_new; });
+}
+function siteUnused(){
+  siteSync();
+  return SITE_DRAFT.map(function(d,i){ return {d:d, i:i}; })
+    .filter(function(x){ return !x.d.is_active && !x.d.is_new; });
+}
+
 function renderSites(){
   var el=document.getElementById('sitesTable'); if(!el) return;
   siteSync();
-  if(!SITE_DRAFT.length){ el.innerHTML='<div class="empty">ยังไม่มี Site — เพิ่มด้านล่าง</div>'; siteMark(); return; }
+  if(!siteVisible().length){
+    el.innerHTML='<div class="empty">ยังไม่ได้เลือก Site สำหรับรอบนี้ — กด “+ เพิ่ม Site” ด้านล่าง</div>';
+    siteMark(); return;
+  }
 
   var items=siteItems(), hasCfg=items.length>0;
   var stMap={ idle:'<span class="status-badge sb-idle">— ยังไม่นับ</span>',
@@ -2215,14 +2233,15 @@ function renderSites(){
               reopened:'<span class="status-badge sb-rejected">↩ เปิดแก้</span>' };
 
   var html='<table><thead><tr>'
-    + '<th>Site</th><th class="num" style="width:110px;">ใช้งาน</th>'
+    + '<th>Site</th><th style="width:130px;">เลขที่เอกสาร</th>'
     + '<th class="num" style="width:130px;">ยอดระบบ</th>'
-    + '<th class="num" style="width:100px;">เริ่มนับ</th>'
+    + '<th class="num" style="width:90px;">เริ่มนับ</th>'
     + '<th class="num" style="width:90px;">ไฟล์แนบ</th>'
     + '<th class="num" style="width:130px;">สถานะการนับ</th>'
     + '<th style="width:90px;"></th></tr></thead><tbody>';
 
-  SITE_DRAFT.forEach(function(d,idx){
+  siteVisible().forEach(function(v){
+    var d=v.d, idx=v.i;
     var filled=hasCfg?siteBookFilled(d.site_id):0;
     var bookCell = !hasCfg ? '<span class="hint">—</span>'
       : (filled>=items.length ? '<span class="status-badge sb-locked">ครบ</span>'
@@ -2231,7 +2250,8 @@ function renderSites(){
     var st = d.is_new ? '<span class="hint">ใหม่</span>' : (stMap[siteState(d.site_id)]||stMap.idle);
     html += '<tr class="site-row'+(SITE_OPEN===d.site_id?' open':'')+'" onclick="siteToggleRow(\''+esc(d.site_id)+'\')">'
       + '<td><b>'+esc(d.site_name)+'</b>'+(d.is_new?' <span class="chip-new">ใหม่</span>':'')+'</td>'
-      + '<td class="num">'+(d.is_active?'<span class="status-badge sb-locked">เปิด</span>':'<span class="status-badge sb-idle">ปิด</span>')+'</td>'
+      + '<td class="mono" style="font-size:12px;">'+(d.doc_no?esc(d.doc_no):'<span class="hint">—</span>')
+      +   (d.is_active?'':' <span class="status-badge sb-idle">ปิด</span>')+'</td>'
       + '<td class="num">'+bookCell+'</td>'
       + '<td class="num">'+esc(d.start_time||'—')+'</td>'
       + '<td class="num">'+((SITE_FILES[d.site_id]||[]).length
@@ -2255,11 +2275,12 @@ function siteEditorHtml(d,idx){
   var h='<div class="site-editor">'
     + '<div class="se-grid">'
     +   '<div class="field"><label>ชื่อ Site</label><input class="input" id="se_name_'+idx+'" value="'+esc(d.site_name)+'" oninput="siteSet('+idx+',\'site_name\',this.value)"></div>'
-    +   '<div class="field"><label>เวลาเริ่มนับ</label><input class="input" id="se_time_'+idx+'" placeholder="เช่น 08:30" value="'+esc(d.start_time)+'" oninput="siteSet('+idx+',\'start_time\',this.value)"></div>'
-    +   '<div class="field"><label>ลิงก์ Drive (ถ้ามี)</label><input class="input" id="se_link_'+idx+'" value="'+esc(d.drive_link)+'" oninput="siteSet('+idx+',\'drive_link\',this.value)"></div>'
-    +   '<div class="field"><label>สถานะ</label>'
-    +     '<button class="btn '+(d.is_active?'btn-outline':'btn-warn')+' btn-sm" style="align-self:flex-start;" onclick="siteToggleActive('+idx+')">'
-    +     (d.is_active?'✓ เปิดใช้งาน (กดเพื่อปิด)':'ปิดอยู่ (กดเพื่อเปิด)')+'</button></div>'
+    +   '<div class="field"><label>เลขที่เอกสาร</label><input class="input mono" id="se_doc_'+idx+'" placeholder="เช่น PE2026_028" value="'+esc(d.doc_no||'')+'" oninput="siteSet('+idx+',\'doc_no\',this.value)"></div>'
+    +   '<div class="field"><label>เวลาเริ่มนับ</label><input class="input" id="se_time_'+idx+'" type="time" step="60" value="'+esc(d.start_time)+'" oninput="siteSet('+idx+',\'start_time\',this.value)"></div>'
+    +   '<div class="field"><label>ใช้ในรอบนี้</label>'
+    +     '<button class="btn btn-outline btn-sm" style="align-self:flex-start;" onclick="siteToggleActive('+idx+')">'
+    +     'เอาออกจากรอบนี้</button>'
+    +     '<div class="hint">Site จะยังอยู่ในระบบ เลือกกลับมาได้ที่ปุ่ม “+ เพิ่ม Site”</div></div>'
     + '</div>';
 
   if(!items.length){
@@ -2294,20 +2315,26 @@ function siteEditorHtml(d,idx){
 
   // ── ไฟล์แนบ (หน้าจอ PCS ฯลฯ) — ต่อท้ายเล่มตอนรวมเอกสาร ──
   h += '<div class="eyebrow" style="margin-top:16px;">ไฟล์แนบท้ายเล่ม '
-    +  '<span class="ehint">— หน้าจอระบบ PCS หรือเอกสารประกอบ (PDF / รูป) เรียงตามลำดับที่แสดง</span></div>'
+    +  '<span class="ehint">— หน้าจอระบบ PCS หรือเอกสารประกอบ (PDF / รูป) · อัปที่นี่ได้เลย ไม่ต้องไปวางใน Drive · '
+    +  'ลำดับที่แสดง = ลำดับหน้าในเล่ม · อัปแล้วบันทึกทันที</span>'
+    +  (d.is_new?'':'<button class="btn btn-outline btn-sm" style="float:right;" onclick="loadSiteFiles(\''+esc(d.site_id)+'\')" title="โหลดรายการใหม่">↻</button>')
+    +  '</div>'
     +  '<div id="sf_box_'+esc(d.site_id)+'">'+(d.is_new
          ? '<div class="hint">บันทึก Site ก่อน จึงจะแนบไฟล์ได้</div>'
          : '<div class="hint"><span class="spinner"></span> กำลังโหลด…</div>')+'</div>';
 
-  h += '<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">'
+  h += '<div style="display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;align-items:center;">'
     +  (d.locked ? '<span class="hint">Site นี้มีข้อมูลการนับแล้ว — ลบไม่ได้</span>'
                  : '<button class="btn btn-danger btn-sm" onclick="siteDelete('+idx+')">ลบ Site นี้</button>')
-    +  '<button class="btn btn-outline btn-sm" style="margin-left:auto;" onclick="siteToggleRow(\'\')">ปิดแผง</button>'
+    +  '<span id="se_state_'+idx+'" class="hint" style="margin-left:auto;"></span>'
+    +  '<button class="btn btn-outline btn-sm" onclick="siteToggleRow(\'\')">ปิดแผง</button>'
+    +  '<button class="btn btn-success btn-sm" id="se_save_'+idx+'" onclick="siteSaveOne('+idx+')">💾 บันทึก Site นี้</button>'
     +  '</div></div>';
   return h;
 }
 
 function siteToggleRow(id){
+  if(SITE_SAVING){ toast('กำลังบันทึกอยู่ รอสักครู่','error'); return; }
   SITE_OPEN = (SITE_OPEN===id ? '' : id);
   renderSites();
   if(SITE_OPEN && SITE_OPEN.indexOf('tmp_')!==0) loadSiteFiles(SITE_OPEN);
@@ -2399,8 +2426,10 @@ function siteSet(idx,field,val){
 }
 function siteToggleActive(idx){
   siteSync();
-  SITE_DRAFT[idx].is_active=!SITE_DRAFT[idx].is_active;
-  renderSites();
+  var d=SITE_DRAFT[idx]; if(!d) return;
+  d.is_active=!d.is_active;
+  if(!d.is_active && SITE_OPEN===d.site_id) SITE_OPEN='';   // ออกจากรอบแล้วปิดแผงตาม
+  renderSites(); drawSiteAdd();
 }
 function siteBookSet(sid,itemId,stId,val){
   siteSync();
@@ -2416,15 +2445,57 @@ function siteBookSet(sid,itemId,stId,val){
   });
   siteMark();
 }
+/* กล่องเพิ่ม Site — เลือกจากที่มีในระบบ หรือสร้างใหม่
+   Site ที่ "ปิดใช้งาน" ในรอบนี้จะมาโผล่ที่นี่ ไม่ไปรกในตารางหลัก */
+function siteOpenAdd(){
+  var box=document.getElementById('siteAddBox');
+  if(box.style.display==='block'){ box.style.display='none'; return; }
+  box.style.display='block';
+  drawSiteAdd();
+}
+function drawSiteAdd(){
+  var box=document.getElementById('siteAddBox'); if(!box) return;
+  var unused=siteUnused();
+  var h='<div style="padding:14px;">';
+  if(unused.length){
+    h += '<div style="font-size:12px;font-weight:700;margin-bottom:8px;">เลือกจาก Site ที่มีในระบบ</div>'
+      +  '<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px;">'
+      +  unused.map(function(x){
+           return '<span class="chip-site" onclick="siteUse('+x.i+')">'
+             + '<span class="chip-tick"></span>'+esc(x.d.site_name)+'</span>';
+         }).join('')
+      +  '</div>';
+  }else{
+    h += '<div class="hint" style="margin-bottom:12px;">Site ทั้งหมดในระบบถูกใช้ในรอบนี้แล้ว</div>';
+  }
+  h += '<div style="font-size:12px;font-weight:700;margin-bottom:8px;">หรือสร้าง Site ใหม่</div>'
+    +  '<div class="add-row">'
+    +    '<input class="input" id="newSiteName" placeholder="เช่น NDC-วังน้อย" onkeydown="if(event.key===\'Enter\')siteAdd()">'
+    +    '<button class="btn btn-primary" onclick="siteAdd()">สร้าง</button>'
+    +  '</div></div>';
+  box.innerHTML=h;
+}
+// ดึง Site ที่มีอยู่กลับมาใช้ในรอบนี้
+function siteUse(idx){
+  siteSync();
+  var d=SITE_DRAFT[idx]; if(!d) return;
+  d.is_active=true;
+  SITE_OPEN=d.site_id;
+  renderSites(); drawSiteAdd();
+  if(d.site_id.indexOf('tmp_')!==0) loadSiteFiles(d.site_id);
+  toast('เพิ่ม '+d.site_name+' เข้ารอบนี้แล้ว','success');
+}
 function siteAdd(){
   siteSync();
-  var inp=document.getElementById('newSiteName'), name=inp.value.trim();
+  var inp=document.getElementById('newSiteName'); if(!inp) return;
+  var name=inp.value.trim();
   if(!name){ toast('กรอกชื่อ Site ก่อน','error'); return; }
   if(SITE_DRAFT.some(function(x){ return x.site_name===name; })){ toast('มี Site ชื่อนี้อยู่แล้ว','error'); return; }
   inp.value='';
   var tmp='tmp_'+(++SITE_TMP);
-  SITE_DRAFT.push({ site_id:tmp, site_name:name, is_active:true, start_time:'', drive_link:'', is_new:true, locked:false });
-  SITE_OPEN=tmp; renderSites();
+  SITE_DRAFT.push({ site_id:tmp, site_name:name, is_active:true, start_time:'', drive_link:'',
+                    doc_no:'', is_new:true, locked:false });
+  SITE_OPEN=tmp; renderSites(); drawSiteAdd();
 }
 function siteDelete(idx){
   siteSync();
@@ -2437,6 +2508,74 @@ function siteDelete(idx){
   if(SITE_OPEN===d.site_id) SITE_OPEN='';
   renderSites();
 }
+/* บันทึกเฉพาะ Site เดียว — จบทีละที่ ไม่ต้องรอบันทึกรวม
+   ระหว่างบันทึก ล็อกแผงไว้ไม่ให้แก้ต่อ กันข้อมูลชนกัน */
+var SITE_SAVING = false;
+
+function siteSaveOne(idx){
+  siteSync();
+  var d=SITE_DRAFT[idx]; if(!d) return;
+  if(SITE_SAVING){ toast('กำลังบันทึกอยู่ รอสักครู่','error'); return; }
+
+  var btn=document.getElementById('se_save_'+idx);
+  var st=document.getElementById('se_state_'+idx);
+  SITE_SAVING=true;
+  if(btn){ btn.disabled=true; btn.textContent='กำลังบันทึก…'; }
+  if(st) st.innerHTML='<span class="spinner"></span> กำลังบันทึก อย่าเพิ่งแก้ข้อมูล';
+  // ปิดช่องกรอกของแผงนี้ระหว่างบันทึก
+  var ed=document.querySelector('.site-editor');
+  if(ed) ed.querySelectorAll('input,select,button').forEach(function(el){ el.disabled=true; });
+
+  post({ action:'saveSitesBatch',
+         sites:[{ site_id: d.is_new ? '' : d.site_id, site_name:d.site_name, is_active:d.is_active,
+                  start_time:d.start_time||'', doc_no:d.doc_no||'' }],
+         delete_ids:[] })
+  .then(function(r){
+    if(r && r.status==='error') throw new Error(r.message||'บันทึกข้อมูล Site ไม่สำเร็จ');
+    // Site ใหม่เพิ่งได้ id จริง — ย้ายยอดที่กรอกไว้ตามไปด้วย
+    var made=((r&&r.created)||[]).filter(function(c){ return c.site_name===d.site_name; })[0];
+    var realId = made ? made.site_id : d.site_id;
+    if(made && BOOK_DRAFT[d.site_id]){ BOOK_DRAFT[realId]=BOOK_DRAFT[d.site_id]; delete BOOK_DRAFT[d.site_id]; }
+    var books={}; books[realId]=BOOK_DRAFT[realId]||{};
+    return post({ action:'saveBooksBatchV2', round_id:S.round?S.round.round_id:'', books:books })
+      .then(function(r2){
+        if(r2 && r2.status==='error') throw new Error(r2.message||'บันทึกยอดระบบไม่สำเร็จ');
+        return realId;
+      });
+  }).then(function(realId){
+    // เก็บ Site อื่นที่ยังแก้ค้างไว้ แล้วล้าง draft "ก่อน" โหลด
+    // (ถ้าไม่ล้างก่อน ตัวโหลดจะมองว่ายังแก้ค้างอยู่ แล้วไม่รับยอดใหม่เข้ามา)
+    var others=SITE_DRAFT.filter(function(x){ return x.site_id!==d.site_id && (x.is_new || siteRowDirty(x)); })
+                 .map(function(x){ return JSON.parse(JSON.stringify(x)); });
+    SITE_DRAFT=null; BOOK_DRAFT=null; SITE_DEL=[];
+    return loadData(false).then(function(){
+      siteSync();
+      others.forEach(function(o){
+        var t=SITE_DRAFT.filter(function(x){ return x.site_id===o.site_id; })[0];
+        if(t){ t.site_name=o.site_name; t.is_active=o.is_active; t.start_time=o.start_time;
+               t.drive_link=o.drive_link; t.doc_no=o.doc_no; }
+        else if(o.is_new) SITE_DRAFT.push(o);
+      });
+      SITE_OPEN=realId; SITE_SAVING=false;
+      renderSites();
+      if(realId && realId.indexOf('tmp_')!==0) loadSiteFiles(realId);
+      toast('บันทึก '+d.site_name+' แล้ว','success');
+    });
+  }).catch(function(err){
+    SITE_SAVING=false; renderSites();
+    toast(String(err && err.message || err),'error');
+  });
+}
+
+// Site นี้มีอะไรต่างจากของจริงไหม (ใช้ตอน sync กลับ)
+function siteRowDirty(d){
+  var o=(S.sites||[]).filter(function(x){ return x.site_id===d.site_id; })[0];
+  if(!o) return true;
+  return o.site_name!==d.site_name || !!o.is_active!==!!d.is_active
+      || (o.start_time||'')!==d.start_time
+      || ((S.docnos||{})[d.site_id]||'')!==(d.doc_no||'');
+}
+
 function siteCancelAll(){
   if(!confirm('ยกเลิกการแก้ไขทั้งหมดที่ยังไม่บันทึก?')) return;
   SITE_DRAFT=null; BOOK_DRAFT=null; SITE_DEL=[]; SITE_OPEN='';
@@ -2450,7 +2589,7 @@ function siteSaveAll(){
   post({ action:'saveSitesBatch',
          sites: SITE_DRAFT.map(function(x){
            return { site_id: x.is_new ? '' : x.site_id, site_name:x.site_name, is_active:x.is_active,
-                    start_time:x.start_time||'', drive_link:x.drive_link||'' };
+                    start_time:x.start_time||'', doc_no:x.doc_no||'' };
          }),
          delete_ids: SITE_DEL })
   .then(function(d){
@@ -2920,7 +3059,11 @@ function settingsGo(sub){
    ════════════════════════════════════════════════════════════════ */
 var V2_UNLOCK = false, V2_REASON = '';
 
-function v2Locked(){ return !!(S.round && S.round.is_started) && !V2_UNLOCK; }
+function v2Locked(){
+  if(WIZ.forceNew) return false;                       // กำลังตั้งรอบใหม่ — ยังไม่มีอะไรให้ล็อก
+  if(document.getElementById('wizard').style.display==='block') return false;  // อยู่ในตัวช่วยตั้งรอบ
+  return !!(S.round && S.round.is_started) && !V2_UNLOCK;
+}
 
 function v2ApplyLock(){
   var p=document.getElementById('panel-setup'); if(!p) return;
@@ -2933,10 +3076,13 @@ function v2ApplyLock(){
   });
   var bar=document.getElementById('v2LockBar');
   if(bar){
+    var inWizard = WIZ.forceNew || document.getElementById('wizard').style.display==='block';
     bar.innerHTML = locked
       ? '<span>🔒 <b>รอบนี้ตั้งค่าเสร็จแล้ว</b> — ดูได้อย่างเดียว เพื่อไม่ให้ยอดที่นับไปแล้วเพี้ยน</span>'
         + '<button class="btn btn-outline btn-sm" id="v2UnlockBtn" style="margin-left:auto;" onclick="v2Unlock()">🔓 แก้ไขกรณีจำเป็น</button>'
-      : (S.round && S.round.is_started
+      : inWizard
+        ? '<span class="hint">กำลังตั้งค่ารอบใหม่ — แก้ไขได้ตามปกติ จะถูกล็อกหลังกดบันทึกและเริ่มรอบ</span>'
+      : (S.round && S.round.is_started && V2_UNLOCK
           ? '<span style="color:var(--warn);">🔓 <b>โหมดแก้ไขกรณีจำเป็น</b> — เหตุผล: '+esc(V2_REASON)+'</span>'
             + '<button class="btn btn-outline btn-sm" id="v2UnlockBtn" style="margin-left:auto;" onclick="v2Relock()">ยกเลิก</button>'
           : '<span class="hint">รอบนี้ยังตั้งค่าไม่เสร็จ — แก้ไขได้ตามปกติ</span>');
@@ -3041,7 +3187,10 @@ function drawDocTags(){
       +  '<div class="doc-blocks">'
       +  l.blocks.map(function(b){
            return '<div class="doc-blk">'+chip('#'+b.tag)+' … '+chip('/'+b.tag)
-                + '<div class="hint">'+esc(b.desc)+'</div></div>';
+                + '<div class="hint">'+esc(b.desc)+'</div>'
+                + (b.alias ? '<div class="hint" style="margin-top:4px;">หรือใช้ '+chip('#'+b.alias)+' … '+chip('/'+b.alias)
+                             +' — อ้างตามลำดับ ไม่ต้องแก้เทมเพลตเมื่อเปลี่ยนชื่อชนิด</div>' : '')
+                + '</div>';
          }).join('')
       +  '</div>'
       +  '<div class="hint" style="margin:8px 0 6px;">ในแต่ละแถวใช้ — '
