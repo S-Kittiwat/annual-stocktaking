@@ -34,6 +34,19 @@ button{font-family:var(--font);}
 @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(52,211,153,.45);}70%{box-shadow:0 0 0 6px rgba(52,211,153,0);}100%{box-shadow:0 0 0 0 rgba(52,211,153,0);}}
 #panel-setup.readonly .input,#panel-setup.readonly select,#panel-setup.readonly input[type=color]{opacity:.75;cursor:not-allowed;}
 #panel-setup.readonly .btn:disabled{opacity:.4;}
+.sf-list{display:flex;flex-direction:column;gap:6px;}
+.sf-item{display:flex;align-items:center;gap:8px;padding:6px 10px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:12.5px;}
+.sf-no{width:20px;text-align:center;font-family:var(--mono);color:var(--muted);font-size:11px;}
+.sf-name{flex:1;color:var(--text);text-decoration:none;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.sf-name:hover{color:var(--accent);text-decoration:underline;}
+.doc-sec{font-size:12px;font-weight:700;margin:16px 0 8px;padding-bottom:4px;border-bottom:1px solid var(--border);}
+.doc-sec:first-child{margin-top:0;}
+.doc-blocks{display:flex;flex-wrap:wrap;gap:10px;}
+.doc-blk{background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:8px 10px;font-size:11.5px;}
+.doc-tag{display:inline-block;font-family:var(--mono);font-size:11.5px;background:rgba(56,189,248,.1);border:1px solid var(--accent);color:var(--accent);border-radius:6px;padding:3px 9px;cursor:pointer;white-space:nowrap;}
+.doc-tag:hover{background:rgba(56,189,248,.2);}
+.doc-tag-row{display:flex;flex-wrap:wrap;gap:10px;}
+.doc-tag-item{display:flex;align-items:center;gap:6px;}
 .site-row{cursor:pointer;}
 .site-row:hover td{background:var(--surface2);}
 .site-row.open td{background:rgba(56,189,248,.07);}
@@ -337,6 +350,9 @@ table.recon .grp{border-left:1px solid var(--border);}
     </div>
 
     <div id="wizSteps" style="display:flex;gap:8px;margin-bottom:20px;"></div>
+      <div id="wizCancelBar" style="display:none;margin-bottom:14px;">
+        <button class="btn btn-outline btn-sm" onclick="wizCancelNew()">← ยกเลิก กลับไปรอบเดิม</button>
+      </div>
 
     <!-- ขั้น 1 -->
     <div class="wiz-panel" id="wiz-1" style="display:none;">
@@ -469,9 +485,23 @@ table.recon .grp{border-left:1px solid var(--border);}
         <button class="subtab active" data-sub="sites"  onclick="settingsGo('sites')">🏭 Site &amp; ยอดระบบ</button>
         <button class="subtab" data-sub="agents" onclick="settingsGo('agents')">👥 ผู้ใช้งาน</button>
         <button class="subtab" data-sub="setup"  onclick="settingsGo('setup')">🎛️ ตั้งค่ารอบ</button>
+        <button class="subtab" data-sub="doc"    onclick="settingsGo('doc')">📄 แม่แบบเอกสาร</button>
       </div>
       <div id="settingsSlot"></div>
 
+      <!-- แม่แบบเอกสาร -->
+      <div class="panel" id="panel-doc">
+        <div class="bb-hint">
+          📄 อัปโหลดไฟล์ <b>Word (.docx)</b> ที่มีแท็กแทนที่ เช่น <span class="mono">{site}</span> ระบบจะเติมข้อมูลจริงให้ตอนที่ผู้นับหรือ Admin กดโหลดเอกสาร
+          · ไฟล์ผูกกับรอบนี้เท่านั้น รอบหน้าอัปใหม่ได้
+        </div>
+
+        <div class="eyebrow">แม่แบบของรอบนี้</div>
+        <div class="card" style="padding:16px;" id="docTplBox"><div class="empty"><span class="spinner"></span></div></div>
+
+        <div class="eyebrow" style="margin-top:18px;">แท็กที่ระบบเติมให้ได้ <span class="ehint">— กดที่แท็กเพื่อคัดลอก แล้วนำไปวางในไฟล์ Word</span></div>
+        <div id="docTagsBox"><div class="empty">—</div></div>
+      </div>
     </div>
 
     <div class="panel" id="panel-sites">
@@ -724,34 +754,6 @@ table.recon .grp{border-left:1px solid var(--border);}
     <div class="modal-foot">
       <button class="btn btn-outline" onclick="closeOverlay('kickbackModal')" style="flex:1;">ยกเลิก</button>
       <button class="btn" onclick="confirmKickback()" style="flex:2;background:#c0392b;color:#fff;">↩ ยืนยันตีกลับ</button>
-    </div>
-  </div>
-</div>
-
-<div class="overlay" id="roundModal">
-  <div class="modal">
-    <div class="modal-head">
-      <div class="modal-title">เปิดรอบนับใหม่</div>
-      <button class="modal-close" onclick="closeRoundModal()">×</button>
-    </div>
-    <div class="modal-body">
-      <div class="modal-note">เปิดรอบใหม่จะ <b>เก็บรอบปัจจุบันเข้าคลัง (archive)</b> และเริ่มนับใหม่ทั้งหมด ผลการนับเดิมยังเรียกดูได้</div>
-      <div class="field" style="gap:8px;">
-        <label>ปี (พ.ศ.)</label>
-        <input class="input mono" id="newRoundYear" type="number" placeholder="2570">
-      </div>
-      <div class="field" style="gap:8px;">
-        <label>ชื่อรอบ</label>
-        <input class="input" id="newRoundName" placeholder="นับสต็อกพาเลท 2570">
-      </div>
-      <div class="field" style="gap:8px;">
-        <label>📅 วันที่เอกสาร (ใช้ทั้งรอบ)</label>
-        <input class="input" id="newRoundDocDate" placeholder="เช่น 30 มิถุนายน 2570">
-      </div>
-    </div>
-    <div class="modal-foot">
-      <button class="btn btn-outline" onclick="closeRoundModal()" style="flex:1;">ยกเลิก</button>
-      <button class="btn btn-primary" onclick="confirmNewRound()" style="flex:2;">เปิดรอบ</button>
     </div>
   </div>
 </div>
@@ -1459,6 +1461,22 @@ function v2Render(keepFocus){
       + '</tbody></table>';
   }
 
+  // 6 ช่องลายเซ็น
+  if(focusId.indexOf('v2sg_')!==0){
+    var sigBox=document.getElementById('v2SigTable');
+    if(sigBox){
+      sigBox.innerHTML =
+        '<table><thead><tr><th class="num" style="width:60px;">ช่องที่</th><th>ข้อความกำกับ</th><th class="num" style="width:70px;">ลำดับ</th><th style="width:130px;"></th></tr></thead><tbody>'
+        + ((V2CFG.signatures||[]).map(function(x,i){
+            return '<tr><td class="num mono" style="color:var(--muted);">'+(i+1)+'</td>'
+              + '<td><input class="input" id="v2sg_nm_'+i+'" value="'+esc(x.sig_label||'')+'" oninput="v2Set(\'signatures\','+i+',\'sig_label\',this.value)"></td>'
+              + v2Num('signatures',i,'sort',x.sort,'v2sg_so_'+i)
+              + v2Act('signatures',i,x)+'</tr>';
+          }).join('') || '<tr><td colspan="4" style="color:var(--muted);">ไม่มีช่องเซ็น — เอกสารจะไม่มีส่วนลายเซ็น</td></tr>')
+        + '</tbody></table>';
+    }
+  }
+
   if(document.getElementById('v2PreviewModal').classList.contains('open')) v2RenderPreview();
   v2ApplyLock();
 }
@@ -1629,14 +1647,25 @@ var WIZ = { step:1, ready:null };
 var WZ_ROUND = { year:'', name:'', doc:'', loaded:false };   // ขั้น 1 เก็บในเครื่อง ยังไม่แตะระบบ
 
 function wizNeeded(){
-  // ต้องตั้งรอบ ถ้ายังไม่มีรอบ หรือมีแต่ยังไม่ได้กด "เริ่มรอบ"
+  // ต้องตั้งรอบเมื่อ: ยังไม่มีรอบ · มีแต่ยังตั้งค่าไม่เสร็จ (ร่าง) · หรือสั่งเปิดรอบใหม่
+  if(WIZ.forceNew) return true;
   return !S.round || !S.round.round_id || !S.round.is_started;
+}
+function wizCancelNew(){
+  if(!confirm('ยกเลิกการเปิดรอบใหม่ — ข้อมูลที่กรอกไว้จะหายไป')) return;
+  WIZ.forceNew=false; WIZ.step=1;
+  WZ_ROUND={ year:'', name:'', doc:'', loaded:false };
+  V2CFG=null; WZ_SITES=null; WZ_DEL=[]; SITE_DRAFT=null; BOOK_DRAFT=null;
+  wizHide(); switchTab('dashboard'); loadData(false);
 }
 function wizShow(){
   document.getElementById('wizard').style.display='block';
   document.getElementById('app').style.display='none';
+  var cb=document.getElementById('wizCancelBar');
+  // ยกเลิกได้เฉพาะตอนสั่งเปิดรอบใหม่ทั้งที่ยังมีรอบเดิมอยู่
+  if(cb) cb.style.display = (WIZ.forceNew && S.round && S.round.round_id) ? 'block' : 'none';
   var sp=document.getElementById('syncPill'); if(sp) sp.style.display='none';
-  wizGo(WIZ.step || (S.round && S.round.round_id ? 2 : 1));
+  wizGo(WIZ.forceNew ? (WIZ.step||1) : (WIZ.step || (S.round && S.round.round_id ? 2 : 1)));
 }
 function wizHide(){
   document.getElementById('wizard').style.display='none';
@@ -1686,7 +1715,7 @@ function wizFillStep1(){
   // มีรอบร่างค้างอยู่ (เคยตั้งค้างไว้) → ดึงค่ามาเป็นตั้งต้น
   if(!WZ_ROUND.loaded){
     WZ_ROUND.loaded = true;
-    if(S.round && S.round.round_id){
+    if(S.round && S.round.round_id && !WIZ.forceNew){
       WZ_ROUND.year = WZ_ROUND.year || S.round.year || '';
       WZ_ROUND.name = WZ_ROUND.name || S.round.round_name || '';
       WZ_ROUND.doc  = WZ_ROUND.doc  || (S.docMeta && S.docMeta.doc_date) || '';
@@ -1697,7 +1726,7 @@ function wizFillStep1(){
   n.value = WZ_ROUND.name || '';
   d.value = WZ_ROUND.doc  || '';
   var st=document.getElementById('wzRoundState');
-  if(st) st.textContent = (S.round && S.round.round_id)
+  if(st) st.textContent = (S.round && S.round.round_id && !WIZ.forceNew)
     ? 'มีรอบร่างค้างอยู่: '+S.round.round_id+' — จะถูกใช้ต่อเมื่อกดเริ่มรอบ'
     : 'ยังไม่บันทึกอะไรลงระบบ จนกว่าจะกด “เริ่มรอบ” ในขั้นที่ 4';
 }
@@ -1924,13 +1953,16 @@ function wizStart(){
   say('⏳ '+steps[0]+'…');
 
   // 1) สร้างรอบ (ถ้ายังไม่มีรอบร่างค้างอยู่)
-  var p = (S.round && S.round.round_id)
+  // ใช้รอบร่างเดิมต่อได้เฉพาะเมื่อยังไม่ได้สั่งเปิดรอบใหม่
+  var reuse = !WIZ.forceNew && S.round && S.round.round_id;
+  var p = reuse
     ? post({action:'saveDocMeta', doc_date:WZ_ROUND.doc, doc_year:WZ_ROUND.year}).then(function(){ return { status:'ok' }; })
     : post({action:'newRound', year:WZ_ROUND.year, round_name:WZ_ROUND.name,
             doc_date:WZ_ROUND.doc, doc_year:WZ_ROUND.year, as_draft:true});
 
   p.then(function(d){
     if(d && d.status==='error') throw new Error(d.message||'สร้างรอบไม่สำเร็จ');
+    WIZ.forceNew = false;          // รอบใหม่ถูกสร้างแล้ว กดซ้ำจะไม่สร้างซ้ำ
     return loadData(false);
   }).then(function(){
     at=1; say('⏳ '+steps[1]+'…');
@@ -1955,7 +1987,7 @@ function wizStart(){
     var panel=document.getElementById('panel-setup'), wrap=document.querySelector('#app .wrap');
     if(panel && wrap && panel.parentNode!==wrap){ panel.classList.remove('active'); panel.style.display=''; wrap.appendChild(panel); }
     var sb2=document.getElementById('v2SaveBtn'); if(sb2 && sb2.parentNode) sb2.parentNode.style.display='';
-    WZ_ROUND={ year:'', name:'', doc:'', loaded:false };
+    WZ_ROUND={ year:'', name:'', doc:'', loaded:false }; WIZ.forceNew=false;
     WIZ.saving=false;
     return loadData(true).then(function(){
       btn.disabled=false; btn.textContent='💾 บันทึกทั้งหมด & เริ่มรอบ';
@@ -2186,6 +2218,7 @@ function renderSites(){
     + '<th>Site</th><th class="num" style="width:110px;">ใช้งาน</th>'
     + '<th class="num" style="width:130px;">ยอดระบบ</th>'
     + '<th class="num" style="width:100px;">เริ่มนับ</th>'
+    + '<th class="num" style="width:90px;">ไฟล์แนบ</th>'
     + '<th class="num" style="width:130px;">สถานะการนับ</th>'
     + '<th style="width:90px;"></th></tr></thead><tbody>';
 
@@ -2201,11 +2234,14 @@ function renderSites(){
       + '<td class="num">'+(d.is_active?'<span class="status-badge sb-locked">เปิด</span>':'<span class="status-badge sb-idle">ปิด</span>')+'</td>'
       + '<td class="num">'+bookCell+'</td>'
       + '<td class="num">'+esc(d.start_time||'—')+'</td>'
+      + '<td class="num">'+((SITE_FILES[d.site_id]||[]).length
+            ? '<span class="status-badge sb-locked">'+SITE_FILES[d.site_id].length+' ไฟล์</span>'
+            : '<span class="hint">—</span>')+'</td>'
       + '<td class="num">'+st+'</td>'
       + '<td><button class="btn btn-outline btn-sm" onclick="event.stopPropagation();siteToggleRow(\''+esc(d.site_id)+'\')">'
       + (SITE_OPEN===d.site_id?'ปิด':'แก้ไข')+'</button></td></tr>';
     if(SITE_OPEN===d.site_id){
-      html += '<tr class="site-editor-row"><td colspan="6">'+siteEditorHtml(d,idx)+'</td></tr>';
+      html += '<tr class="site-editor-row"><td colspan="7">'+siteEditorHtml(d,idx)+'</td></tr>';
     }
   });
   html+='</tbody></table>';
@@ -2256,6 +2292,13 @@ function siteEditorHtml(d,idx){
       +  '</tr></tfoot></table></div>';
   }
 
+  // ── ไฟล์แนบ (หน้าจอ PCS ฯลฯ) — ต่อท้ายเล่มตอนรวมเอกสาร ──
+  h += '<div class="eyebrow" style="margin-top:16px;">ไฟล์แนบท้ายเล่ม '
+    +  '<span class="ehint">— หน้าจอระบบ PCS หรือเอกสารประกอบ (PDF / รูป) เรียงตามลำดับที่แสดง</span></div>'
+    +  '<div id="sf_box_'+esc(d.site_id)+'">'+(d.is_new
+         ? '<div class="hint">บันทึก Site ก่อน จึงจะแนบไฟล์ได้</div>'
+         : '<div class="hint"><span class="spinner"></span> กำลังโหลด…</div>')+'</div>';
+
   h += '<div style="display:flex;gap:8px;margin-top:12px;flex-wrap:wrap;">'
     +  (d.locked ? '<span class="hint">Site นี้มีข้อมูลการนับแล้ว — ลบไม่ได้</span>'
                  : '<button class="btn btn-danger btn-sm" onclick="siteDelete('+idx+')">ลบ Site นี้</button>')
@@ -2264,7 +2307,85 @@ function siteEditorHtml(d,idx){
   return h;
 }
 
-function siteToggleRow(id){ SITE_OPEN = (SITE_OPEN===id ? '' : id); renderSites(); }
+function siteToggleRow(id){
+  SITE_OPEN = (SITE_OPEN===id ? '' : id);
+  renderSites();
+  if(SITE_OPEN && SITE_OPEN.indexOf('tmp_')!==0) loadSiteFiles(SITE_OPEN);
+}
+
+/* ── ไฟล์แนบท้ายเล่มของแต่ละ Site ─────────────────────── */
+var SITE_FILES = {};   // SITE_FILES[site_id] = [...]
+
+function loadSiteFiles(sid){
+  post({action:'listSiteFiles', round_id:S.round?S.round.round_id:'', site_id:sid}).then(function(d){
+    SITE_FILES[sid] = (d && d.files) || [];
+    drawSiteFiles(sid);
+  }).catch(function(){ drawSiteFiles(sid); });
+}
+function drawSiteFiles(sid){
+  var box=document.getElementById('sf_box_'+sid); if(!box) return;
+  var list=SITE_FILES[sid]||[];
+  var up='<input type="file" id="sf_in_'+esc(sid)+'" accept=".pdf,.png,.jpg,.jpeg" multiple style="display:none;" onchange="siteFileUpload(this,\''+esc(sid)+'\')">';
+  box.innerHTML = up
+    + (list.length
+        ? '<div class="sf-list">'+list.map(function(f,i){
+            var isImg=/^image\//.test(f.mime||'');
+            return '<div class="sf-item">'
+              + '<span class="sf-no">'+(i+1)+'</span>'
+              + '<span class="sf-ic">'+(isImg?'🖼':'📄')+'</span>'
+              + '<a href="'+esc(f.url||'#')+'" target="_blank" class="sf-name">'+esc(f.filename)+'</a>'
+              + '<span class="hint">'+Math.round((f.size||0)/1024)+' KB</span>'
+              + '<button class="btn btn-outline btn-sm" '+(i===0?'disabled':'')+' onclick="siteFileMove(\''+esc(sid)+'\','+i+',-1)">↑</button>'
+              + '<button class="btn btn-outline btn-sm" '+(i===list.length-1?'disabled':'')+' onclick="siteFileMove(\''+esc(sid)+'\','+i+',1)">↓</button>'
+              + '<button class="btn btn-danger btn-sm" onclick="siteFileDel(\''+esc(sid)+'\',\''+esc(f.file_id)+'\')">ลบ</button>'
+              + '</div>';
+          }).join('')+'</div>'
+        : '<div class="hint">ยังไม่มีไฟล์แนบ</div>')
+    + '<button class="btn btn-outline btn-sm" style="margin-top:8px;" onclick="document.getElementById(\'sf_in_'+esc(sid)+'\').click()">⬆ เพิ่มไฟล์ (PDF / รูป)</button>';
+}
+function siteFileUpload(input, sid){
+  var files=[].slice.call(input.files||[]); if(!files.length) return;
+  input.value='';
+  var box=document.getElementById('sf_box_'+sid);
+  if(box) box.innerHTML='<div class="hint"><span class="spinner"></span> กำลังอัปโหลด '+files.length+' ไฟล์…</div>';
+  // อัปทีละไฟล์ต่อกัน — กัน GAS ชนกันเองและคุมลำดับได้
+  var chain=Promise.resolve();
+  files.forEach(function(file){
+    chain=chain.then(function(){
+      return new Promise(function(res){
+        var rd=new FileReader();
+        rd.onload=function(){
+          post({action:'addSiteFile', round_id:S.round?S.round.round_id:'', site_id:sid,
+                filename:file.name, data:rd.result})
+          .then(function(d){
+            if(d && d.status==='error') toast(d.message||'อัปโหลดไม่สำเร็จ','error');
+            else SITE_FILES[sid]=d.files||[];
+            res();
+          }).catch(function(){ toast('อัปโหลด '+file.name+' ไม่สำเร็จ','error'); res(); });
+        };
+        rd.readAsDataURL(file);
+      });
+    });
+  });
+  chain.then(function(){ drawSiteFiles(sid); renderSites(); toast('อัปโหลดเสร็จ','success'); });
+}
+function siteFileDel(sid, fid){
+  if(!confirm('ลบไฟล์นี้?')) return;
+  post({action:'deleteSiteFile', round_id:S.round?S.round.round_id:'', site_id:sid, file_id:fid})
+  .then(function(d){
+    if(d && d.status==='error'){ toast(d.message||'ลบไม่สำเร็จ','error'); return; }
+    SITE_FILES[sid]=d.files||[]; drawSiteFiles(sid); renderSites();
+  });
+}
+function siteFileMove(sid, idx, dir){
+  var list=SITE_FILES[sid]||[]; var to=idx+dir;
+  if(to<0 || to>=list.length) return;
+  var tmp=list[idx]; list[idx]=list[to]; list[to]=tmp;
+  drawSiteFiles(sid);
+  post({action:'reorderSiteFiles', round_id:S.round?S.round.round_id:'', site_id:sid,
+        file_ids:list.map(function(f){ return f.file_id; })})
+  .then(function(d){ if(d && d.files) SITE_FILES[sid]=d.files; });
+}
 function siteSet(idx,field,val){
   siteSync();
   if(!SITE_DRAFT[idx]) return;
@@ -2712,24 +2833,37 @@ function toggleRound(){
     toast(next?'▶ เปิดรอบแล้ว':'⏸ ปิดรอบแล้ว','info');
   }).catch(function(){ toast('เปลี่ยนสถานะรอบไม่สำเร็จ','error'); });
 }
+/* เปิดรอบใหม่ = เริ่มวงจรใหม่ที่สถานะ "ร่าง"
+   ไม่สร้างรอบทันที — ทุกอย่างค้างในเครื่องจนกดบันทึกรวมในขั้นตรวจทาน
+   config ของรอบก่อนถูกดึงมาเป็นค่าตั้งต้นให้แก้ต่อ (ไม่ต้องตั้งใหม่ทั้งหมด) */
 function openNewRound(){
-  var y=(S.round&&S.round.year)?(Number(S.round.year)+1):'';
-  document.getElementById('newRoundYear').value=y;
-  document.getElementById('newRoundName').value=y?('นับสต็อกพาเลท '+y):'';
-  document.getElementById('newRoundDocDate').value='';
-  openOverlay('roundModal');
-}
-function closeRoundModal(){ closeOverlay('roundModal'); }
-function confirmNewRound(){
-  var year=document.getElementById('newRoundYear').value.trim();
-  var name=document.getElementById('newRoundName').value.trim();
-  var docDate=document.getElementById('newRoundDocDate').value.trim();
-  if(!year||!name){ toast('กรอกปีและชื่อรอบ','error'); return; }
-  post({action:'newRound', year:year, round_name:name, doc_date:docDate, doc_year:year}).then(function(d){
-    var rnd=(d&&d.round)?d.round:{round_id:'R'+year, year:year, round_name:name, is_open:true};
-    S.round=rnd; S.docMeta={doc_date:docDate, doc_year:year}; closeRoundModal(); renderAll();
-    toast('+ เปิดรอบ '+year+' แล้ว','success');
-  }).catch(function(){ toast('เปิดรอบไม่สำเร็จ','error'); });
+  var prev = S.round && S.round.round_id ? S.round : null;
+  if(prev && roundPhase()!=='closed'){
+    if(!confirm('รอบ "'+prev.round_name+'" ยังไม่จบงาน\n\nเปิดรอบใหม่ตอนนี้จะทำให้รอบเดิมถูกทิ้งไว้\nแนะนำให้กด “จบงาน” ก่อน\n\nยืนยันเปิดรอบใหม่?')) return;
+  }else if(prev){
+    if(!confirm('เปิดรอบนับใหม่ต่อจาก "'+prev.round_name+'"?\n\nการตั้งค่าของรอบเดิมจะถูกคัดลอกมาเป็นค่าตั้งต้นให้แก้ต่อได้')) return;
+  }
+
+  WIZ.forceNew = true;
+  WIZ.step = 1;
+  var nextYear = prev && prev.year ? String(Number(prev.year)+1) : String(new Date().getFullYear()+543);
+  WZ_ROUND = { year:nextYear, name:'', doc:'', loaded:true };
+  SITE_DRAFT=null; BOOK_DRAFT=null; SITE_DEL=[]; SITE_OPEN='';
+  WZ_SITES=null; WZ_DEL=[];
+  V2_UNLOCK=false; V2_REASON=''; S.v2Dirty=false;
+
+  // ดึง config รอบก่อนมาเป็นตั้งต้น (id เดิมทั้งหมด → เทียบข้ามรอบได้)
+  if(prev){
+    post({action:'getRoundConfigV2', round_id:prev.round_id}).then(function(d){
+      if(d && d.config && (d.config.types||[]).length){
+        V2CFG = d.config;
+        toast('คัดลอกการตั้งค่าจากรอบที่แล้วมาให้แล้ว','info');
+      }else V2CFG = null;
+      wizShow();
+    }).catch(function(){ V2CFG=null; wizShow(); });
+  }else{
+    V2CFG = null; wizShow();
+  }
 }
 
 /* ── Tabs / overlay ──────────────────────────────────── */
@@ -2763,6 +2897,9 @@ function settingsGo(sub){
     el.classList.toggle('active', k===sub);
   });
 
+  var docp=document.getElementById('panel-doc');
+  if(docp) docp.classList.toggle('active', sub==='doc');
+  if(sub==='doc') renderDocTpl();
   if(sub==='setup'){ if(!V2CFG) v2LoadConfig(); else v2Render(); v2ApplyLock(); }
   if(sub==='sites'){
     // ตารางยอดระบบสร้างจาก config ของรอบ — โหลดให้ก่อนถ้ายังไม่มี
@@ -2824,6 +2961,158 @@ function v2Relock(){
   v2LoadConfig(); setTimeout(v2ApplyLock,300);
 }
 
+/* ════════════════════════════════════════════════════════════════
+   แม่แบบเอกสาร — Admin อัปโหลด .docx ที่มีแท็กแทนที่
+   ระบบตรวจว่าแท็กในไฟล์ตรงกับที่เติมให้ได้หรือไม่ แล้วเตือนถ้าไม่ตรง
+   ════════════════════════════════════════════════════════════════ */
+var DOC_TPL = null, DOC_TAGS = null;
+
+// เวลาไทยเสมอ ไม่อิงโซนเครื่องผู้ใช้
+function fmtDT(iso){
+  if(!iso) return '—';
+  try{
+    return new Intl.DateTimeFormat('th-TH',{ timeZone:'Asia/Bangkok', day:'2-digit', month:'short',
+      year:'2-digit', hour:'2-digit', minute:'2-digit' }).format(new Date(iso));
+  }catch(e){ return String(iso); }
+}
+
+function renderDocTpl(){
+  var box=document.getElementById('docTplBox'); if(!box) return;
+  post({action:'getDocTemplate', round_id:S.round?S.round.round_id:''}).then(function(d){
+    DOC_TPL = (d && d.template) || null;
+    drawDocTplBox();
+  }).catch(function(){ box.innerHTML='<div class="empty">โหลดข้อมูลแม่แบบไม่สำเร็จ</div>'; });
+
+  post({action:'getDocTags', round_id:S.round?S.round.round_id:''}).then(function(d){
+    DOC_TAGS = d && d.status==='ok' ? d : null;
+    drawDocTags();
+  }).catch(function(){});
+}
+
+function drawDocTplBox(){
+  var box=document.getElementById('docTplBox'); if(!box) return;
+  var up = '<input type="file" id="docTplFile" accept=".docx" style="display:none;" onchange="docTplUpload(this)">';
+  if(!DOC_TPL){
+    box.innerHTML = up
+      + '<div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">'
+      +   '<div style="flex:1;min-width:240px;">'
+      +     '<div style="font-size:13px;font-weight:700;color:var(--warn);">ยังไม่ได้อัปโหลดแม่แบบ</div>'
+      +     '<div class="hint">ผู้นับจะโหลดเอกสารในขั้นสุดท้ายไม่ได้จนกว่าจะมีไฟล์นี้</div></div>'
+      +   '<button class="btn btn-primary" onclick="document.getElementById(\'docTplFile\').click()">⬆ อัปโหลดไฟล์ .docx</button>'
+      + '</div>';
+    return;
+  }
+  box.innerHTML = up
+    + '<div style="display:flex;align-items:center;gap:14px;flex-wrap:wrap;">'
+    +   '<div style="flex:1;min-width:240px;">'
+    +     '<div style="font-size:13px;font-weight:700;">📄 '+esc(DOC_TPL.filename)+'</div>'
+    +     '<div class="hint">อัปโหลดเมื่อ '+esc(fmtDT(DOC_TPL.uploaded_at))
+    +       (DOC_TPL.uploaded_by?' โดย '+esc(DOC_TPL.uploaded_by):'')
+    +       ' · พบแท็กในไฟล์ '+((DOC_TPL.tags||[]).length)+' รายการ</div></div>'
+    +   (DOC_TPL.url?'<a class="btn btn-outline btn-sm" href="'+esc(DOC_TPL.url)+'" target="_blank">เปิดดูไฟล์</a>':'')
+    +   '<button class="btn btn-outline btn-sm" onclick="document.getElementById(\'docTplFile\').click()">เปลี่ยนไฟล์</button>'
+    +   '<button class="btn btn-danger btn-sm" onclick="docTplDelete()">ลบ</button>'
+    + '</div>'
+    + ((DOC_TPL.tags||[]).length
+        ? '<div style="margin-top:12px;display:flex;flex-wrap:wrap;gap:6px;">'
+          + DOC_TPL.tags.map(function(t){ return '<span class="mono" style="font-size:11px;background:var(--surface2);border:1px solid var(--border);border-radius:6px;padding:3px 8px;">{'+esc(t)+'}</span>'; }).join('')
+          + '</div>'
+        : '<div class="bb-hint" style="margin-top:12px;border-left:3px solid var(--warn);">⚠ ไม่พบแท็กใด ๆ ในไฟล์ — ตรวจว่าพิมพ์ปีกกาในโปรแกรม Word โดยไม่มีการจัดรูปแบบคั่นกลาง</div>')
+    + '<div id="docTplWarn"></div>';
+}
+
+function drawDocTags(){
+  var box=document.getElementById('docTagsBox'); if(!box) return;
+  if(!DOC_TAGS){ box.innerHTML='<div class="empty">ตั้งค่ารอบให้เสร็จก่อน จึงจะรู้ว่ามีแท็กอะไรบ้าง</div>'; return; }
+  function chip(t){ return '<span class="doc-tag" onclick="docCopy(this)">{'+esc(t)+'}</span>'; }
+
+  var h='<div class="card" style="padding:14px;">'
+    + '<div class="doc-sec">① หัวเอกสาร — ค่าเดี่ยว</div>'
+    + '<div class="doc-tag-row">'+DOC_TAGS.single.map(function(x){
+        return '<div class="doc-tag-item">'+chip(x.tag)+'<span class="hint">'+esc(x.desc)+'</span></div>';
+      }).join('')+'</div>';
+
+  (DOC_TAGS.loops||[]).forEach(function(l){
+    h += '<div class="doc-sec">② ตาราง — '+esc(l.group)+'</div>'
+      +  '<div class="hint" style="margin-bottom:8px;">หัวคอลัมน์วางนอกบล็อก · '
+      +  l.head_tags.map(function(t,i){ return chip(t)+' <span class="hint">= '+esc(l.items[i]||'')+'</span>'; }).join(' &nbsp; ')
+      +  '</div>'
+      +  '<div class="hint" style="margin-bottom:6px;">เลือกครอบแถวด้วยบล็อกใดบล็อกหนึ่ง (แยกส่วนได้ตามเอกสารเดิม):</div>'
+      +  '<div class="doc-blocks">'
+      +  l.blocks.map(function(b){
+           return '<div class="doc-blk">'+chip('#'+b.tag)+' … '+chip('/'+b.tag)
+                + '<div class="hint">'+esc(b.desc)+'</div></div>';
+         }).join('')
+      +  '</div>'
+      +  '<div class="hint" style="margin:8px 0 6px;">ในแต่ละแถวใช้ — '
+      +  l.row_tags.map(function(t,i){
+           return chip(t)+(i===0?' <span class="hint">= ชื่อแถว</span>':' <span class="hint">= '+esc(l.items[i-1]||'')+'</span>');
+         }).join(' &nbsp; ')+'</div>';
+  });
+
+  if((DOC_TAGS.signatures||[]).length){
+    h += '<div class="doc-sec">③ ช่องลายเซ็น</div>'
+      +  '<div class="doc-tag-row">'+DOC_TAGS.signatures.map(function(x){
+           return '<div class="doc-tag-item">'+chip(x.tag)+'<span class="hint">'+esc(x.desc)+'</span></div>';
+         }).join('')+'</div>';
+  }else{
+    h += '<div class="doc-sec">③ ช่องลายเซ็น</div>'
+      +  '<div class="bb-hint">ยังไม่ได้ตั้งช่องลายเซ็น — ไปเพิ่มที่ “ตั้งค่ารอบ → ส่วนที่ 6”</div>';
+  }
+
+  if((DOC_TAGS.conditions||[]).length){
+    h += '<div class="doc-sec">④ บล็อกเงื่อนไข (ซ่อนเมื่อไม่มียอด)</div>'
+      +  '<div class="doc-tag-row">'+DOC_TAGS.conditions.map(function(c){
+           return '<div class="doc-tag-item">'+chip('#'+c.tag)+'<span class="hint">'+esc(c.desc)+'</span></div>';
+         }).join('')+'</div>';
+  }
+
+  h += '<div class="bb-hint" style="margin-top:14px;">'
+    +  '💡 ข้อความคงที่ (เรียน, เอกสารแนบ, ที่อยู่บริษัท, หัวข้อในตาราง) พิมพ์ลงไฟล์ Word ได้เลย ไม่ต้องใช้แท็ก'
+    +  '<br>⚠ รูปภาพแนบยังใส่อัตโนมัติไม่ได้ — แนบแยกหลังพิมพ์</div>';
+  h += '</div>';
+  box.innerHTML=h;
+}
+function docCopy(el){
+  var t=el.textContent;
+  if(navigator.clipboard) navigator.clipboard.writeText(t);
+  toast('คัดลอก '+t+' แล้ว','info');
+}
+
+function docTplUpload(input){
+  var file=input.files && input.files[0]; if(!file) return;
+  if(!/\.docx$/i.test(file.name)){ toast('ต้องเป็นไฟล์ .docx เท่านั้น','error'); input.value=''; return; }
+  var box=document.getElementById('docTplBox');
+  box.innerHTML='<div class="empty"><span class="spinner"></span> กำลังอัปโหลดและตรวจแท็ก…</div>';
+  var rd=new FileReader();
+  rd.onload=function(){
+    post({ action:'saveDocTemplate', round_id:S.round?S.round.round_id:'',
+           filename:file.name, data:rd.result, by:(myUserName||'admin') })
+    .then(function(d){
+      input.value='';
+      if(d && d.status==='error'){ toast(d.message||'อัปโหลดไม่สำเร็จ','error'); drawDocTplBox(); return; }
+      DOC_TPL=d.template; drawDocTplBox();
+      // เตือนแท็กที่ระบบไม่รู้จัก — พังให้เห็นดีกว่าเงียบแล้วเอกสารว่าง
+      var un=(d.unknown_tags||[]);
+      var wb=document.getElementById('docTplWarn');
+      if(un.length && wb){
+        wb.innerHTML='<div class="bb-hint" style="border-left:3px solid var(--warn);margin-top:10px;">'
+          +'⚠ พบแท็กที่ระบบไม่รู้จัก '+un.length+' รายการ — ช่องเหล่านี้จะไม่ถูกเติม:<br>'
+          +un.map(function(t){ return '<span class="mono">{'+esc(t)+'}</span>'; }).join(' ')+'</div>';
+      }
+      toast('อัปโหลดแม่แบบแล้ว'+(un.length?' (มีแท็กที่ไม่รู้จัก)':''), un.length?'error':'success');
+    }).catch(function(){ input.value=''; toast('อัปโหลดไม่สำเร็จ','error'); drawDocTplBox(); });
+  };
+  rd.readAsDataURL(file);
+}
+function docTplDelete(){
+  if(!confirm('ลบแม่แบบเอกสารของรอบนี้?')) return;
+  post({action:'deleteDocTemplate', round_id:S.round?S.round.round_id:''}).then(function(d){
+    if(d && d.status==='error'){ toast(d.message||'ลบไม่สำเร็จ','error'); return; }
+    DOC_TPL=null; drawDocTplBox(); toast('ลบแล้ว','info');
+  });
+}
+
 /* ── ช่วงเตรียมระบบ ─────────────────────────────────────
    จบ wizard → รอบอยู่สถานะ "เตรียมการ" (ผู้นับยังเข้าไม่ได้)
    Admin ใส่ยอดระบบ แล้วกดเปิดเองเมื่อพร้อม
@@ -2853,6 +3142,12 @@ function renderPrep(){
         }).join('')+'</div>';
     var b=document.getElementById('btnGoLive');
     if(b) b.textContent = (ready===sites.length) ? '▶ เปิดให้ผู้นับเริ่มงาน' : '▶ เปิดให้ผู้นับเริ่มงาน ('+(sites.length-ready)+' Site ยังไม่มียอด)';
+    // แม่แบบเอกสารเป็นอีกอย่างที่ต้องพร้อมก่อนผู้นับถึงขั้นสุดท้าย
+    box.innerHTML += '<div style="margin-top:10px;display:flex;align-items:center;gap:8px;flex-wrap:wrap;">'
+      + '<span class="chip-site'+(d.has_template?' on':'')+'" style="cursor:default;"><span class="chip-tick">'
+      + (d.has_template?'✓':'')+'</span>แม่แบบเอกสาร</span>'
+      + (d.has_template?'' : '<button class="btn btn-outline btn-sm" onclick="switchTab(\'settings\');settingsGo(\'doc\')">ไปอัปโหลด</button>')
+      + '</div>';
   }).catch(function(){});
 }
 function goLive(){
