@@ -2246,6 +2246,34 @@ function _thaiDocDate(raw) {
   return ('0' + day).slice(-2) + ' ' + _TH_MONTHS[mon0] + ' ' + year;
 }
 
+// ชุดช่องลายเซ็นมาตรฐาน — ใช้เมื่อ config ของรอบยังไม่ได้ตั้งไว้
+// (ต้องตรงกับ _defaultSignatures_() ฝั่ง backend ไม่งั้นแท็กที่ Admin เห็นจะไม่ตรงกับที่เติมจริง)
+var _SIG_FALLBACK = [
+  { sig_id:'sg_pallet',     sig_label:'ทีมพาเลทส่วนกลาง' },
+  { sig_id:'sg_admin',      sig_label:'โรงงาน/คลัง (ฝ่ายบริหาร/แผนกคลังสินค้า)' },
+  { sig_id:'sg_production', sig_label:'โรงงาน/คลัง (ฝ่ายผลิต)' },
+  { sig_id:'sg_fixedasset', sig_label:'BRB-Fixed-asset Accounting' },
+  { sig_id:'sg_audit',      sig_label:'สำนักงานตรวจสอบบัญชี' }
+];
+function SIGS(){
+  var list = (V2 && V2.signatures || []).filter(_act).sort(_bySort);
+  return list.length ? list : _SIG_FALLBACK;
+}
+
+// ชื่อไฟล์เอกสาร: {เลขที่เอกสาร}_{site}_yyyymmdd
+function _docFileName(){
+  var no = _safeSeg(siteDocNo || 'ไม่มีเลขที่', 40);
+  var st = _safeSeg((session && session.site) || 'site', 40);
+  var d  = new Date(), p = function(n){ return ('0'+n).slice(-2); };
+  var ymd;
+  try {
+    var parts = new Intl.DateTimeFormat('en-CA', { timeZone:'Asia/Bangkok',
+      year:'numeric', month:'2-digit', day:'2-digit' }).format(d).split('-');
+    ymd = parts.join('');
+  } catch(e) { ymd = d.getFullYear() + p(d.getMonth()+1) + p(d.getDate()); }
+  return no + '_' + st + '_' + ymd + '.docx';
+}
+
 /* ════════════════════════════════════════════════════════════
    C4 — ประกอบข้อมูลสำหรับเติมลง Word template ของรอบ
    ชุดแท็กต้องตรงกับ getDocTags() ฝั่ง backend ทุกตัว
@@ -2328,11 +2356,16 @@ function _buildDocData() {
   adjList.forEach(function(a){ d['มี_'+a.adjust_name] = adjSumOf(a.adjust_id) > 0; });
 
   // ── ช่องลายเซ็น: เว้นว่างให้เซ็นมือ, ตำแหน่ง = ป้ายจาก config ──
-  var sigs = (V2 && V2.signatures || []).filter(_act).sort(_bySort);
+  var sigs = SIGS();
   sigs.forEach(function(x, i){
     d['ผู้เซ็น'+(i+1)]  = '';
     d['ตำแหน่ง'+(i+1)] = x.sig_label || '';
   });
+  // เทมเพลตอาจมีช่องเซ็นมากกว่าที่ตั้งไว้ — เติมค่าว่างกันคำว่า undefined
+  for (var si = sigs.length; si < 10; si++) {
+    d['ผู้เซ็น'+(si+1)]  = '';
+    d['ตำแหน่ง'+(si+1)] = '';
+  }
 
   return d;
 }
@@ -2348,7 +2381,7 @@ function _nowBangkok() {
 }
 
 function printDoc() {
-  if (!V2_OK())      { showToast('ยังไม่มี config ของรอบ — กดตรวจสอบสถานะอีกครั้ง', 'warn'); return; }
+  if (!V2_OK())          { showToast('ยังไม่มี config ของรอบ — กดตรวจสอบสถานะอีกครั้ง', 'warn'); return; }
   if (!locations.length) { showToast('ยังไม่มีข้อมูลนับ', 'warn'); return; }
   if (typeof window.PizZip === 'undefined' || typeof window.docxtemplater === 'undefined') {
     showToast('โหลดตัวสร้างเอกสารไม่สำเร็จ — เช็คอินเทอร์เน็ตแล้วรีเฟรชหน้า', 'error'); return;
@@ -2357,28 +2390,33 @@ function printDoc() {
   for (var i=0;i<btns.length;i++) { btns[i].disabled = true; }
   showToast('⏳ กำลังสร้างเอกสาร...', 'info');
 
-  fetch(API_URL + '?action=getDocTemplateFile&round_id=' + encodeURIComponent((roundInfo&&roundInfo.round_id)||''))
+  var fname = _docFileName();
+  return fetch(API_URL + '?action=getDocTemplateFile&round_id=' + encodeURIComponent((roundInfo&&roundInfo.round_id)||''))
     .then(function(r){ return r.json(); })
     .then(function(t){
       if (t.status !== 'ok' || !t.data) throw new Error(t.message || 'ยังไม่ได้อัปโหลดแม่แบบเอกสาร — แจ้ง Admin');
       var zip = new window.PizZip(t.data, { base64:true });
-      var doc = new window.docxtemplater(zip, { paragraphLoop:true, linebreaks:true });
+      var doc = new window.docxtemplater(zip, {
+        paragraphLoop : true,
+        linebreaks    : true,
+        // แท็กที่ระบบไม่มีข้อมูลให้ → เว้นว่าง ไม่ใช่คำว่า undefined
+        nullGetter    : function(){ return ''; }
+      });
       doc.render(_buildDocData());
       var blob = doc.getZip().generate({ type:'blob',
         mimeType:'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
-      var fname = _buildFileName('report.docx', { kind:'doc', extra:(siteDocNo||'') });
       _downloadBlob(blob, fname);
       _printed = true; updateSubmitCard();
-      showToast('✅ ได้ไฟล์ '+fname+' — เปิดใน Word แล้วสั่งพิมพ์ เซ็น แล้วสแกนกลับมาอัปในขั้นที่ 5', 'success');
+      showToast('✅ ได้ไฟล์ '+fname+' — กำลังทำลิงก์สำหรับโหลดบนคอม...', 'success');
+      return _uploadDocForLink(blob, fname);
     })
     .catch(function(err){
       var m = String(err && err.message || err);
       // docxtemplater แจ้งรายละเอียดแท็กที่พังไว้ใน properties.errors
       if (err && err.properties && err.properties.errors && err.properties.errors.length) {
-        m = err.properties.errors.map(function(e){
+        m = 'แม่แบบมีแท็กที่เติมไม่ได้: ' + err.properties.errors.map(function(e){
           return (e.properties && e.properties.explanation) || e.message;
         }).join(' · ');
-        m = 'แม่แบบมีแท็กที่เติมไม่ได้: ' + m;
       }
       showToast('❌ สร้างเอกสารไม่สำเร็จ: ' + m, 'error');
     })
@@ -2386,6 +2424,79 @@ function printDoc() {
       var bs = document.querySelectorAll('.btn-print');
       for (var j=0;j<bs.length;j++) { bs[j].disabled = false; }
     });
+}
+
+// อัปไฟล์ขึ้นโฟลเดอร์ของ Site → ได้ลิงก์ให้เอาไปเปิดบนคอม
+function _uploadDocForLink(blob, fname) {
+  return new Promise(function(resolve){
+    var reader;
+    try { reader = new FileReader(); } catch (e) {
+      showToast('⚠ ไฟล์โหลดลงเครื่องแล้ว แต่ทำลิงก์ไม่สำเร็จ', 'warn'); resolve(null); return;
+    }
+    reader.onload = function(e){
+      fetch(API_URL, {
+        method:'POST', redirect:'follow', headers:{'Content-Type':'text/plain'},
+        body: JSON.stringify({ action:'uploadDocFile',
+          round_id: (roundInfo && roundInfo.round_id) || '',
+          site_id : (session && (session.site_id || _siteIdByName(session.site))) || '',
+          filename: fname, data: e.target.result })
+      })
+      .then(function(r){ return r.json(); })
+      .then(function(d){
+        if (d.status !== 'ok' || !d.url) throw new Error(d.message || 'อัปไฟล์ไม่สำเร็จ');
+        _showDocLink(d.url, d.view || '', fname);
+        resolve(d);
+      })
+      .catch(function(err){
+        showToast('⚠ ไฟล์โหลดลงเครื่องแล้ว แต่ทำลิงก์ไม่สำเร็จ: '+err.message, 'warn');
+        resolve(null);
+      });
+    };
+    reader.onerror = function(){
+      showToast('⚠ ไฟล์โหลดลงเครื่องแล้ว แต่อ่านไฟล์เพื่อทำลิงก์ไม่สำเร็จ', 'warn'); resolve(null);
+    };
+    // อ่านไฟล์พังต้องไม่ไปโผล่เป็น "สร้างเอกสารไม่สำเร็จ" — เอกสารสร้างเสร็จและโหลดลงเครื่องแล้ว
+    try { reader.readAsDataURL(blob); }
+    catch (e) {
+      showToast('⚠ ไฟล์โหลดลงเครื่องแล้ว แต่ทำลิงก์ไม่สำเร็จ: '+String(e.message||e), 'warn');
+      resolve(null);
+    }
+  });
+}
+
+// กล่องแสดงลิงก์ + ปุ่มคัดลอก (ให้หน้างานส่งต่อไปเปิดบนคอม)
+function _showDocLink(url, view, fname) {
+  var el = document.getElementById('docLinkBox');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'docLinkBox';
+    el.style.cssText = 'border-radius:var(--rs);padding:13px 14px;margin:12px 0;'
+      + 'background:rgba(16,110,86,.1);border:1.5px solid rgba(16,110,86,.3);font-size:13px;line-height:1.6;';
+    var host = document.getElementById('step3Body') || document.getElementById('mainContent');
+    if (host) host.appendChild(el);
+  }
+  el.innerHTML =
+    '<div style="font-weight:700;margin-bottom:6px;">🔗 ลิงก์ดาวน์โหลดเอกสาร</div>'+
+    '<div style="font-size:12px;color:var(--muted);margin-bottom:8px;word-break:break-all;">'+esc(fname)+'</div>'+
+    '<input class="input" id="docLinkInput" type="text" readonly value="'+esc(url)+'" '+
+      'onclick="this.select()" style="font-size:12px;margin-bottom:8px;">'+
+    '<div style="display:flex;gap:8px;flex-wrap:wrap;">'+
+      '<button class="btn btn-outline" type="button" onclick="_copyDocLink()" style="flex:1;min-width:120px;">📋 คัดลอกลิงก์</button>'+
+      '<a class="btn btn-outline" href="'+esc(url)+'" target="_blank" rel="noopener" style="flex:1;min-width:120px;text-align:center;text-decoration:none;">⬇️ โหลดไฟล์</a>'+
+      (view ? '<a class="btn btn-outline" href="'+esc(view)+'" target="_blank" rel="noopener" style="flex:1;min-width:120px;text-align:center;text-decoration:none;">👁️ เปิดดู</a>' : '')+
+    '</div>'+
+    '<div style="font-size:11px;color:var(--muted);margin-top:8px;">เปิดลิงก์นี้บนคอมเพื่อโหลดไปพิมพ์ แล้วเซ็นและสแกนกลับมาอัปในขั้นที่ 5</div>';
+  el.scrollIntoView({ behavior:'smooth', block:'nearest' });
+  showToast('🔗 ได้ลิงก์แล้ว — คัดลอกไปเปิดบนคอมได้', 'success');
+}
+
+function _copyDocLink() {
+  var i = document.getElementById('docLinkInput');
+  if (!i) return;
+  var done = function(){ showToast('📋 คัดลอกลิงก์แล้ว', 'success'); };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(i.value).then(done).catch(function(){ i.select(); document.execCommand('copy'); done(); });
+  } else { i.select(); document.execCommand('copy'); done(); }
 }
 
 function _downloadBlob(blob, filename) {
