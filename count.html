@@ -353,38 +353,157 @@ var _printed    = false; // กดพิมพ์เอกสารแล้ว�
 var _offDone    = false; // กด "จบ/ข้าม" ขั้นที่ 3 แล้วหรือยัง
 var _bookReady  = true;  // Admin ใส่ยอดระบบแล้วหรือยัง (จาก checkSiteStatus)
 
-// ── Pallet schema ─────────────────────────────────────────
-var WOOD_STATUS    = [
-  'พาเลทเปล่า RFI',
-  'พาเลทเปล่า TBR',
-  'พาเลทเปล่า BER',
-  'พาเลทเปล่า TBC',
-  'พาเลทเปล่า TBS',
-  'พาเลทที่ใช้วางสินค้า',
-  'พาเลทที่ใช้ในสายการผลิต'
-];
-var PLASTIC_STATUS = [
-  'พาเลทเปล่า RFI',
-  'พาเลทเปล่า TBS',
-  'พาเลทที่ใช้วางสินค้า',
-  'พาเลทที่ใช้ในสายการผลิต',
-  'พาเลทชำรุด รออนุมัติโอนเข้า BRS-900',
-  'พาเลทชำรุด โอน BRS-900 แล้ว (ตัวเอง)',
-  'พาเลทชำรุด โอน BRS-900 แล้ว (ที่อื่น)'
-];
+// ── v2 schema — โครงทั้งหมดมาจาก config ของรอบ ไม่มี hardcode ───
+// V2       = { types, items, count_statuses, book_statuses, adjustments }
+// V2BOOK   = ยอดระบบของ site นี้ → [item_id][book_status_id] = จำนวน
+// ข้อมูลนับ = loc.q[item_id][status_id] = จำนวน
+var V2      = null;
+var V2BOOK  = {};
+var V2PHASE = '';
 
-function emptyWood()    { var o={}; WOOD_STATUS.forEach(function(s){o[s]=0;}); return o; }
-function emptyPlastic() { var o={}; PLASTIC_STATUS.forEach(function(s){o[s]=0;}); return o; }
+function _act(o){ return o && o.is_active !== false && String(o.is_active).toUpperCase() !== 'FALSE'; }
+function _bySort(a,b){ return (Number(a.sort)||0) - (Number(b.sort)||0); }
+function _pick(arr, id, key){
+  var list = (V2 && V2[arr]) || [];
+  for (var i=0;i<list.length;i++) if (String(list[i][key]) === String(id)) return list[i];
+  return null;
+}
+
+function V2TYPES(){ return !V2 ? [] : (V2.types||[]).filter(_act).sort(_bySort); }
+function ITEMS_OF(typeId){
+  return !V2 ? [] : (V2.items||[]).filter(function(i){ return String(i.type_id)===String(typeId) && _act(i); }).sort(_bySort);
+}
+function CS_OF(typeId){
+  return !V2 ? [] : (V2.count_statuses||[]).filter(function(s){ return String(s.type_id)===String(typeId) && _act(s); }).sort(_bySort);
+}
+function BSTATS(){ return !V2 ? [] : (V2.book_statuses||[]).filter(_act).sort(_bySort); }
+function BSTATS_OUT(){ return BSTATS().filter(function(s){ return !!s.is_outstanding; }); }
+function BSTAT_BASE(){ return BSTATS().filter(function(s){ return !!s.is_baseline; })[0] || null; }
+function ADJUSTS(){ return !V2 ? [] : (V2.adjustments||[]).filter(_act).sort(_bySort); }
+function ALL_ITEMS(){
+  var out=[]; V2TYPES().forEach(function(t){ out = out.concat(ITEMS_OF(t.type_id)); }); return out;
+}
+
+// ชื่อ/ไอคอน/หน่วย — ใช้แทน TY_NAME / PV_LABEL ของ v1
+function TY2(id){ var t=_pick('types',id,'type_id'); return t || { type_id:id, type_name:id, icon:'' }; }
+function IT2(id){ var i=_pick('items',id,'item_id'); return i || { item_id:id, item_name:id, unit:'', color:'' }; }
+function CS2(id){ var s=_pick('count_statuses',id,'status_id'); return s || { status_id:id, status_name:id }; }
+function BS2(id){ var s=_pick('book_statuses',id,'status_id'); return s || { status_id:id, status_name:id }; }
+function V2_OK(){ return !!(V2 && V2TYPES().length && ALL_ITEMS().length); }
+// หน่วยที่ใช้แสดงรวม — ถ้าทุก item ใช้หน่วยเดียวกันก็โชว์หน่วยนั้น ไม่งั้นเว้นไว้
+function V2UNIT(){
+  var u = ALL_ITEMS().map(function(i){ return String(i.unit||'').trim(); }).filter(Boolean);
+  if (!u.length) return '';
+  for (var i=1;i<u.length;i++) if (u[i] !== u[0]) return '';
+  return u[0];
+}
+
+// ── โครง location ──────────────────────────────────────────
 function emptyLoc(name) {
-  return { name:name, photo:'',
-    wood   :{ loscam:emptyWood(),    chep:emptyWood()    },
-    plastic:{ brs:emptyPlastic(),    swwi:emptyPlastic() } };
+  var q = {};
+  V2TYPES().forEach(function(t){
+    var sts = CS_OF(t.type_id);
+    ITEMS_OF(t.type_id).forEach(function(it){
+      q[it.item_id] = {};
+      sts.forEach(function(s){ q[it.item_id][s.status_id] = 0; });
+    });
+  });
+  return { name:name, photo:'', q:q };
 }
-function brandTotal(obj) { return Object.values(obj).reduce(function(s,v){return s+Number(v||0);},0); }
+function itemTotal(loc, itemId) {
+  var g = (loc && loc.q && loc.q[itemId]) || {};
+  return Object.keys(g).reduce(function(s,k){ return s + (Number(g[k])||0); }, 0);
+}
+function typeTotal(loc, typeId) {
+  return ITEMS_OF(typeId).reduce(function(s,it){ return s + itemTotal(loc, it.item_id); }, 0);
+}
 function locTotal(loc) {
-  return brandTotal(loc.wood.loscam) + brandTotal(loc.wood.chep)
-       + brandTotal(loc.plastic.brs) + brandTotal(loc.plastic.swwi);
+  return ALL_ITEMS().reduce(function(s,it){ return s + itemTotal(loc, it.item_id); }, 0);
 }
+
+// โหลด config ของรอบ + ยอดระบบของ site นี้ (เรียกก่อน render สถานะ)
+async function _loadCountSetup(site) {
+  V2 = null; V2BOOK = {}; V2PHASE = '';
+  try {
+    var res = await fetch(API_URL + '?action=getCountSetup&site=' + encodeURIComponent(site)
+      + '&site_id=' + encodeURIComponent(_siteIdByName(site)));
+    var d = await res.json();
+    if (d.status !== 'ok') return { ok:false, reason:'error', message:d.message||'' };
+    V2      = d.config || null;
+    V2BOOK  = d.book || {};
+    V2PHASE = (d.round && d.round.phase) || '';
+    return { ok:!!d.ready, reason:d.reason||'', has_book:!!d.has_book, round:d.round||null };
+  } catch (e) {
+    return { ok:false, reason:'network', message:String(e) };
+  }
+}
+
+// ข้อความอธิบายสาเหตุที่ยังนับไม่ได้
+function _setupReasonText(reason) {
+  if (reason === 'no_round')        return 'ยังไม่มีรอบนับสต็อกที่เปิดอยู่';
+  if (reason === 'no_config')       return 'รอบนี้ยังไม่ได้ตั้งค่าชนิด/รายการที่นับ — แจ้ง Admin';
+  if (reason === 'phase_draft')     return 'รอบนี้ยังเป็นร่าง — Admin ยังตั้งค่าไม่เสร็จ';
+  if (reason === 'phase_preparing') return 'Admin กำลังเตรียมระบบ — รอเปิดใช้งานก่อนเริ่มนับ';
+  if (reason === 'phase_closed')    return 'รอบนี้จบงานแล้ว';
+  if (reason === 'network')         return 'เชื่อมต่อไม่ได้ — ลองกดตรวจสอบอีกครั้ง';
+  return 'ยังเริ่มนับไม่ได้';
+}
+
+/* ════════════════════════════════════════════════════════════════
+   v2 Phase 1 — ชื่อ/สี/ไอคอน มาจากชีต Config (ItemType / Provider)
+   ⚠ key ของข้อมูล (wood/plastic + loscam/chep/brs/swwi) ยังคงเดิมทุกอย่าง
+     เปลี่ยนแค่ "ป้ายที่แสดง" → ใบเก่าอ่านได้เหมือนเดิม 100%
+   ════════════════════════════════════════════════════════════════ */
+var ITEMCFG = null;
+
+// ค่าเริ่มต้น (ใช้เมื่อ backend ยังไม่ส่ง item_config มา) = ค่าเดิมที่เคยฝังในไฟล์นี้
+var _PROV_FALLBACK = {
+  loscam:{ label:'LOSCAM', color:'var(--loscam)', type:'wood' },
+  chep  :{ label:'CHEP',   color:'var(--chep)',   type:'wood' },
+  brs   :{ label:'BRS',    color:'var(--brs)',    type:'plastic' },
+  swwi  :{ label:'SWWI',   color:'#2e7d32',       type:'plastic' }
+};
+var _TYPE_FALLBACK = {
+  wood   :{ name:'พาเลทไม้',      icon:'🪵', short:'Wood Pallet' },
+  plastic:{ name:'พาเลทพลาสติก', icon:'🟧', short:'Plastic Pallet' }
+};
+
+function applyItemConfig(cfg){
+  if (!cfg || !cfg.types || !cfg.types.length || !cfg.providers || !cfg.providers.length) return;
+  ITEMCFG = cfg;
+}
+// ชื่อผู้ให้บริการที่จะแสดง
+function PV(key){
+  if (ITEMCFG) {
+    var p = ITEMCFG.providers.filter(function(x){ return x.provider_id===key; })[0];
+    if (p) return { label:p.provider_name||key, color:p.color||'', type:p.type_id||'' };
+  }
+  return _PROV_FALLBACK[key] || { label:key, color:'', type:'' };
+}
+function PV_LABEL(key){ return PV(key).label; }
+function PV_COLOR(key){ return PV(key).color || (_PROV_FALLBACK[key]||{}).color || 'inherit'; }
+// ชื่อชนิด
+function TY(id){
+  if (ITEMCFG) {
+    var t = ITEMCFG.types.filter(function(x){ return x.type_id===id; })[0];
+    if (t) return { name:t.type_name||id, icon:t.icon||'', short:t.type_name||id };
+  }
+  return _TYPE_FALLBACK[id] || { name:id, icon:'', short:id };
+}
+function TY_NAME(id){ return TY(id).name; }
+function TY_ICON(id){ return TY(id).icon; }
+// ผู้ให้บริการของชนิดนั้น (เรียงตาม sort) — Phase 1 ยังมี 4 ตัวเท่าเดิม แต่ย้ายชนิดได้
+function PV_OF(typeId){
+  if (ITEMCFG) {
+    var list = ITEMCFG.providers
+      .filter(function(p){ return p.type_id===typeId && p.is_active!==false; })
+      .sort(function(a,b){ return (a.sort||0)-(b.sort||0); })
+      .map(function(p){ return p.provider_id; });
+    if (list.length) return list;
+  }
+  return Object.keys(_PROV_FALLBACK).filter(function(k){ return _PROV_FALLBACK[k].type===typeId; });
+}
+// (emptyLoc / locTotal / brandTotal เวอร์ชัน v1 ถูกย้ายไปบล็อก v2 schema ด้านบน)
 
 function fetchBookBalance(site) {
   fetch(API_URL + '?action=getBookBalance&site=' + encodeURIComponent(site))
@@ -443,14 +562,11 @@ function _n2(x){ return Number(x) || 0; }
 function _normLocFromServer(L) {
   L = L || {};
   var out = emptyLoc(L.name || '');
-  if (L.wood) {
-    ['loscam','chep'].forEach(function(b){
-      if (L.wood[b]) Object.keys(out.wood[b]).forEach(function(k){ out.wood[b][k] = _n2(L.wood[b][k]); });
-    });
-  }
-  if (L.plastic) {
-    ['brs','swwi'].forEach(function(b){
-      if (L.plastic[b]) Object.keys(out.plastic[b]).forEach(function(k){ out.plastic[b][k] = _n2(L.plastic[b][k]); });
+  var src = L.q || null;
+  if (src) {
+    Object.keys(out.q).forEach(function(itemId){
+      var g = src[itemId] || {};
+      Object.keys(out.q[itemId]).forEach(function(sid){ out.q[itemId][sid] = _n2(g[sid]); });
     });
   }
   // รูปเดิม: ใช้ thumbnail ให้ preview เห็น + จำ url/id เต็มไว้ (resubmit จะไม่อัปซ้ำ)
@@ -512,6 +628,7 @@ function loadConfig() {
       locList   = data.locations|| [];
       docDate   = data.doc_date || '';     // วันที่ของรอบ (Admin)
       docYear   = data.doc_year || (data.round ? data.round.year : '') || '';
+      applyItemConfig(data.item_config);   // v2: ชื่อ/สี/ไอคอน จากชีต Config
       // โหลด book balance ถ้ามี session อยู่แล้ว
       if (session && data.book_balances) {
         var bb = data.book_balances[session.site];
@@ -868,6 +985,7 @@ function renderStep1(content) {
 function onSiteChange() {
   var site = document.getElementById('selSite').value;
   _checkinPhotoFile = null; _bookReady = true; _offDone = false;
+  V2 = null; V2BOOK = {}; V2PHASE = '';
   var b = document.getElementById('btnCheckStatus'); if (b) b.disabled = !site;
   var sb = document.getElementById('statusBox'); if (sb) sb.style.display = 'none';
   var cs = document.getElementById('checkinSection'); if (cs) cs.style.display = 'none';
@@ -889,6 +1007,7 @@ async function checkStatus() {
     var res = await fetch(API_URL + '?action=checkSiteStatus&site=' + encodeURIComponent(site) + '&site_id=' + encodeURIComponent(_siteIdByName(site)));
     d = await res.json();
   } catch(e) {}
+  var setupRes = await _loadCountSetup(site);
   btn.innerHTML = '🔍 ตรวจสอบสถานะอีกครั้ง'; btn.disabled = false;
 
   if (!d || d.status !== 'ok') {
@@ -924,46 +1043,57 @@ async function checkStatus() {
   }
 
   // gate === 'ok'
-  _bookReady = !!d.hasBook;
-  var bk = d.book || {loscam:0,chep:0,brs:0,swwi:0,total:0};
-  if (d.hasBook) {
+  _bookReady = !!(setupRes && setupRes.ok && setupRes.has_book);
+  if (!V2_OK() || !setupRes || !setupRes.ok) {
+    box.style.background = 'rgba(245,158,11,.12)'; box.style.color = '#a16207';
+    box.innerHTML = '⚠ <b>ยังเริ่มนับไม่ได้</b><br>'
+      + esc(_setupReasonText(setupRes ? setupRes.reason : 'no_config'))
+      + '<br><span style="font-size:11px;opacity:.8;">เช็คอินได้ แต่ยังเริ่มนับไม่ได้ (กด “ตรวจสอบสถานะ” อีกครั้งเมื่อพร้อม)</span>';
+  } else if (setupRes.has_book) {
     box.style.background = 'rgba(16,110,86,.1)'; box.style.color = 'var(--success,#0f6e56)';
-    var bd = d.book_detail || {};
-    var _n = function(v){ return Number(v||0); };
+    var _n   = function(v){ return Number(v||0); };
     var _fmt = function(v){ return _n(v).toLocaleString('th-TH'); };
-    // ยอดคงค้างในบัญชีเช่า = คงเหลือ + ระหว่างโอนออก
-    var _lease = function(pk){ var g=bd[pk]||{}; return _n(g['คงเหลือ'])+_n(g['ระหว่างโอนออก']); };
-    var _grp = function(title, sub, cards){   // cards = [['LOSCAM','loscam'],['CHEP','chep']]
+    // ── ยอดระบบ: แสดงเฉพาะสถานะที่ติ๊ก is_outstanding ──
+    var outs  = BSTATS_OUT();
+    var _lease = function(itemId){
+      var g = V2BOOK[itemId] || {};
+      return outs.reduce(function(s,bs){ return s + _n(g[bs.status_id]); }, 0);
+    };
+    var _grp = function(ty){
+      var items = ITEMS_OF(ty.type_id);
+      if (!items.length) return '';
+      var sub = items.reduce(function(s,it){ return s + _lease(it.item_id); }, 0);
+      var cols = items.length >= 3 ? 3 : items.length;
       return '<div style="margin-top:12px;">'
         +'<div style="display:flex;justify-content:space-between;align-items:center;font-size:12px;font-weight:800;margin-bottom:5px;">'
-          +'<span>'+title+'</span>'
+          +'<span>'+esc(ty.icon||'📦')+' '+esc(ty.type_name)+'</span>'
           +'<span style="opacity:.8;">รวม '+_fmt(sub)+'</span>'
         +'</div>'
-        +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;">'
-        + cards.map(function(p){
+        +'<div style="display:grid;grid-template-columns:repeat('+cols+',1fr);gap:8px;">'
+        + items.map(function(it){
             return '<div style="background:rgba(255,255,255,.55);border:1px solid rgba(16,110,86,.25);border-radius:10px;padding:9px 10px;text-align:center;">'
-              +'<div style="font-size:11px;font-weight:700;opacity:.75;letter-spacing:.3px;">'+p[0]+'</div>'
-              +'<div style="font-size:22px;font-weight:800;line-height:1.15;">'+_fmt(_lease(p[1]))+'</div>'
+              +'<div style="font-size:11px;font-weight:700;opacity:.75;letter-spacing:.3px;">'+esc(it.item_name)+'</div>'
+              +'<div style="font-size:20px;font-weight:800;line-height:1.15;">'+_fmt(_lease(it.item_id))+'</div>'
               +'</div>';
           }).join('')
         +'</div>'
       +'</div>';
     };
-    var _woodSub = _lease('loscam')+_lease('chep');
-    var _plasSub = _lease('brs')+_lease('swwi');
+    var grand = ALL_ITEMS().reduce(function(s,it){ return s + _lease(it.item_id); }, 0);
+    var unit  = V2UNIT();
     box.innerHTML = '<div style="font-size:17px;font-weight:800;margin-bottom:10px;">✅ พร้อมเริ่มนับ</div>'
       +'<div style="border-top:1px solid rgba(0,0,0,.08);padding-top:12px;">'
-        +'<div style="font-size:12px;opacity:.85;margin-bottom:2px;">ยอดคงค้างในบัญชีเช่ารวม</div>'
+        +'<div style="font-size:12px;opacity:.85;margin-bottom:2px;">ยอดคงค้างตามระบบรวม</div>'
         +'<div style="font-size:34px;font-weight:800;line-height:1;margin-bottom:2px;">'
-          + _fmt(_woodSub+_plasSub)
-          + ' <span style="font-size:14px;font-weight:600;opacity:.8;">พาเลท</span></div>'
-        +'<div style="font-size:11px;opacity:.7;margin-bottom:4px;">(คงเหลือ + ระหว่างโอนออก)</div>'
-        + _grp('🪵 พาเลทไม้', _woodSub, [['LOSCAM','loscam'],['CHEP','chep']])
-        + _grp('🟧 พาเลทพลาสติก', _plasSub, [['BRS','brs'],['SWWI','swwi']])
+          + _fmt(grand)
+          + (unit?' <span style="font-size:14px;font-weight:600;opacity:.8;">'+esc(unit)+'</span>':'')+'</div>'
+        +'<div style="font-size:11px;opacity:.7;margin-bottom:4px;">('
+          + outs.map(function(s){ return esc(s.status_name); }).join(' + ') + ')</div>'
+        + V2TYPES().map(_grp).join('')
       +'</div>';
   } else {
     box.style.background = 'rgba(245,158,11,.12)'; box.style.color = '#a16207';
-    box.innerHTML = '⚠ <b>ไม่พร้อมตรวจนับ</b><br>Admin ยังไม่ใส่ยอดระบบ — เช็คอินได้ แต่ยัง<b>เริ่มนับไม่ได้</b> จนกว่า Admin จะใส่ยอด (กด “ตรวจสอบสถานะ” อีกครั้งเมื่อพร้อม)';
+    box.innerHTML = '⚠ <b>ไม่พร้อมตรวจนับ</b><br>Admin ยังไม่ใส่ยอดระบบของไซต์นี้ — เช็คอินได้ แต่ยัง<b>เริ่มนับไม่ได้</b> จนกว่า Admin จะใส่ยอด (กด “ตรวจสอบสถานะ” อีกครั้งเมื่อพร้อม)';
   }
   cs.style.display = 'block';
   var bh = document.getElementById('bookHint'); if (bh) bh.style.display = _bookReady ? 'none' : 'block';
@@ -1102,7 +1232,7 @@ function renderStep2(content) {
             '<span style="font-size:18px;" id="formIcon">📍</span>'+
             '<div style="flex:1;">'+
               '<div style="font-size:13px;font-weight:700;" id="formTitle">เพิ่ม Location ใหม่</div>'+
-              '<div style="font-size:11px;color:var(--muted);" id="formSub">กรอกชื่อและยอดพาเลท แล้วกดบันทึก</div>'+
+              '<div style="font-size:11px;color:var(--muted);" id="formSub">กรอกชื่อ Location และยอดที่นับได้ แล้วกดบันทึก</div>'+
             '</div>'+
             '<button id="btnCancelEdit" onclick="cancelEditMode()" style="background:var(--surface);border:1px solid var(--border);border-radius:6px;padding:8px 14px;font-family:var(--font);font-size:13px;color:var(--muted);cursor:pointer;min-height:36px;touch-action:manipulation;display:none;">✕ ยกเลิกแก้ไข</button>'+
           '</div>'+
@@ -1113,17 +1243,10 @@ function renderStep2(content) {
               '<input type="file" id="photoInputGallery" accept="image/*" onchange="handlePhoto(this)" style="display:none;">'+
             '</div>'+
             '<div class="field" style="margin-bottom:0;"><label>Location / Zone <span style="color:var(--danger);">*</span></label>'+
-              '<input class="input" id="selLocation" type="text" placeholder="เช่น Zone A, ลาน CHEP" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">'+
+              '<input class="input" id="selLocation" type="text" placeholder="เช่น Zone A, ลานหน้าคลัง" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">'+
             '</div>'+
           '</div>'+
-          '<div class="material-section">'+
-            '<div class="material-head"><span class="material-icon">🪵</span><span class="material-label">Wood Pallet</span><span class="material-total" id="woodTotal">รวม 0</span></div>'+
-            _renderPalletTable('wood','loscam','LOSCAM','chep','CHEP')+
-          '</div>'+
-          '<div class="material-section">'+
-            '<div class="material-head"><span class="material-icon">🟧</span><span class="material-label">Plastic Pallet</span><span class="material-total" id="plasticTotal">รวม 0</span></div>'+
-            _renderPalletTable('plastic','brs','BRS','swwi','SWWI')+
-          '</div>'+
+          _renderTypeSections()+
           '<button class="btn btn-success" id="btnSaveLocation" style="width:100%;margin-top:8px;" type="button" onclick="addLocation()">💾 บันทึก Location นี้</button>'+
           '<div id="formMsg" style="font-size:12px;text-align:center;margin-top:8px;min-height:16px;"></div>'+
         '</div>'+
@@ -1143,7 +1266,9 @@ function renderStep2(content) {
       '<div class="card-body" id="offBody">'+
         '<div style="font-size:12px;color:var(--muted);margin-bottom:12px;">กรอกจำนวนระดับ Site — <b>ถ้ามีจำนวนมากกว่า 0 ต้องแนบไฟล์หลักฐาน</b> (PDF / Excel / รูปภาพ) · Site ที่ไม่มีนอกระบบ ปล่อยว่างแล้วกดจบได้เลย</div>'+
         '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">'+
-          _offInput('LOSCAM (ไม้)','loscam')+_offInput('CHEP (ไม้)','chep')+_offInput('BRS (พลาสติก)','brs')+_offInput('SWWI (พลาสติก)','swwi')+
+          PV_OF('wood').concat(PV_OF('plastic')).map(function(pk){
+            return _offInput(PV_LABEL(pk)+' ('+TY_NAME(PV(pk).type||_PROV_FALLBACK[pk].type)+')', pk);
+          }).join('')+
         '</div>'+
         '<div class="upload-zone" id="offUploadZone" onclick="document.getElementById(\'offFileInput\').click()"'+
           ' ondragover="event.preventDefault();this.classList.add(\'drag\')" ondragleave="this.classList.remove(\'drag\')" ondrop="handleOffDrop(event)">'+
@@ -1339,63 +1464,77 @@ function updateSubmitCard() {
 
 
 
-function _renderPalletTable(material, brand1cls, brand1name, brand2cls, brand2name) {
-  var statusList = material === 'wood' ? WOOD_STATUS : PLASTIC_STATUS;
-  var brand1 = brand1name.toLowerCase();
-  var brand2 = brand2name.toLowerCase();
+// v2: คอลัมน์มาจาก config (ชื่อ/สี/ลำดับ) — id ของ input ยังเป็น inp_{type}_{provider}_{statusKey} เหมือนเดิม
+function _inpId(itemId, statusId){ return 'inp_' + _domId(itemId) + '_' + _domId(statusId); }
+function _domId(s){ return String(s).replace(/[^A-Za-z0-9_-]/g, '_'); }
 
-  var rows = statusList.map(function(s) {
-    var k = _statusKey(s);
-    var id1 = 'inp_'+material+'_'+brand1+'_'+k;
-    var id2 = 'inp_'+material+'_'+brand2+'_'+k;
-    return '<tr>'+
-      '<td>'+esc(s)+'</td>'+
-      '<td class="inp-cell"><input class="status-input" id="'+id1+'" type="text" inputmode="numeric" pattern="[0-9]*" value=""'+
-        ' placeholder="0"'+
-        ' oninput="this.value=this.value.replace(/[^0-9]/g,\'\');this.classList.toggle(\'has-val\',this.value!==\'\'&&this.value!==\'0\');_updateLiveTotal()"></td>'+
-      '<td class="inp-cell"><input class="status-input" id="'+id2+'" type="text" inputmode="numeric" pattern="[0-9]*" value=""'+
-        ' placeholder="0"'+
-        ' oninput="this.value=this.value.replace(/[^0-9]/g,\'\');this.classList.toggle(\'has-val\',this.value!==\'\'&&this.value!==\'0\');_updateLiveTotal()"></td>'+
+function _renderPalletTable(typeId) {
+  var items = ITEMS_OF(typeId), sts = CS_OF(typeId);
+  if (!items.length || !sts.length) {
+    return '<div style="padding:12px;font-size:12px;color:var(--muted);text-align:center;">'
+      + (!items.length ? 'ชนิดนี้ยังไม่ได้ตั้งค่ารายการที่นับ' : 'ชนิดนี้ยังไม่ได้ตั้งค่าสถานะการนับ')
+      + '</div>';
+  }
+  var rows = sts.map(function(s){
+    return '<tr><td>'+esc(s.status_name)+'</td>'+
+      items.map(function(it){
+        return '<td class="inp-cell"><input class="status-input" id="'+_inpId(it.item_id,s.status_id)+'"'+
+          ' type="text" inputmode="numeric" pattern="[0-9]*" value="" placeholder="0"'+
+          ' oninput="this.value=this.value.replace(/[^0-9]/g,\'\');this.classList.toggle(\'has-val\',this.value!==\'\'&&this.value!==\'0\');_updateLiveTotal()"></td>';
+      }).join('')+
     '</tr>';
   }).join('');
 
   return '<table class="pallet-table">'+
     '<thead><tr>'+
       '<th>สถานะ</th>'+
-      '<th class="'+brand1cls+'-h">'+brand1name+'</th>'+
-      '<th class="'+brand2cls+'-h">'+brand2name+'</th>'+
+      items.map(function(it){
+        var u = String(it.unit||'').trim();
+        return '<th style="color:'+(it.color||'inherit')+';">'+esc(it.item_name)+(u?' <span style="font-weight:400;opacity:.7;">('+esc(u)+')</span>':'')+'</th>';
+      }).join('')+
     '</tr></thead>'+
     '<tbody>'+rows+'</tbody>'+
     '<tfoot><tr>'+
       '<td>รวม</td>'+
-      '<td id="sub_'+material+'_'+brand1+'">0</td>'+
-      '<td id="sub_'+material+'_'+brand2+'">0</td>'+
+      items.map(function(it){ return '<td id="sub_'+_domId(it.item_id)+'">0</td>'; }).join('')+
     '</tr></tfoot>'+
   '</table>';
 }
 
-function _updateLiveTotal() {
-  var wl=0, wc=0, pb=0, ps=0;
-  WOOD_STATUS.forEach(function(s){
-    var k = _statusKey(s);
-    wl += _getInpVal('wood','loscam',k);
-    wc += _getInpVal('wood','chep',k);
-  });
-  PLASTIC_STATUS.forEach(function(s){
-    var k = _statusKey(s);
-    pb += _getInpVal('plastic','brs',k);
-    ps += _getInpVal('plastic','swwi',k);
-  });
-  _setEl('sub_wood_loscam',    wl);
-  _setEl('sub_wood_chep',      wc);
-  _setEl('sub_plastic_brs',    pb);
-  _setEl('sub_plastic_swwi',   ps);
-  _setEl('woodTotal',    'รวม '+(wl+wc));
-  _setEl('plasticTotal', 'รวม '+(pb+ps));
+// การ์ดกรอกยอด 1 ใบต่อชนิด — จำนวนและชื่อมาจาก config
+function _renderTypeSections() {
+  var tys = V2TYPES();
+  if (!tys.length) {
+    return '<div style="padding:14px;border-radius:var(--rs);background:rgba(245,158,11,.12);color:#a16207;font-size:12px;line-height:1.6;">'
+      + '⚠ รอบนี้ยังไม่ได้ตั้งค่าชนิดที่นับ — แจ้ง Admin ให้ตั้งค่าก่อน</div>';
+  }
+  return tys.map(function(t){
+    return '<div class="material-section">'+
+      '<div class="material-head">'+
+        '<span class="material-icon">'+esc(t.icon||'📦')+'</span>'+
+        '<span class="material-label">'+esc(t.type_name)+'</span>'+
+        '<span class="material-total" id="tot_'+_domId(t.type_id)+'">รวม 0</span>'+
+      '</div>'+
+      _renderPalletTable(t.type_id)+
+    '</div>';
+  }).join('');
 }
 
-function _getInpVal(material, brand, statusKey) {
-  var el = document.getElementById('inp_'+material+'_'+brand+'_'+statusKey);
+function _updateLiveTotal() {
+  V2TYPES().forEach(function(t){
+    var sts = CS_OF(t.type_id), sum = 0;
+    ITEMS_OF(t.type_id).forEach(function(it){
+      var n = 0;
+      sts.forEach(function(s){ n += _getInpVal(it.item_id, s.status_id); });
+      _setEl('sub_'+_domId(it.item_id), n);
+      sum += n;
+    });
+    _setEl('tot_'+_domId(t.type_id), 'รวม '+sum);
+  });
+}
+
+function _getInpVal(itemId, statusId) {
+  var el = document.getElementById(_inpId(itemId, statusId));
   return el ? (parseInt(el.value.replace(/[^0-9]/g,''),10)||0) : 0;
 }
 
@@ -1404,18 +1543,20 @@ function _setEl(id, val) {
   if (el) el.textContent = val;
 }
 
+// อ่านค่าจากฟอร์มทุกช่อง → loc.q[item_id][status_id]
+function _readFormInto(loc) {
+  V2TYPES().forEach(function(t){
+    var sts = CS_OF(t.type_id);
+    ITEMS_OF(t.type_id).forEach(function(it){
+      if (!loc.q[it.item_id]) loc.q[it.item_id] = {};
+      sts.forEach(function(s){ loc.q[it.item_id][s.status_id] = _getInpVal(it.item_id, s.status_id); });
+    });
+  });
+  return loc;
+}
+
 function _readForm() {
-  var loc = emptyLoc(document.getElementById('selLocation').value);
-  WOOD_STATUS.forEach(function(s){
-    var k = _statusKey(s);
-    loc.wood.loscam[s] = _getInpVal('wood','loscam',k);
-    loc.wood.chep[s]   = _getInpVal('wood','chep',k);
-  });
-  PLASTIC_STATUS.forEach(function(s){
-    var k = _statusKey(s);
-    loc.plastic.brs[s]  = _getInpVal('plastic','brs',k);
-    loc.plastic.swwi[s] = _getInpVal('plastic','swwi',k);
-  });
+  var loc = _readFormInto(emptyLoc(document.getElementById('selLocation').value));
   // รูปถ่าย
   var pp = document.getElementById('photoPreview');
   if (pp && pp.dataset.photo) loc.photo = pp.dataset.photo;
@@ -1428,23 +1569,26 @@ function _readForm() {
   return loc;
 }
 
+// รวมยอดทุก location → t.byItem[item_id][status_id] + ยอดรวมต่อ item / ต่อชนิด
 function _calcTotals() {
-  var t = { loscam:{}, chep:{}, brs:{}, swwi:{} };
-  WOOD_STATUS.forEach(function(s){
-    t.loscam[s] = locations.reduce(function(a,l){return a+Number(l.wood.loscam[s]||0);},0);
-    t.chep[s]   = locations.reduce(function(a,l){return a+Number(l.wood.chep[s]||0);},0);
+  var t = { byItem:{}, itemTotal:{}, typeTotal:{}, grand:0 };
+  V2TYPES().forEach(function(ty){
+    var sts = CS_OF(ty.type_id), tsum = 0;
+    ITEMS_OF(ty.type_id).forEach(function(it){
+      var g = {}, isum = 0;
+      sts.forEach(function(s){
+        var v = locations.reduce(function(a,l){
+          return a + Number(((l.q||{})[it.item_id]||{})[s.status_id] || 0);
+        }, 0);
+        g[s.status_id] = v; isum += v;
+      });
+      t.byItem[it.item_id] = g;
+      t.itemTotal[it.item_id] = isum;
+      tsum += isum;
+    });
+    t.typeTotal[ty.type_id] = tsum;
+    t.grand += tsum;
   });
-  PLASTIC_STATUS.forEach(function(s){
-    t.brs[s]  = locations.reduce(function(a,l){return a+Number(l.plastic.brs[s]||0);},0);
-    t.swwi[s] = locations.reduce(function(a,l){return a+Number(l.plastic.swwi[s]||0);},0);
-  });
-  t.totLoscam = brandTotal(t.loscam);
-  t.totChep   = brandTotal(t.chep);
-  t.totBrs    = brandTotal(t.brs);
-  t.totSwwi   = brandTotal(t.swwi);
-  t.totWood    = t.totLoscam + t.totChep;
-  t.totPlastic = t.totBrs    + t.totSwwi;
-  t.grand      = t.totWood   + t.totPlastic;
   return t;
 }
 
@@ -1460,8 +1604,8 @@ function _renderStatusTable(tot) {
     var l = tot.loscam[s]||0, c = tot.chep[s]||0;
     return '<tr>'+
       '<td>'+esc(s)+'</td>'+
-      '<td class="r" style="color:var(--loscam);">'+l+'</td>'+
-      '<td class="r" style="color:var(--chep);">'+c+'</td>'+
+      '<td class="r" style="color:'+PV_COLOR('loscam')+';">'+l+'</td>'+
+      '<td class="r" style="color:'+PV_COLOR('chep')+';">'+c+'</td>'+
       '<td class="r">'+(l+c)+'</td>'+
     '</tr>';
   }).join('');
@@ -1469,22 +1613,22 @@ function _renderStatusTable(tot) {
     var b = tot.brs[s]||0, w = tot.swwi[s]||0;
     return '<tr>'+
       '<td>'+esc(s)+'</td>'+
-      '<td class="r" style="color:var(--brs);">'+b+'</td>'+
-      '<td class="r" style="color:#2e7d32;">'+w+'</td>'+
+      '<td class="r" style="color:'+PV_COLOR('brs')+';">'+b+'</td>'+
+      '<td class="r" style="color:'+PV_COLOR('swwi')+';">'+w+'</td>'+
       '<td class="r">'+(b+w)+'</td>'+
     '</tr>';
   }).join('');
 
   return '<table class="status-sum-table">'+
     '<thead><tr>'+
-      '<th>🪵 Wood Pallet</th>'+
-      '<th class="r" style="color:var(--loscam);">LOSCAM</th>'+
-      '<th class="r" style="color:var(--chep);">CHEP</th>'+
+      '<th>'+esc(TY_ICON('wood')+' '+TY_NAME('wood'))+'</th>'+
+      '<th class="r" style="color:'+PV_COLOR('loscam')+';">'+esc(PV_LABEL('loscam'))+'</th>'+
+      '<th class="r" style="color:'+PV_COLOR('chep')+';">'+esc(PV_LABEL('chep'))+'</th>'+
       '<th class="r">รวม</th>'+
     '</tr></thead>'+
     '<tbody>'+woodRows+'</tbody>'+
     '<tfoot><tr class="bold-row">'+
-      '<td>รวม Wood</td>'+
+      '<td>'+esc('รวม '+TY_NAME('wood'))+'</td>'+
       '<td class="r">'+tot.totLoscam+'</td>'+
       '<td class="r">'+tot.totChep+'</td>'+
       '<td class="r">'+tot.totWood+'</td>'+
@@ -1563,10 +1707,10 @@ function _buildStep3Body() {
   var tot = _calcTotals();
   var pend = _bookHas() ? '' : '<div class="book-pending">⏳ Admin ยังไม่ได้ใส่ข้อมูลจากระบบ PCS สำหรับ '+esc(session.site)+'</div>';
   return pend +
-    _sysBlock('① จำนวนในระบบ — พาเลทไม้ 🪵', 'LOSCAM','CHEP','loscam','chep','var(--loscam)','var(--chep)') +
-    _countBlock('② จำนวนนับจริง — พาเลทไม้ 🪵', WOOD_STATUS, 'LOSCAM','CHEP','loscam','chep','var(--loscam)','var(--chep)', tot, tot.totLoscam, tot.totChep, tot.totWood) +
-    _sysBlock('③ จำนวนในระบบ — พาเลทพลาสติก 🟧', 'BRS','SWWI','brs','swwi','var(--brs)','#2e7d32') +
-    _countBlock('④ จำนวนนับจริง — พาเลทพลาสติก 🟧', PLASTIC_STATUS, 'BRS','SWWI','brs','swwi','var(--brs)','#2e7d32', tot, tot.totBrs, tot.totSwwi, tot.totPlastic) +
+    _sysBlock('① จำนวนในระบบ — '+TY_NAME('wood')+' '+TY_ICON('wood'), PV_LABEL('loscam'),PV_LABEL('chep'),'loscam','chep',PV_COLOR('loscam'),PV_COLOR('chep')) +
+    _countBlock('② จำนวนนับจริง — '+TY_NAME('wood')+' '+TY_ICON('wood'), WOOD_STATUS, PV_LABEL('loscam'),PV_LABEL('chep'),'loscam','chep',PV_COLOR('loscam'),PV_COLOR('chep'), tot, tot.totLoscam, tot.totChep, tot.totWood) +
+    _sysBlock('③ จำนวนในระบบ — '+TY_NAME('plastic')+' '+TY_ICON('plastic'), PV_LABEL('brs'),PV_LABEL('swwi'),'brs','swwi',PV_COLOR('brs'),PV_COLOR('swwi')) +
+    _countBlock('④ จำนวนนับจริง — '+TY_NAME('plastic')+' '+TY_ICON('plastic'), PLASTIC_STATUS, PV_LABEL('brs'),PV_LABEL('swwi'),'brs','swwi',PV_COLOR('brs'),PV_COLOR('swwi'), tot, tot.totBrs, tot.totSwwi, tot.totPlastic) +
     _offBlock() +
     '<button class="btn-print" onclick="printDoc()">🖨️ พิมพ์เอกสารยืนยัน</button>';
 }
@@ -1576,10 +1720,9 @@ function _offBlock() {
   '<table class="status-sum-table">'+
     '<thead><tr><th>ผู้ให้บริการ</th><th class="r">จำนวน (พาเลท)</th></tr></thead>'+
     '<tbody>'+
-      '<tr><td>LOSCAM (ไม้)</td><td class="r">'+_cellV(offPcs.loscam||0)+'</td></tr>'+
-      '<tr><td>CHEP (ไม้)</td><td class="r">'+_cellV(offPcs.chep||0)+'</td></tr>'+
-      '<tr><td>BRS (พลาสติก)</td><td class="r">'+_cellV(offPcs.brs||0)+'</td></tr>'+
-      '<tr><td>SWWI (พลาสติก)</td><td class="r">'+_cellV(offPcs.swwi||0)+'</td></tr>'+
+      PV_OF('wood').concat(PV_OF('plastic')).map(function(pk){
+        return '<tr><td>'+esc(PV_LABEL(pk)+' ('+TY_NAME(PV(pk).type||_PROV_FALLBACK[pk].type)+')')+'</td><td class="r">'+_cellV(offPcs[pk]||0)+'</td></tr>';
+      }).join('')+
     '</tbody>'+
     '<tfoot><tr class="bold-row" style="background:var(--accent-bg);"><td>รวมนอกระบบ PCS</td><td class="r">'+_cellV(t)+'</td></tr></tfoot>'+
   '</table>'+
@@ -1616,6 +1759,11 @@ function toggleStep2() {
 
 // ปุ่ม "ไปขั้นที่ 3" — พับขั้น 2 + ปลดล็อก + เปิดสรุป + เลื่อนไปหา
 function goStep3() {
+  // ⛔ C2: ขั้นที่ 3–5 ยังเป็นโค้ด v1 (อ้างชนิด/ผู้ให้บริการแบบ hardcode)
+  //    เปิดใช้จะได้ยอดผิดโครง — ปลดล็อคในก้อน C3
+  showToast('ขั้นที่ 3–5 ยังอยู่ระหว่างย้ายเป็น v2 — ตอนนี้ทดสอบได้ถึงขั้นที่ 2 (ยอดที่กรอกไว้ไม่หาย)', 'warn');
+  return;
+  /* eslint-disable no-unreachable */
   if (locations.length === 0) { showToast('กรุณาบันทึกอย่างน้อย 1 Location ก่อน', 'warn'); return; }
   // พับซ่อนขั้นที่ 2
   var s2body = document.getElementById('step2Body');
@@ -1667,20 +1815,20 @@ function goStep4() {
 //  3 view functions — เขียน DOM โดยตรง ไม่ผ่าน render()
 // ============================================================
 function _renderLocRow(l, i) {
-  var wl = brandTotal(l.wood.loscam);
-  var wc = brandTotal(l.wood.chep);
-  var pb = brandTotal(l.plastic.brs);
-  var ps = brandTotal(l.plastic.swwi);
-  var lt = wl + wc + pb + ps;
   var isEditing = (_editingIdx === i);
+  var items = ALL_ITEMS();
+  // item เยอะ → สรุปเป็นชนิดแทน ไม่ให้ชิปล้นจอมือถือ
+  var chips = (items.length > 6)
+    ? V2TYPES().map(function(t){
+        return '<span class="loc-chip">'+esc(t.icon||'')+' '+typeTotal(l, t.type_id)+'</span>'; })
+    : items.map(function(it){
+        return '<span class="loc-chip" style="border-color:'+(it.color||'var(--border2)')+';">'
+          + esc(it.item_name)+' '+itemTotal(l, it.item_id)+'</span>'; });
   return '<div class="loc-item'+(isEditing?' loc-item-editing':'')+'" id="locRow_'+i+'">'+
     '<div class="loc-item-top"><span class="loc-name">'+(isEditing?'✏️ ':'')+esc(l.name)+'</span></div>'+
     '<div class="loc-item-bot">'+
-      '<span class="loc-chip loscam">L '+wl+'</span>'+
-      '<span class="loc-chip chep">C '+wc+'</span>'+
-      '<span class="loc-chip brs">B '+pb+'</span>'+
-      '<span class="loc-chip swwi">S '+ps+'</span>'+
-      '<span class="loc-total">'+lt+'</span>'+
+      chips.join('')+
+      '<span class="loc-total">'+locTotal(l)+'</span>'+
       '<button class="loc-act edit" onclick="editLocation('+i+')">✏️ แก้ไข</button>'+
       '<button class="loc-act del" onclick="removeLocation('+i+')">✕</button>'+
     '</div></div>';
@@ -1725,7 +1873,7 @@ function _setFormMode(editIdx) {
   document.getElementById('formCardTitle').textContent = isEdit ? '✏️ แก้ไข Location' : 'เพิ่ม Location ใหม่';
   document.getElementById('formIcon').textContent = isEdit ? '✏️' : '📍';
   document.getElementById('formTitle').textContent = isEdit ? 'แก้ไข Location: '+locations[editIdx].name : 'เพิ่ม Location ใหม่';
-  document.getElementById('formSub').textContent = isEdit ? 'แก้ไขยอดนับแล้วกด "บันทึก"' : 'กรอกชื่อและยอดพาเลท แล้วกดบันทึก';
+  document.getElementById('formSub').textContent = isEdit ? 'แก้ไขยอดนับแล้วกด "บันทึก"' : 'กรอกชื่อ Location และยอดที่นับได้ แล้วกดบันทึก';
   document.getElementById('formBox').style.background = isEdit ? '#fff8e1' : 'var(--accent-bg)';
   document.getElementById('formBox').style.borderColor = isEdit ? 'var(--accent)' : 'var(--border2)';
   document.getElementById('btnCancelEdit').style.display = isEdit ? 'block' : 'none';
@@ -1738,21 +1886,18 @@ function _fillFormFromLocation(i) {
   var loc = locations[i];
   if (!loc) return;
   _setFormMode(i);
-  var sel = document.getElementById('selLocation');
-  sel.value = loc.name;
-  WOOD_STATUS.forEach(function(s){
-    var k = _statusKey(s);
-    var el = document.getElementById('inp_wood_loscam_'+k);
-    if (el){ el.value = loc.wood.loscam[s]||''; el.classList.toggle('has-val',(loc.wood.loscam[s]||0)>0); }
-    el = document.getElementById('inp_wood_chep_'+k);
-    if (el){ el.value = loc.wood.chep[s]||''; el.classList.toggle('has-val',(loc.wood.chep[s]||0)>0); }
-  });
-  PLASTIC_STATUS.forEach(function(s){
-    var k = _statusKey(s);
-    var el = document.getElementById('inp_plastic_brs_'+k);
-    if (el){ el.value = loc.plastic.brs[s]||''; el.classList.toggle('has-val',(loc.plastic.brs[s]||0)>0); }
-    el = document.getElementById('inp_plastic_swwi_'+k);
-    if (el){ el.value = loc.plastic.swwi[s]||''; el.classList.toggle('has-val',(loc.plastic.swwi[s]||0)>0); }
+  document.getElementById('selLocation').value = loc.name;
+  V2TYPES().forEach(function(t){
+    var sts = CS_OF(t.type_id);
+    ITEMS_OF(t.type_id).forEach(function(it){
+      sts.forEach(function(s){
+        var el = document.getElementById(_inpId(it.item_id, s.status_id));
+        if (!el) return;
+        var v = Number(((loc.q||{})[it.item_id]||{})[s.status_id] || 0);
+        el.value = v || '';
+        el.classList.toggle('has-val', v > 0);
+      });
+    });
   });
   var pp = document.getElementById('photoPreview');
   if (loc.photo) { pp.innerHTML = '<img src="'+loc.photo+'" style="width:100%;height:100%;object-fit:cover;">'; pp.dataset.photo = loc.photo; }
@@ -1860,17 +2005,7 @@ function addLocation() {
 
 // อ่านค่าจากฟอร์มโดยใช้ชื่อที่ validate แล้ว (กัน race condition กับ DOM)
 function _readFormManual(name) {
-  var loc = emptyLoc(name);
-  WOOD_STATUS.forEach(function(s){
-    var k = _statusKey(s);
-    loc.wood.loscam[s] = _getInpVal('wood','loscam',k);
-    loc.wood.chep[s]   = _getInpVal('wood','chep',k);
-  });
-  PLASTIC_STATUS.forEach(function(s){
-    var k = _statusKey(s);
-    loc.plastic.brs[s]  = _getInpVal('plastic','brs',k);
-    loc.plastic.swwi[s] = _getInpVal('plastic','swwi',k);
-  });
+  var loc = _readFormInto(emptyLoc(name));
   var pp = document.getElementById('photoPreview');
   if (pp && pp.dataset.photo) loc.photo = pp.dataset.photo;
   return loc;
@@ -1956,18 +2091,18 @@ function _renderComparison(tot) {
     var vL = val('loscam', f), vC = val('chep', f);
     return '<tr>'+
       '<td>'+esc(f)+'</td>'+
-      '<td class="r" style="color:var(--loscam);">'+(vL!=='—'?vL:'<span style="color:var(--muted);">—</span>')+'</td>'+
-      '<td class="r" style="color:var(--chep);">'+(vC!=='—'?vC:'<span style="color:var(--muted);">—</span>')+'</td>'+
+      '<td class="r" style="color:'+PV_COLOR('loscam')+';">'+(vL!=='—'?vL:'<span style="color:var(--muted);">—</span>')+'</td>'+
+      '<td class="r" style="color:'+PV_COLOR('chep')+';">'+(vC!=='—'?vC:'<span style="color:var(--muted);">—</span>')+'</td>'+
     '</tr>';
   }).join('');
 
   var btL = bookTotal('loscam'), btC = bookTotal('chep');
-  html += '<div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin:14px 0 6px;">ข้อมูลจากระบบควบคุมพาเลท (PCS) — Wood</div>'+
+  html += '<div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin:14px 0 6px;">ข้อมูลจากระบบควบคุมพาเลท (PCS) — '+esc(TY_NAME('wood'))+'</div>'+
   '<table class="status-sum-table">'+
     '<thead><tr>'+
       '<th>รายการ</th>'+
-      '<th class="r" style="color:var(--loscam);">LOSCAM</th>'+
-      '<th class="r" style="color:var(--chep);">CHEP</th>'+
+      '<th class="r" style="color:'+PV_COLOR('loscam')+';">'+esc(PV_LABEL('loscam'))+'</th>'+
+      '<th class="r" style="color:'+PV_COLOR('chep')+';">'+esc(PV_LABEL('chep'))+'</th>'+
     '</tr></thead>'+
     '<tbody>'+woodPCSrows+'</tbody>'+
     '<tfoot>'+
@@ -1989,18 +2124,18 @@ function _renderComparison(tot) {
     var vB = val('brs', f), vS = val('swwi', f);
     return '<tr>'+
       '<td>'+esc(f)+'</td>'+
-      '<td class="r" style="color:var(--brs);">'+(vB!=='—'?vB:'<span style="color:var(--muted);">—</span>')+'</td>'+
-      '<td class="r" style="color:#2e7d32;">'+(vS!=='—'?vS:'<span style="color:var(--muted);">—</span>')+'</td>'+
+      '<td class="r" style="color:'+PV_COLOR('brs')+';">'+(vB!=='—'?vB:'<span style="color:var(--muted);">—</span>')+'</td>'+
+      '<td class="r" style="color:'+PV_COLOR('swwi')+';">'+(vS!=='—'?vS:'<span style="color:var(--muted);">—</span>')+'</td>'+
     '</tr>';
   }).join('');
 
   var btB = bookTotal('brs'), btS = bookTotal('swwi');
-  html += '<div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin:14px 0 6px;">ข้อมูลจากระบบควบคุมพาเลท (PCS) — Plastic</div>'+
+  html += '<div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin:14px 0 6px;">ข้อมูลจากระบบควบคุมพาเลท (PCS) — '+esc(TY_NAME('plastic'))+'</div>'+
   '<table class="status-sum-table">'+
     '<thead><tr>'+
       '<th>รายการ</th>'+
-      '<th class="r" style="color:var(--brs);">BRS</th>'+
-      '<th class="r" style="color:#2e7d32;">SWWI</th>'+
+      '<th class="r" style="color:'+PV_COLOR('brs')+';">'+esc(PV_LABEL('brs'))+'</th>'+
+      '<th class="r" style="color:'+PV_COLOR('swwi')+';">'+esc(PV_LABEL('swwi'))+'</th>'+
     '</tr></thead>'+
     '<tbody>'+plasticPCSrows+'</tbody>'+
     '<tfoot>'+
@@ -2052,6 +2187,9 @@ function _thaiDocDate(raw) {
 }
 
 function printDoc() {
+  showToast('เอกสารสรุปยังอยู่ระหว่างย้ายไปใช้ Word template ของรอบ (ก้อน C4)', 'warn');
+  return;
+  /* eslint-disable no-unreachable */
   var tot = _calcTotals();
 
   // ── ดึงข้อมูลจาก Admin config (backend) ──
@@ -2197,7 +2335,7 @@ function printDoc() {
         '<td style="font-weight:700;white-space:nowrap;padding-right:8px;text-align:right;width:12mm;">วันที่</td>'+
         '<td style="text-align:left;width:40mm;">'+DOC_DATE+'</td>'+
       '</tr>'+
-      '<tr><td class="lbl">เรื่อง</td><td colspan="3">รายงานผลการตรวจนับสต็อกพาเลทไม้และพาเลทพลาสติก ประจำปี '+DOC_YEAR+'</td></tr>'+
+      '<tr><td class="lbl">เรื่อง</td><td colspan="3">รายงานผลการตรวจนับสต็อก'+TY_NAME('wood')+'และ'+TY_NAME('plastic')+' ประจำปี '+DOC_YEAR+'</td></tr>'+
       '<tr><td class="lbl">เรียน</td><td colspan="3">ส่วนงาน Pallet and Operation Support บจก. บุญรอด ซัพพลายเชน</td></tr>'+
       '<tr>'+
         '<td class="lbl" style="vertical-align:top;">เอกสารแนบ</td>'+
@@ -2211,13 +2349,13 @@ function printDoc() {
   '<hr>'+
 
   // ── Intro ──
-  '<div class="intro">ตามที่ส่วนงาน Pallet Management and Operation Support ได้ดำเนินการตรวจนับสต็อกพาเลทไม้และพาเลทพลาสติก '+
+  '<div class="intro">ตามที่ส่วนงาน Pallet Management and Operation Support ได้ดำเนินการตรวจนับสต็อก'+TY_NAME('wood')+'และ'+TY_NAME('plastic')+' '+
     'ประจำปี '+DOC_YEAR+' เมื่อวันที่ '+DOC_DATE+' ณ สถานที่ตรวจนับ <strong>'+esc(session.site)+'</strong> '+
     'คณะผู้ตรวจนับและผู้ดูแลพื้นที่ได้ทำการเข้าตรวจนับและขอสรุปผลตามตารางที่แสดงด้านล่างนี้</div>'+
 
   // ── 2 ตาราง ──
   '<div class="two-col">'+
-    tbl('ตารางข้อมูลจำนวนพาเลทไม้','ข้อมูลจากระบบควบคุมพาเลท (PCS)',['Loscam','Chep'],
+    tbl('ตารางข้อมูลจำนวน'+TY_NAME('wood'),'ข้อมูลจากระบบควบคุมพาเลท (PCS)',[PV_LABEL('loscam'),PV_LABEL('chep')],
       // PCS
       row('1. คงเหลือ',bL['คงเหลือ']||0,bC['คงเหลือ']||0)+
       row('2. ระหว่างโอนออก',bL['ระหว่างโอนออก']||0,bC['ระหว่างโอนออก']||0)+
@@ -2243,7 +2381,7 @@ function printDoc() {
       row('บวก พาเลทที่ควบคุมนอกระบบ PCS',wL_nok,wC_nok,false,1)+
       row('ส่วนต่างสุทธิ',wL_net,wC_net,true)
     )+
-    tbl('ตารางข้อมูลจำนวนพาเลทพลาสติก','ข้อมูลจากระบบควบคุมพาเลท (PCS)',['BRS','SWWI'],
+    tbl('ตารางข้อมูลจำนวน'+TY_NAME('plastic'),'ข้อมูลจากระบบควบคุมพาเลท (PCS)',[PV_LABEL('brs'),PV_LABEL('swwi')],
       row('1. คงเหลือ',bB['คงเหลือ']||0,bS['คงเหลือ']||0)+
       row('2. ระหว่างโอนออก',bB['ระหว่างโอนออก']||0,bS['ระหว่างโอนออก']||0)+
       row('3. ระหว่างโอนเข้า',bB['ระหว่างโอนเข้า']||0,bS['ระหว่างโอนเข้า']||0)+
