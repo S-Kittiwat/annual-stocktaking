@@ -850,17 +850,7 @@ function applyItemConfig(cfg){
     return { key:p.key, label:(t?t.type_name+' ':'')+p.label, color:p.color||'' };
   });
 
-  // สูตร Actual: สถานะที่ติ๊ก in_actual ของแต่ละชนิด (แทนอาเรย์ที่เคยฝังในโค้ด)
-  var act = {};
-  cfgTypes().forEach(function(t){
-    act[t.type_id] = cfgStatuses(t.type_id).filter(function(s){ return !!s.in_actual; })
-                       .map(function(s){ return s.status_name; });
-  });
-  if(Object.keys(act).length) ACTUAL_STATUS = act;
-
-  // provider → ชนิด
-  var pk = {}; provs.forEach(function(p){ pk[p.key]=p.kind; });
-  PROV_KIND = pk;
+  // (สูตร Actual / provider→ชนิด ไม่ใช้แล้ว — หน้ากระทบยอดอ่าน sub.recon ที่ backend คำนวณให้)
 
   // สถานะ Book: แก้ได้แค่ flag in_book (ชื่อผูกกับหัวคอลัมน์ชีต BookBalance)
   if(cfg.book_statuses && cfg.book_statuses.length) BOOK_STATUS_CFG = cfg.book_statuses;
@@ -932,6 +922,11 @@ function loadData(showSpin){
       if(!siteDirty()) S.booksV2 = d.books_v2 || {};   // อย่าทับยอดที่กำลังกรอกค้างไว้
       // v2: config ชนิด/สถานะ — ถ้ากำลังแก้ค้างอยู่ อย่าดึงของ server มาทับ (บทเรียน 2.6)
       if(d.item_config && !S.typesDirty) applyItemConfig(d.item_config);
+      // config v2 ของรอบ — หน้าภาพรวม/กระทบยอดต้องใช้ แต่ห้ามทับตอนกำลังแก้ค้างใน Setting
+      if(d.config_v2 && !S.v2Dirty){
+        V2CFG = d.config_v2;
+        if(d.config_v2.limits) V2LIM = d.config_v2.limits;
+      }
     }
     if(wizNeeded()){ if(!WIZ.saving){ wizShow(); wizRenderSteps(); } }
     else { if(document.getElementById('wizard').style.display==='block') wizHide(); renderAll(); }
@@ -2001,103 +1996,86 @@ function wizStart(){
   }).catch(function(err){ fail(String(err && err.message || err)); });
 }
 
-/* ── Render: Actual vs System reconciliation ─────────── */
-// System = ยอดในระบบ (book) = คงเหลือ + ระหว่างโอนออก  (ยอดคงค้างในบัญชีเช่า)
-function systemOf(site_id, prov){
-  var b = S.books[site_id];
-  if(!b || !b[prov]) return 0;
-  var g = b[prov], sum = 0;
-  bookOutstandingKeys().forEach(function(k){ sum += Number(g[k]||0); });   // flag in_book (ชีต) แทนสูตรฝังโค้ด
-  return sum;
-}
-// ── สูตรกระทบยอด (เฉพาะหน้าภาพรวมนี้เท่านั้น — ไม่กระทบเอกสารสรุปหรือข้อมูลในชีต) ──
-// Actual ไม้      = RFI + TBR + BER + TBC + TBS + ใช้วางสินค้า + สายการผลิต + นอกระบบ PCS + ระหว่างโอนออก
-// Actual พลาสติก  = RFI + TBS + ใช้วางสินค้า + สายการผลิต + ชำรุด รออนุมัติ BRS-900 + นอกระบบ PCS + ระหว่างโอนออก
-// System (ทั้งคู่) = คงเหลือ + ระหว่างโอนออก
-var ACTUAL_STATUS = {
-  wood: ['พาเลทเปล่า RFI','พาเลทเปล่า TBR','พาเลทเปล่า BER','พาเลทเปล่า TBC','พาเลทเปล่า TBS',
-         'พาเลทที่ใช้วางสินค้า','พาเลทที่ใช้ในสายการผลิต'],
-  plastic: ['พาเลทเปล่า RFI','พาเลทเปล่า TBS','พาเลทที่ใช้วางสินค้า','พาเลทที่ใช้ในสายการผลิต',
-            'พาเลทชำรุด รออนุมัติโอนเข้า BRS-900']
-};
-var PROV_KIND = { loscam:'wood', chep:'wood', brs:'plastic', swwi:'plastic' };
-
-function actualOf(site_id, prov){
-  var s = latestSub(site_id);
-  if(!s) return null;
-  var kind = PROV_KIND[prov] || 'wood';
-  // + สถานะ Book ที่นับเป็นยอดคงค้าง แต่ไม่ใช่ "คงเหลือ" (เดิม = ระหว่างโอนออก) — อ่านจาก flag in_book
-  var bookRow = (S.books[site_id]||{})[prov] || {};
-  var transitOut = 0;
-  bookOutstandingKeys().forEach(function(k){ if(k!=='onhand') transitOut += Number(bookRow[k]||0); });
-  var offPcs     = Number((s.off_pcs && s.off_pcs[prov]) || 0);                   // + นอกระบบ PCS (ระดับ Site)
-  var locs = s.locations;
-
-  if(Array.isArray(locs) && locs.length){
-    // ── ทางหลัก: มี locations_json → รวมเฉพาะสถานะตามสูตร (แม่นยำที่สุด) ──
-    var keep = ACTUAL_STATUS[kind], sum = 0;
-    locs.forEach(function(L){
-      var grp = (L && L[kind]) ? L[kind][prov] : null;   // L.wood.loscam / L.plastic.brs
-      if(!grp) return;
-      keep.forEach(function(k){ sum += Number(grp[k]||0); });
-    });
-    return sum + offPcs + transitOut;
-  }
-
-  // ── Fallback (ใบเก่าที่ไม่มี locations_json): ใช้ยอดรวมเดิมที่เก็บไว้ ──
-  // actual_* = ผลรวมทุกสถานะที่นับได้ ซึ่ง:
-  //   ไม้     → ตรงกับสูตร Actual พอดี (7 สถานะ ใช้ครบทุกตัว)
-  //   พลาสติก → เกินมา 2 สถานะ (ชำรุด โอน BRS-900 แล้ว ตัวเอง/ที่อื่น) ที่ไม่มีเก็บแยกไว้
-  //             ถ้าใบนั้นไม่มียอด BRS-900-โอนแล้ว (ปกติ = 0) ผลจะตรงสูตร
-  if(s.actual && s.actual[prov]!=null){
-    return Number(s.actual[prov]||0) + offPcs + transitOut;
-  }
-  return null;
-}
+/* (systemOf / actualOf / ACTUAL_STATUS / PROV_KIND แบบ v1 ถูกแทนด้วย v2ReconOf + sub.recon) */
 function diffCell(d, isSum){
   var cls = d<0 ? 'diff-neg' : d>0 ? 'diff-pos' : 'diff-zero';
   var txt = d===0 ? '0' : (d>0?'+':'') + d.toLocaleString();
   return '<td class="num '+cls+(isSum?' recon-sum':'')+'">'+txt+'</td>';
 }
+/* ── Render: งบกระทบยอด (v2) ─────────────────────────────
+   คอลัมน์ = รายการที่นับจาก config ของรอบ ไม่ใช่ loscam/chep/brs/swwi
+   ตัวเลขมาจาก reconcileV2_() ฝั่ง backend ที่แนบมากับใบส่งผล (sub.recon)
+   ────────────────────────────────────────────────────────── */
+function v2ReconItems(){
+  if(!V2CFG) return [];
+  var act = function(o){ return o && o.is_active!==false && String(o.is_active).toUpperCase()!=='FALSE'; };
+  var bs  = function(a,b){ return (Number(a.sort)||0)-(Number(b.sort)||0); };
+  var out = [];
+  (V2CFG.types||[]).filter(act).sort(bs).forEach(function(t){
+    (V2CFG.items||[]).filter(function(i){ return i.type_id===t.type_id && act(i); }).sort(bs)
+      .forEach(function(i){ out.push({ item_id:i.item_id, label:i.item_name, type_name:t.type_name, icon:t.icon||'' }); });
+  });
+  return out;
+}
+// แถวงบกระทบยอดของ (site, item) จากใบล่าสุด
+function v2ReconOf(site_id, item_id){
+  var s = latestSub(site_id);
+  if(!s || !Array.isArray(s.recon)) return null;
+  for(var i=0;i<s.recon.length;i++){ if(String(s.recon[i].item_id)===String(item_id)) return s.recon[i]; }
+  return null;
+}
+
 function renderRecon(){
   var act = activeSites();
   var el = document.getElementById('reconTable');
   if(!act.length){ el.innerHTML = '<div class="empty">ยังไม่มี Site</div>'; return; }
-  var anyData = curSubs().some(function(x){ return x.actual; });
 
-  var gA={}, gS={}, gD={}, grand=0;
-  RECON_COLS.forEach(function(c){ gA[c.key]=0; gS[c.key]=0; gD[c.key]=0; });
+  var cols = v2ReconItems();
+  if(!cols.length){
+    el.innerHTML = '<div class="empty">รอบนี้ยังไม่ได้ตั้งค่ารายการที่นับ</div>'; return;
+  }
+  var anyData = curSubs().some(function(x){ return Array.isArray(x.recon) && x.recon.length; });
+
+  var gA={}, gS={}, gD={};
+  cols.forEach(function(c){ gA[c.item_id]=0; gS[c.item_id]=0; gD[c.item_id]=0; });
 
   var body = act.map(function(s){
-    var cells='', siteSum=0;
-    RECON_COLS.forEach(function(c){
-      var a = actualOf(s.site_id, c.key); var aShown = (a==null)?0:a;
-      var sys = systemOf(s.site_id, c.key);
-      var d = aShown - sys;
-      gA[c.key]+=aShown; gS[c.key]+=sys; gD[c.key]+=d; siteSum+=d;
-      cells += '<td class="num grp">'+aShown.toLocaleString()+'</td>'
+    var cells='', siteSum=0, has=false;
+    cols.forEach(function(c){
+      var r = v2ReconOf(s.site_id, c.item_id);
+      if(r) has=true;
+      var a   = r ? Number(r.actual||0)      : 0;
+      var sys = r ? Number(r.outstanding||0) : 0;
+      var d   = r ? Number(r.net_diff||0)    : 0;
+      gA[c.item_id]+=a; gS[c.item_id]+=sys; gD[c.item_id]+=d; siteSum+=d;
+      cells += '<td class="num grp">'+(r?a.toLocaleString():'—')+'</td>'
              + '<td class="num">'+sys.toLocaleString()+'</td>'
-             + diffCell(d);
+             + (r ? diffCell(d) : '<td class="num diff-zero">—</td>');
     });
-    grand += siteSum;
-    return '<tr><td style="font-weight:600;">'+esc(s.site_name)+'</td>'+cells+diffCell(siteSum,true)+'</tr>';
+    var nm = esc(s.site_name) + (has ? '' : ' <span style="font-size:10.5px;color:var(--muted);font-weight:400;">(ยังไม่ส่ง)</span>');
+    return '<tr><td style="font-weight:600;">'+nm+'</td>'+cells+diffCell(siteSum,true)+'</tr>';
   }).join('');
 
   var h1 = '<tr><th rowspan="2">Location Name</th>'
-    + RECON_COLS.map(function(c){ return '<th colspan="3" class="grp">'+esc(c.label)+'</th>'; }).join('')
-    + '<th rowspan="2">Sum total</th></tr>';
-  var h2 = '<tr>' + RECON_COLS.map(function(){ return '<th class="grp">Actual</th><th>System</th><th>Diff</th>'; }).join('') + '</tr>';
+    + cols.map(function(c){ return '<th colspan="3" class="grp">'+esc((c.icon?c.icon+' ':'')+c.label)+'</th>'; }).join('')
+    + '<th rowspan="2">รวมสุทธิ</th></tr>';
+  var h2 = '<tr>' + cols.map(function(){
+      return '<th class="grp">นับจริง</th><th>ตามระบบ</th><th>สุทธิ</th>'; }).join('') + '</tr>';
 
   var fCells='', fSum=0;
-  RECON_COLS.forEach(function(c){
-    fCells += '<td class="num grp">'+gA[c.key].toLocaleString()+'</td>'
-            + '<td class="num">'+gS[c.key].toLocaleString()+'</td>'
-            + diffCell(gD[c.key]);
-    fSum += gD[c.key];
+  cols.forEach(function(c){
+    fCells += '<td class="num grp">'+gA[c.item_id].toLocaleString()+'</td>'
+            + '<td class="num">'+gS[c.item_id].toLocaleString()+'</td>'
+            + diffCell(gD[c.item_id]);
+    fSum += gD[c.item_id];
   });
   var foot = '<tr class="recon-foot"><td>Grand Total</td>'+fCells+diffCell(fSum,true)+'</tr>';
 
-  el.innerHTML = '<table class="recon"><thead>'+h1+h2+'</thead><tbody>'+body+'</tbody><tfoot>'+foot+'</tfoot></table>';
+  el.innerHTML = '<table class="recon"><thead>'+h1+h2+'</thead><tbody>'+body+'</tbody><tfoot>'+foot+'</tfoot></table>'
+    + '<div style="padding:9px 14px;font-size:11px;color:var(--muted);line-height:1.6;border-top:1px solid var(--border);">'
+    + 'นับจริง = รวมสถานะที่ตั้ง in_actual · ตามระบบ = รวมสถานะที่ตั้ง is_outstanding · '
+    + '<b>สุทธิ = ส่วนต่างสุทธิจากงบกระทบยอด</b> (นับจริง − ยอดตั้งต้น + บวกกลับ + รายการปรับปรุง) ไม่ใช่ นับจริง − ตามระบบ'
+    + '</div>';
   if(!anyData){
     el.insertAdjacentHTML('afterbegin','<div style="padding:9px 14px;font-size:11.5px;color:var(--muted);border-bottom:1px solid var(--border);">ℹ️ ยังไม่มี Site ที่ส่งผลการนับ — ตารางจะเติมค่าเมื่อเริ่มมีข้อมูลเข้ามา</div>');
   }
@@ -2110,25 +2088,29 @@ function exportReconCSV(){
   function q(v){ return '"' + String(v==null?'':v).replace(/"/g,'""') + '"'; }
   var rows = [];
   // header 2 ชั้น → รวมเป็นชื่อคอลัมน์เดียว
+  var cols = v2ReconItems();
+  if(!cols.length){ toast('รอบนี้ยังไม่ได้ตั้งค่ารายการที่นับ','error'); return; }
   var head = ['Location Name'];
-  RECON_COLS.forEach(function(c){ head.push(c.label+' Actual', c.label+' System', c.label+' Diff'); });
-  head.push('Sum total');
+  cols.forEach(function(c){ head.push(c.label+' นับจริง', c.label+' ตามระบบ', c.label+' สุทธิ'); });
+  head.push('รวมสุทธิ');
   rows.push(head.map(q).join(','));
 
-  var gA={}, gS={}, gD={}; RECON_COLS.forEach(function(c){ gA[c.key]=0; gS[c.key]=0; gD[c.key]=0; });
+  var gA={}, gS={}, gD={}; cols.forEach(function(c){ gA[c.item_id]=0; gS[c.item_id]=0; gD[c.item_id]=0; });
   act.forEach(function(s){
     var line=[s.site_name], siteSum=0;
-    RECON_COLS.forEach(function(c){
-      var a=actualOf(s.site_id,c.key); var aShown=(a==null)?0:a;
-      var sys=systemOf(s.site_id,c.key); var d=aShown-sys;
-      gA[c.key]+=aShown; gS[c.key]+=sys; gD[c.key]+=d; siteSum+=d;
-      line.push(aShown, sys, d);
+    cols.forEach(function(c){
+      var r = v2ReconOf(s.site_id, c.item_id);
+      var a   = r?Number(r.actual||0):0;
+      var sys = r?Number(r.outstanding||0):0;
+      var d   = r?Number(r.net_diff||0):0;
+      gA[c.item_id]+=a; gS[c.item_id]+=sys; gD[c.item_id]+=d; siteSum+=d;
+      line.push(a, sys, d);
     });
     line.push(siteSum);
     rows.push(line.map(q).join(','));
   });
   var foot=['Grand Total'], fSum=0;
-  RECON_COLS.forEach(function(c){ foot.push(gA[c.key], gS[c.key], gD[c.key]); fSum+=gD[c.key]; });
+  cols.forEach(function(c){ foot.push(gA[c.item_id], gS[c.item_id], gD[c.item_id]); fSum+=gD[c.item_id]; });
   foot.push(fSum);
   rows.push(foot.map(q).join(','));
 
@@ -2767,19 +2749,29 @@ function renderQueue(st){
       cs.sort(function(a,b){return (b.submitted_at||'').localeCompare(a.submitted_at||'');});
       sub=cs[0]||null;
     }catch(e){}
-    var op = (sub&&sub.off_pcs)?sub.off_pcs:{loscam:null,chep:null,brs:null,swwi:null};
-    var ac = (sub&&sub.actual)?sub.actual:{loscam:null,chep:null,brs:null,swwi:null};
-    var pr = (sub&&sub.production)?sub.production:{loscam:null,chep:null,brs:null,swwi:null};
-    function opv(x){ return (x===null||x===undefined||x==='')?'—':x; }
-    var opTotal = ['loscam','chep','brs','swwi'].reduce(function(a,k){return a+(Number(op[k])||0);},0);
-    function opCell(lbl,val){ return '<div style="border:1px solid var(--border,#e2e2e2);border-radius:8px;padding:8px;text-align:center;"><div style="font-size:11px;color:var(--muted,#999);">'+lbl+'</div><div style="font-size:16px;font-weight:700;">'+opv(val)+'</div></div>'; }
-    function provGrid(o){
-      var t=['loscam','chep','brs','swwi'].reduce(function(a,k){return a+(Number(o[k])||0);},0);
-      return '<div style="display:grid;grid-template-columns:repeat(4,1fr) auto;gap:8px;align-items:stretch;margin-bottom:14px;">'
-        +opCell('LOSCAM',o.loscam)+opCell('CHEP',o.chep)+opCell('BRS',o.brs)+opCell('SWWI',o.swwi)
-        +'<div style="border:1px solid var(--border,#e2e2e2);border-radius:8px;padding:8px 14px;text-align:center;background:rgba(0,0,0,.03);"><div style="font-size:11px;color:var(--muted,#999);">รวม</div><div style="font-size:18px;font-weight:800;">'+t+'</div></div>'
+    // ── v2: การ์ดต่อรายการที่นับ (จาก config ของรอบ) ──
+    var qCols = v2ReconItems();
+    var qRec  = {};
+    if(sub && Array.isArray(sub.recon)) sub.recon.forEach(function(r){ qRec[r.item_id]=r; });
+    function opv(x){ return (x===null||x===undefined||x==='')?'—':Number(x).toLocaleString(); }
+    function opCell(lbl,val){ return '<div style="border:1px solid var(--border,#e2e2e2);border-radius:8px;padding:8px;text-align:center;"><div style="font-size:11px;color:var(--muted,#999);">'+esc(lbl)+'</div><div style="font-size:16px;font-weight:700;">'+opv(val)+'</div></div>'; }
+    // pick(item_id) → ตัวเลขที่จะโชว์ในการ์ดนั้น
+    function itemGrid(pick){
+      if(!qCols.length) return '<div style="font-size:12px;color:var(--muted);margin-bottom:14px;">รอบนี้ยังไม่ได้ตั้งค่ารายการที่นับ</div>';
+      var cols = Math.min(qCols.length, 4), t = 0, cells = '';
+      qCols.forEach(function(c){
+        var v = pick(c.item_id);
+        if(v!=null) t += Number(v)||0;
+        cells += opCell(c.label, v);
+      });
+      return '<div style="display:grid;grid-template-columns:repeat('+cols+',1fr) auto;gap:8px;align-items:stretch;margin-bottom:14px;">'
+        +cells
+        +'<div style="border:1px solid var(--border,#e2e2e2);border-radius:8px;padding:8px 14px;text-align:center;background:rgba(0,0,0,.03);"><div style="font-size:11px;color:var(--muted,#999);">รวม</div><div style="font-size:18px;font-weight:800;">'+t.toLocaleString()+'</div></div>'
         +'</div>';
     }
+    var adjList = (V2CFG && V2CFG.adjustments || []).filter(function(a){ return a.is_active!==false; });
+    var adjTotal = 0;
+    qCols.forEach(function(c){ var r=qRec[c.item_id]; if(r) adjTotal += Number(r.adjust||0); });
     var urls=(sub&&sub.pdf_urls&&sub.pdf_urls.length)?sub.pdf_urls:((sub&&sub.pdf_url)?[sub.pdf_url]:[]);
     var pdf = urls.length
       ? urls.map(function(u,i){return '<a class="btn-sm btn-sm-open" href="'+esc(u)+'" target="_blank" rel="noopener" style="margin:0 6px 6px 0;">📄 ไฟล์ '+(i+1)+'</a>';}).join('')
@@ -2798,18 +2790,41 @@ function renderQueue(st){
         +'<div style="background:rgba(0,0,0,.04);border-radius:8px;padding:10px 12px;"><div style="font-size:11px;color:var(--muted,#777);">⏱ ระยะเวลารอคิว</div><div class="mono" style="font-size:19px;font-weight:700;">'+(waitSec!=null?fmtDur(waitSec):'—')+'</div></div>'
         +'<div style="background:rgba(184,137,61,.12);border-radius:8px;padding:10px 12px;"><div style="font-size:11px;color:var(--accent,#8a6526);">▶ ดำเนินการ (เดินสด)</div><div class="mono q-tick" data-since="'+esc(c.calledAt||'')+'" style="font-size:19px;font-weight:700;color:var(--accent,#8a6526);">—</div></div>'
       +'</div>'
-      +'<div style="font-size:12px;color:var(--muted,#777);margin-bottom:6px;">ยอดนับจริงรวม (พาเลท)</div>'
-      +provGrid(ac)
-      +'<div style="font-size:12px;color:var(--muted,#777);margin-bottom:6px;">ยอดในสายการผลิต</div>'
-      +provGrid(pr)
-      +'<div style="font-size:12px;color:var(--muted,#777);margin-bottom:6px;">พาเลทที่ควบคุมนอกระบบ PCS <span style="color:var(--muted,#aaa);">— เทียบกับไฟล์หลักฐาน</span></div>'
-      +provGrid(op)
+      +'<div style="font-size:12px;color:var(--muted,#777);margin-bottom:6px;">รวมที่ตรวจนับได้จริง</div>'
+      +itemGrid(function(id){ var r=qRec[id]; return r?r.actual:null; })
+      +'<div style="font-size:12px;color:var(--muted,#777);margin-bottom:6px;">ยอดคงค้างตามระบบ</div>'
+      +itemGrid(function(id){ var r=qRec[id]; return r?r.outstanding:null; })
+      +'<div style="font-size:12px;color:var(--muted,#777);margin-bottom:6px;">ส่วนต่างสุทธิ</div>'
+      +itemGrid(function(id){ var r=qRec[id]; return r?r.net_diff:null; })
+      + (adjList.length
+          ? adjList.map(function(a){
+              return '<div style="font-size:12px;color:var(--muted,#777);margin-bottom:6px;">'+esc(a.adjust_name)
+                + (a.require_file?' <span style="color:var(--muted,#aaa);">— เทียบกับไฟล์หลักฐาน</span>':'')+'</div>'
+                + itemGrid(function(id){
+                    var g=(sub&&sub.totals&&sub.totals[id]&&sub.totals[id].by_adjust)?sub.totals[id].by_adjust:null;
+                    return g ? (Number(g[a.adjust_id])||0) : null;
+                  });
+            }).join('')
+          : '')
       + (function(){
-          var of = (op&&op.files&&op.files.length)?op.files:[];
-          if(!of.length) return (opTotal>0 ? '<div style="font-size:11px;color:#c0392b;margin:-6px 0 14px;">⚠ ไม่มีไฟล์หลักฐานนอกระบบแนบมา</div>' : '');
-          return '<div style="font-size:12px;color:var(--muted,#777);margin-bottom:6px;">ไฟล์หลักฐานนอกระบบ PCS</div><div style="margin-bottom:16px;">'
-            + of.map(function(u,i){return '<a class="btn-sm btn-sm-open" href="'+esc(u)+'" target="_blank" rel="noopener" style="margin:0 6px 6px 0;">🧾 หลักฐาน '+(i+1)+'</a>';}).join('')
-            + '</div>';
+          var af = (sub && sub.adjust_files) ? sub.adjust_files : {};
+          var out = '';
+          adjList.forEach(function(a){
+            var urls = af[a.adjust_id] || [];
+            var sum  = 0;
+            qCols.forEach(function(c){
+              var g=(sub&&sub.totals&&sub.totals[c.item_id]&&sub.totals[c.item_id].by_adjust)?sub.totals[c.item_id].by_adjust:null;
+              if(g) sum += Number(g[a.adjust_id])||0;
+            });
+            if(!urls.length){
+              if(a.require_file && sum>0) out += '<div style="font-size:11px;color:#c0392b;margin:-6px 0 14px;">⚠ '+esc(a.adjust_name)+' มียอด '+sum.toLocaleString()+' แต่ไม่มีไฟล์หลักฐานแนบมา</div>';
+              return;
+            }
+            out += '<div style="font-size:12px;color:var(--muted,#777);margin-bottom:6px;">ไฟล์หลักฐาน — '+esc(a.adjust_name)+'</div><div style="margin-bottom:16px;">'
+              + urls.map(function(u,i){return '<a class="btn-sm btn-sm-open" href="'+esc(u)+'" target="_blank" rel="noopener" style="margin:0 6px 6px 0;">🧾 หลักฐาน '+(i+1)+'</a>';}).join('')
+              + '</div>';
+          });
+          return out;
         })()
       + (function(){
           var lp = (sub && sub.location_photos && sub.location_photos.length) ? sub.location_photos : [];
@@ -2888,12 +2903,7 @@ function confirmKickback(){
 }
 function qOnCall(on){ qAction('setOnCall',{on:on}); }
 
-/* ── Render: Review ──────────────────────────────────── */
-function renderReview(){
-  var subs = curSubs();
-  renderSubTable('pendingTable', subs.filter(function(c){return c.status==='pending';}), true);
-  renderSubTable('allTable', subs.slice().sort(function(a,b){return (b.submitted_at||'').localeCompare(a.submitted_at||'');}), false);
-}
+/* (renderReview แบบเก่าถูกลบ — ตารางย้ายไป allTableQ ผ่าน renderQueueHistory) */
 function renderSubTable(elId, list, isPending){
   var el = document.getElementById(elId);
   if(!list.length){ el.innerHTML = '<div class="empty">'+(isPending?'ไม่มีรายการรออนุมัติ ✅':'ยังไม่มีผลการนับ')+'</div>'; return; }
