@@ -339,8 +339,8 @@ var API_URL = (typeof STOCKCOUNT_CONFIG !== 'undefined') ? STOCKCOUNT_CONFIG.API
 var session   = null;
 var locations = [];   // [{ name, photo, wood:{loscam:{...}, chep:{...}}, plastic:{brs:{...}, swwi:{...}} }]
 var files     = [];
-var offPcs    = { loscam:0, chep:0, brs:0, swwi:0 };  // ขั้นที่ 3: นอกระบบ PCS ระดับ Site
-var offPcsFiles = [];                                  // ไฟล์หลักฐานนอกระบบ (คนละชุดกับใบเซ็น)
+var ADJ      = {};   // ขั้นที่ 3: ADJ[adjust_id][item_id] = จำนวน
+var ADJFILES = {};   // ADJFILES[adjust_id] = [File,...] (เฉพาะรายการที่ require_file)
 var _checkinPhotoFile = null;                          // รูปเช็คอิน (ถือใน memory → อัปตอนเช็คอิน ไม่ลง localStorage)
 var _emptyPCS = function(){ return {คงเหลือ:0,ระหว่างโอนออก:0,ระหว่างโอนเข้า:0,ชำรุดเสียหาย:0,สูญหาย:0}; };
 var bookBalance = { loscam:_emptyPCS(), chep:_emptyPCS(), brs:_emptyPCS(), swwi:_emptyPCS() };
@@ -360,6 +360,7 @@ var _bookReady  = true;  // Admin ใส่ยอดระบบแล้วห�
 var V2      = null;
 var V2BOOK  = {};
 var V2PHASE = '';
+var V2SUB   = null;  // ใบส่งผล v2 ของ site นี้ (จาก getCountSetup)
 
 function _act(o){ return o && o.is_active !== false && String(o.is_active).toUpperCase() !== 'FALSE'; }
 function _bySort(a,b){ return (Number(a.sort)||0) - (Number(b.sort)||0); }
@@ -421,9 +422,101 @@ function locTotal(loc) {
   return ALL_ITEMS().reduce(function(s,it){ return s + itemTotal(loc, it.item_id); }, 0);
 }
 
+/* ════════════════════════════════════════════════════════════
+   ขั้นที่ 3 — รายการปรับปรุงระดับ Site (จาก cfg.adjustments)
+   ════════════════════════════════════════════════════════════ */
+function adjGet(ajId, itemId){ return Number((ADJ[ajId]||{})[itemId]) || 0; }
+function setAdj(ajId, itemId, val){
+  if (!ADJ[ajId]) ADJ[ajId] = {};
+  ADJ[ajId][itemId] = Math.max(0, Math.floor(Number(val)||0));
+  _offDone = false; updateSubmitCard();
+  var el = document.getElementById('adjSum_'+_domId(ajId));
+  if (el) el.textContent = _fmtN(adjSumOf(ajId));
+  try { saveProgress(); } catch(e) {}
+}
+function adjSumOf(ajId){
+  return ALL_ITEMS().reduce(function(s,it){ return s + adjGet(ajId, it.item_id); }, 0);
+}
+function adjSumItem(itemId){
+  return ADJUSTS().reduce(function(s,a){ return s + adjGet(a.adjust_id, itemId); }, 0);
+}
+function _offSum(){ return ADJUSTS().reduce(function(s,a){ return s + adjSumOf(a.adjust_id); }, 0); }
+// ครบเงื่อนไขไหม — รายการที่ require_file และมียอด ต้องมีไฟล์
+function _offOk(){
+  return ADJUSTS().every(function(a){
+    if (!a.require_file) return true;
+    if (adjSumOf(a.adjust_id) === 0) return true;
+    return (ADJFILES[a.adjust_id] || []).length > 0;
+  });
+}
+function _offSummaryTxt(){
+  if (!ADJUSTS().length) return '(ไม่มีรายการปรับปรุงในรอบนี้)';
+  var s = _offSum();
+  if (s === 0) return '(0 — ไม่ต้องแนบไฟล์)';
+  var miss = ADJUSTS().filter(function(a){
+    return a.require_file && adjSumOf(a.adjust_id) > 0 && !(ADJFILES[a.adjust_id]||[]).length;
+  });
+  return '(' + _fmtN(s) + (V2UNIT()?' '+V2UNIT():'') + ' · ' + (miss.length ? '⚠ ต้องแนบไฟล์' : 'ครบ') + ')';
+}
+function _fmtN(v){ return (Number(v)||0).toLocaleString('th-TH'); }
+
+// ── ช่องกรอก 1 รายการปรับปรุง × 1 item ──
+function _adjInput(ajId, it){
+  var u = String(it.unit||'').trim();
+  return '<div class="field" style="margin-bottom:0;"><label>'+esc(it.item_name)+(u?' <span style="font-weight:400;opacity:.7;">('+esc(u)+')</span>':'')+'</label>'+
+    '<input class="input" id="adj_'+_domId(ajId)+'_'+_domId(it.item_id)+'" type="number" min="0" inputmode="numeric" '+
+    'value="'+adjGet(ajId, it.item_id)+'" '+
+    'onchange="setAdj(\''+ajId+'\',\''+it.item_id+'\',this.value)" '+
+    'oninput="setAdj(\''+ajId+'\',\''+it.item_id+'\',this.value)"></div>';
+}
+
+// ── การ์ด 1 ใบต่อรายการปรับปรุง ──
+function _adjCard(a){
+  var items = ALL_ITEMS();
+  var cols  = items.length >= 2 ? 2 : 1;
+  return '<div style="border:1px solid var(--border);border-radius:var(--rs);padding:12px;margin-bottom:12px;">'+
+    '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">'+
+      '<span style="font-size:13px;font-weight:700;flex:1;">'+esc(a.adjust_name)+
+        (a.require_file?' <span style="font-size:11px;font-weight:600;color:var(--danger);">· ต้องแนบไฟล์ถ้ามียอด</span>':'')+'</span>'+
+      '<span style="font-size:13px;font-weight:800;" id="adjSum_'+_domId(a.adjust_id)+'">'+_fmtN(adjSumOf(a.adjust_id))+'</span>'+
+    '</div>'+
+    '<div style="display:grid;grid-template-columns:repeat('+cols+',1fr);gap:10px;margin-bottom:'+(a.require_file?'12px':'0')+';">'+
+      items.map(function(it){ return _adjInput(a.adjust_id, it); }).join('')+
+    '</div>'+
+    (a.require_file
+      ? '<div class="upload-zone" onclick="document.getElementById(\'adjFile_'+_domId(a.adjust_id)+'\').click()">'+
+          '<div class="icon">📎</div><div class="label">แนบไฟล์หลักฐาน</div></div>'+
+        '<input type="file" id="adjFile_'+_domId(a.adjust_id)+'" accept="image/*,application/pdf,.xls,.xlsx,.csv,.doc,.docx" multiple '+
+          'onchange="handleAdjFiles(\''+a.adjust_id+'\',this.files);this.value=\'\';" style="display:none;">'+
+        '<div class="file-list" id="adjFileList_'+_domId(a.adjust_id)+'">'+_renderAdjFileList(a.adjust_id)+'</div>'
+      : '')+
+  '</div>';
+}
+
+function handleAdjFiles(ajId, fileList){
+  if (!ADJFILES[ajId]) ADJFILES[ajId] = [];
+  Array.from(fileList).forEach(function(f){ ADJFILES[ajId].push(f); });
+  var el = document.getElementById('adjFileList_'+_domId(ajId));
+  if (el) el.innerHTML = _renderAdjFileList(ajId);
+  _offDone = false; updateSubmitCard();
+}
+function removeAdjFile(ajId, i){
+  (ADJFILES[ajId]||[]).splice(i,1);
+  var el = document.getElementById('adjFileList_'+_domId(ajId));
+  if (el) el.innerHTML = _renderAdjFileList(ajId);
+  _offDone = false; updateSubmitCard();
+}
+function _renderAdjFileList(ajId){
+  return (ADJFILES[ajId]||[]).map(function(f,i){
+    return '<div class="file-item"><span>📄</span><span class="fname">'+esc(f.name)+'</span>'+
+      '<span style="font-size:11px;color:var(--muted);">'+_fmtSize(f.size)+'</span>'+
+      '<button class="fdel" onclick="removeAdjFile(\''+ajId+'\','+i+')" title="ลบ">✕</button></div>';
+  }).join('');
+}
+
 // โหลด config ของรอบ + ยอดระบบของ site นี้ (เรียกก่อน render สถานะ)
 async function _loadCountSetup(site) {
-  V2 = null; V2BOOK = {}; V2PHASE = '';
+  V2 = null; V2BOOK = {}; V2PHASE = ''; V2SUB = null;
   try {
     var res = await fetch(API_URL + '?action=getCountSetup&site=' + encodeURIComponent(site)
       + '&site_id=' + encodeURIComponent(_siteIdByName(site)));
@@ -432,6 +525,8 @@ async function _loadCountSetup(site) {
     V2      = d.config || null;
     V2BOOK  = d.book || {};
     V2PHASE = (d.round && d.round.phase) || '';
+    V2SUB   = d.submission || null;
+    if (V2SUB) siteSubmission = V2SUB;      // v2 เป็นแหล่งข้อมูลหลัก
     return { ok:!!d.ready, reason:d.reason||'', has_book:!!d.has_book, round:d.round||null };
   } catch (e) {
     return { ok:false, reason:'network', message:String(e) };
@@ -509,7 +604,7 @@ function fetchBookBalance(site) {
   fetch(API_URL + '?action=getBookBalance&site=' + encodeURIComponent(site))
     .then(function(r){ return r.json(); })
     .then(function(data) {
-      siteSubmission = data.submission || null; // ส่งแล้ว/ตีกลับ/ล็อก
+      siteSubmission = data.submission || V2SUB || null; // v2 ชนะ v1 ถ้า v1 ไม่มีใบ
       siteDocNo = data.doc_no || '';            // เลขที่เอกสารของ site นี้ (Admin)
       if (data.status === 'ok' && data.book) {
         bookBalance = data.book;
@@ -533,6 +628,10 @@ function saveProgress() {
       return copy;
     });
     localStorage.setItem('stockCountLocations', JSON.stringify(slim));
+    // รายการปรับปรุงขั้นที่ 3 — ผูก round_id ไว้ด้วย (ไฟล์แนบเก็บไม่ได้ ต้องแนบใหม่)
+    localStorage.setItem('stockCountAdj', JSON.stringify({
+      round_id: (roundInfo && roundInfo.round_id) || '', adj: ADJ
+    }));
   } catch(e) {
     console.warn('saveProgress failed (quota exceeded?):', e.message);
     // ไม่ throw ต่อ — ให้ flow หลักทำงานต่อได้แม้ save ไม่สำเร็จ
@@ -540,17 +639,38 @@ function saveProgress() {
   }
 }
 
+// ADJ ถูกโหลดตอน loadProgress() ซึ่งยังไม่รู้ round_id — ตรวจซ้ำเมื่อรู้แล้ว
+function _revalidateAdj() {
+  try {
+    var a = JSON.parse(localStorage.getItem('stockCountAdj') || 'null');
+    var rid = (roundInfo && roundInfo.round_id) || '';
+    if (rid && a && a.round_id && a.round_id !== rid) {
+      ADJ = {}; ADJFILES = {};
+      localStorage.removeItem('stockCountAdj');
+    }
+  } catch(e) {}
+}
+
 function loadProgress() {
   try {
     var saved = localStorage.getItem('stockCountLocations');
     if (saved) locations = JSON.parse(saved);
   } catch(e) { locations = []; }
+  // ADJ ต้องตรงรอบ ไม่ตรงให้ล้าง (กันยอดข้ามรอบปนกัน)
+  try {
+    var a = JSON.parse(localStorage.getItem('stockCountAdj') || 'null');
+    var rid = (roundInfo && roundInfo.round_id) || '';
+    ADJ = (a && a.adj && (!rid || !a.round_id || a.round_id === rid)) ? a.adj : {};
+  } catch(e) { ADJ = {}; }
+  ADJFILES = {};   // ไฟล์แนบเก็บใน localStorage ไม่ได้ — ต้องแนบใหม่ทุกครั้งที่เปิดหน้า
 }
 
 // ล้าง session + งานค้างที่เป็นของรอบเก่า (กันยอดข้ามรอบปนกัน)
 function _clearStaleSession(msg) {
-  try { localStorage.removeItem('stockCountSession'); localStorage.removeItem('stockCountLocations'); } catch(e) {}
+  try { localStorage.removeItem('stockCountSession'); localStorage.removeItem('stockCountLocations');
+        localStorage.removeItem('stockCountAdj'); } catch(e) {}
   session = null; locations = []; siteSubmission = null; files = [];
+  ADJ = {}; ADJFILES = {}; V2SUB = null;
   try { stopSitePoll(); } catch(e) {}
   if (msg) showToast(msg, 'info');
 }
@@ -580,15 +700,19 @@ function _maybeRestoreFromServer() {
   if (!s) return;
   if (s.status !== 'rejected' && s.status !== 'reopened') return;
   var key = (s.count_id || '') + '#' + (s.revision || '');
-  if (_serverRestoredKey === key) return;   // เติมไปแล้วสำหรับใบ/รอบแก้นี้ → ไม่ทับ
+  if (_serverRestoredKey === key) return;   // เติมไปแล้วสำหรับใบนี้
   if (Array.isArray(s.locations) && s.locations.length) {
     locations = s.locations.map(_normLocFromServer);
   }
-  if (s.off_pcs) {
-    offPcs = { loscam:_n2(s.off_pcs.loscam), chep:_n2(s.off_pcs.chep),
-               brs:_n2(s.off_pcs.brs),       swwi:_n2(s.off_pcs.swwi) };
+  if (s.adjustments && typeof s.adjustments === 'object') {
+    ADJ = {};
+    ADJUSTS().forEach(function(a){
+      var g = s.adjustments[a.adjust_id];
+      if (!g) return;
+      ADJ[a.adjust_id] = {};
+      ALL_ITEMS().forEach(function(it){ ADJ[a.adjust_id][it.item_id] = _n2(g[it.item_id]); });
+    });
   }
-  // production เติมกลับอัตโนมัติ — คำนวณจาก locations ตอน submit อยู่แล้ว
   _serverRestoredKey = key;
   try { saveProgress(); } catch(e) {}
 }
@@ -614,10 +738,10 @@ window.onload = function() {
   startHelpPoll();   // แถบเรียกเจ้าหน้าที่ (จะซ่อนเองถ้ายังไม่มี session / อยู่หน้าล็อก)
 };
 
-function loadConfig() {
-  fetch(API_URL + '?action=getConfig')
+async function loadConfig() {
+  await fetch(API_URL + '?action=getConfig')
     .then(function(r){ return r.json(); })
-    .then(function(data) {
+    .then(async function(data) {
       roundInfo = data.round || { round_name:'นับสต็อก', is_open:true };
       // ── กันข้อมูลข้ามรอบ: ถ้า session/งานค้างเป็นของรอบก่อน → ล้างทิ้ง เริ่มใหม่ ──
       if (session && roundInfo && roundInfo.round_id && session.round_id !== roundInfo.round_id) {
@@ -633,6 +757,13 @@ function loadConfig() {
       if (session && data.book_balances) {
         var bb = data.book_balances[session.site];
         if (bb) bookBalance = bb;
+      }
+      // ── โหลด config v2 ของรอบ ก่อน render ──
+      // จำเป็นตอนเปิดหน้าใหม่ทั้งที่เช็คอินไว้แล้ว (ไม่ได้ผ่าน checkStatus)
+      // ไม่โหลดก่อน ขั้นที่ 2 จะขึ้น "ยังไม่ได้ตั้งค่าชนิดที่นับ"
+      if (session && session.site) {
+        try { await _loadCountSetup(session.site); } catch(e) {}
+        _revalidateAdj();
       }
       render();
     })
@@ -743,9 +874,10 @@ function render() {
     if (locations.length > 0) {
       var banner = document.createElement('div');
       banner.className = 'resume-banner';
+      var _ru = V2UNIT();
       banner.innerHTML = '💾 มีข้อมูลค้างอยู่จากครั้งก่อน — '+locations.length+' Location (รวม '
-        + locations.reduce(function(s,l){return s+Number(l.chep||0)+Number(l.loscam||0)+Number(l.brs||0);},0)
-        + ' ใบ) ถูกโหลดกลับมาแล้ว';
+        + _fmtN(locations.reduce(function(s,l){ return s + locTotal(l); }, 0))
+        + (_ru?' '+esc(_ru):'') + ') ถูกโหลดกลับมาแล้ว';
       content.insertBefore(banner, content.firstChild);
     }
     // แบนเนอร์สถานะใบส่งผล (ตีกลับ/เปิดแก้ไข) — ให้อยู่บนสุด
@@ -985,7 +1117,7 @@ function renderStep1(content) {
 function onSiteChange() {
   var site = document.getElementById('selSite').value;
   _checkinPhotoFile = null; _bookReady = true; _offDone = false;
-  V2 = null; V2BOOK = {}; V2PHASE = '';
+  V2 = null; V2BOOK = {}; V2PHASE = ''; V2SUB = null;
   var b = document.getElementById('btnCheckStatus'); if (b) b.disabled = !site;
   var sb = document.getElementById('statusBox'); if (sb) sb.style.display = 'none';
   var cs = document.getElementById('checkinSection'); if (cs) cs.style.display = 'none';
@@ -1261,20 +1393,17 @@ function renderStep2(content) {
     // ── Step 3: พาเลทที่ควบคุมนอกระบบ PCS (ระดับ Site) + ไฟล์หลักฐาน ──
     '<div class="card '+(hasLoc?'active':'locked')+'" id="stepOffCard">'+
       '<div class="card-head" style="cursor:pointer;" onclick="toggleOff()" id="stepOffHead"><span class="step-badge '+(hasLoc?'active':'locked')+'">ขั้นที่ 3</span>'+
-        '<span class="card-title">พาเลทที่ควบคุมนอกระบบ PCS</span>'+
+        '<span class="card-title">รายการปรับปรุงระดับ Site</span>'+
         '<span id="offToggle" style="margin-left:auto;font-size:13px;color:var(--accent);font-weight:600;"></span></div>'+
       '<div class="card-body" id="offBody">'+
-        '<div style="font-size:12px;color:var(--muted);margin-bottom:12px;">กรอกจำนวนระดับ Site — <b>ถ้ามีจำนวนมากกว่า 0 ต้องแนบไฟล์หลักฐาน</b> (PDF / Excel / รูปภาพ) · Site ที่ไม่มีนอกระบบ ปล่อยว่างแล้วกดจบได้เลย</div>'+
-        '<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:14px;">'+
-          PV_OF('wood').concat(PV_OF('plastic')).map(function(pk){
-            return _offInput(PV_LABEL(pk)+' ('+TY_NAME(PV(pk).type||_PROV_FALLBACK[pk].type)+')', pk);
-          }).join('')+
-        '</div>'+
-        '<div class="upload-zone" id="offUploadZone" onclick="document.getElementById(\'offFileInput\').click()"'+
-          ' ondragover="event.preventDefault();this.classList.add(\'drag\')" ondragleave="this.classList.remove(\'drag\')" ondrop="handleOffDrop(event)">'+
-          '<div class="icon">📎</div><div class="label">แนบไฟล์หลักฐานนอกระบบ</div><div class="sub">PDF, Excel, รูปภาพ</div></div>'+
-        '<input type="file" id="offFileInput" accept="image/*,application/pdf,.xls,.xlsx,.csv,.xlsm" multiple onchange="handleOffFiles(this.files);this.value=\'\';" style="display:none;">'+
-        '<div class="file-list" id="offFileList">'+_renderOffFileList()+'</div>'+
+        (function(){
+          var adjList = ADJUSTS();
+          if (!adjList.length) {
+            return '<div style="font-size:12px;color:var(--muted);margin-bottom:12px;">รอบนี้ไม่มีรายการปรับปรุง — กดปุ่มด้านล่างเพื่อไปขั้นถัดไป</div>';
+          }
+          return '<div style="font-size:12px;color:var(--muted);margin-bottom:12px;">กรอกยอดระดับ Site (ไม่ผูกกับ Location) — รายการที่กำหนดให้แนบไฟล์ ต้องแนบเมื่อมียอด</div>'+
+            adjList.map(_adjCard).join('');
+        })()+
         '<button class="btn btn-success" type="button" onclick="finishStep3()" style="width:100%;margin-top:16px;">✓ จบขั้นที่ 3 — ไปสรุป</button>'+
       '</div>'+
     '</div>'+
@@ -1312,14 +1441,15 @@ function renderStep2(content) {
     // ── Submit Card ──
     (function(){
       var _isRe = siteSubmission && (siteSubmission.status==='rejected'||siteSubmission.status==='reopened');
-      var ready = hasLoc && _offDone && files.length>0 && (_isRe || (_step3Seen && _printed));
+      // C3: ยังไม่บังคับพิมพ์เอกสาร (printDoc รอก้อน C4) — ใช้ _step3Seen พอ
+      var ready = hasLoc && _offDone && files.length>0 && (_isRe || _step3Seen);
       return '<div class="submit-card" id="submitCard">'+
       '<div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:8px;">📋 ตรวจสอบก่อน Submit</div>'+
       '<div class="step-check" id="chk1">'+_chkIcon(true)+'ขั้นที่ 1 — เลือก Site และผู้นับ</div>'+
       '<div class="step-check" id="chk2">'+_chkIcon(hasLoc)+'ขั้นที่ 2 — กรอกยอดนับ ('+(hasLoc?locations.length+' Location':'ยังไม่มี Location')+')</div>'+
       '<div class="step-check" id="chkOff">'+_chkIcon(_offDone)+'ขั้นที่ 3 — พาเลทนอกระบบ PCS '+(_offDone?_offSummaryTxt():'(กด “จบขั้นที่ 3 — ไปสรุป”)')+'</div>'+
       (_isRe ? '' : '<div class="step-check" id="chk3a">'+_chkIcon(_step3Seen)+'ขั้นที่ 4 — ตรวจสอบสรุปยอดแล้ว'+(!_step3Seen?' (กด "▸ แสดง" ก่อน)':'')+'</div>')+
-      (_isRe ? '' : '<div class="step-check" id="chk3b">'+_chkIcon(_printed)+'ขั้นที่ 4 — พิมพ์เอกสารยืนยันแล้ว'+(!_printed?' (กด 🖨️ พิมพ์เอกสารยืนยัน)':'')+'</div>')+
+      ''+
       (_isRe ? '<div class="step-check done">'+_chkIcon(true)+'ฉบับแก้ไข — ไม่ต้องพิมพ์/ตรวจสอบซ้ำ</div>' : '')+
       '<div class="step-check" id="chk4">'+_chkIcon(files.length>0)+'ขั้นที่ 5 — Upload รายงาน '+(files.length>0?'('+files.length+' ไฟล์)':'(ยังไม่มีไฟล์)')+'</div>'+
       '<button class="btn btn-success" id="btnSubmit" onclick="submitCount()" '+(ready?'':'disabled')+' style="width:100%;margin-top:8px;">'+
@@ -1399,7 +1529,8 @@ function updateSubmitCard() {
   var hasLoc  = locations.length > 0;
   var hasFile = files.length > 0;
   var _isRe   = siteSubmission && (siteSubmission.status==='rejected'||siteSubmission.status==='reopened');
-  var ready   = hasLoc && _offDone && hasFile && (_isRe || (_step3Seen && _printed));
+  // C3: ยังไม่บังคับพิมพ์เอกสาร (printDoc รอก้อน C4)
+  var ready   = hasLoc && _offDone && hasFile && (_isRe || _step3Seen);
 
   // ปลดล็อกขั้น 3/4 + ปุ่มไปขั้น 3 ทันทีที่มี Location (กันต้อง refresh)
   var goBtn = document.getElementById('btnGoStep3');
@@ -1431,7 +1562,7 @@ function updateSubmitCard() {
   }
   if (chk3b) {
     chk3b.style.display = _isRe ? 'none' : '';
-    chk3b.innerHTML = _chkIcon(_printed)+'ขั้นที่ 4 — พิมพ์เอกสารยืนยันแล้ว'+(!_printed?' <span style="color:var(--warn);">(กด 🖨️ พิมพ์เอกสารยืนยัน)</span>':'');
+    chk3b.innerHTML = '';
     chk3b.className = 'step-check '+(_printed?'done':'pending');
   }
   if (chk4) {
@@ -1592,64 +1723,77 @@ function _calcTotals() {
   return t;
 }
 
-var PCS_BOOK_FIELDS = ['คงเหลือ','ระหว่างโอนออก','ระหว่างโอนเข้า','ชำรุดเสียหาย','สูญหาย'];
+// (PCS_BOOK_FIELDS แบบ v1 ถูกแทนด้วย BSTATS() จาก config)
 
-function _renderSummary(tot) {
-  // ไม่มี summary card — แสดงแค่ตาราง status breakdown
-  return _renderStatusTable(tot);
+/* ════════════════════════════════════════════════════════════
+   งบกระทบยอด — สูตรเดียวกับ reconcileV2_ ฝั่ง backend
+   ประกอบจาก flag ล้วน: is_baseline / is_outstanding / in_actual / add_back
+   ════════════════════════════════════════════════════════════ */
+function _reconcile(tot) {
+  tot = tot || _calcTotals();
+  var base   = BSTAT_BASE();
+  var outIds = BSTATS_OUT().map(function(s){ return s.status_id; });
+  return ALL_ITEMS().map(function(it){
+    var b   = V2BOOK[it.item_id] || {};
+    var g   = tot.byItem[it.item_id] || {};
+    var actual = 0, addBack = 0;
+    CS_OF(it.type_id).forEach(function(s){
+      var q = Number(g[s.status_id]) || 0;
+      if (s.in_actual) actual  += q;
+      if (s.add_back)  addBack += q;
+    });
+    var baseline = base ? (Number(b[base.status_id])||0) : 0;
+    var outstanding = outIds.reduce(function(s,id){ return s + (Number(b[id])||0); }, 0);
+    var adjust = adjSumItem(it.item_id);
+    var diff   = actual - baseline;
+    return { item_id:it.item_id, item_name:it.item_name, unit:it.unit, type_id:it.type_id,
+             baseline:baseline, outstanding:outstanding, actual:actual,
+             add_back:addBack, adjust:adjust, diff:diff, net_diff:diff + addBack + adjust };
+  });
+}
+function _hasBookV2(){
+  return Object.keys(V2BOOK||{}).some(function(k){ return Object.keys(V2BOOK[k]||{}).length > 0; });
+}
+// เซลล์ส่วนต่าง: + เขียว − แดง 0 เทา
+function _diffCell(v){
+  var n = Number(v)||0;
+  var col = n>0 ? 'var(--success)' : n<0 ? 'var(--danger)' : 'var(--muted)';
+  return '<span style="color:'+col+';font-weight:700;">'+(n>0?'+':'')+_fmtN(n)+'</span>';
 }
 
+// ตารางยอดนับจริง แยกตามชนิด: แถว = สถานะ, คอลัมน์ = รายการ
 function _renderStatusTable(tot) {
-  var woodRows = WOOD_STATUS.map(function(s){
-    var l = tot.loscam[s]||0, c = tot.chep[s]||0;
-    return '<tr>'+
-      '<td>'+esc(s)+'</td>'+
-      '<td class="r" style="color:'+PV_COLOR('loscam')+';">'+l+'</td>'+
-      '<td class="r" style="color:'+PV_COLOR('chep')+';">'+c+'</td>'+
-      '<td class="r">'+(l+c)+'</td>'+
-    '</tr>';
+  tot = tot || _calcTotals();
+  var tys = V2TYPES();
+  if (!tys.length) return '<div style="font-size:12px;color:var(--muted);">ยังไม่มีข้อมูล</div>';
+  return tys.map(function(ty){
+    var items = ITEMS_OF(ty.type_id), sts = CS_OF(ty.type_id);
+    if (!items.length || !sts.length) return '';
+    var rows = sts.map(function(s){
+      var sum = 0;
+      var cells = items.map(function(it){
+        var v = Number((tot.byItem[it.item_id]||{})[s.status_id]) || 0; sum += v;
+        return '<td class="r" style="color:'+(it.color||'inherit')+';">'+_fmtN(v)+'</td>';
+      }).join('');
+      return '<tr><td>'+esc(s.status_name)+'</td>'+cells+'<td class="r">'+_fmtN(sum)+'</td></tr>';
+    }).join('');
+    return '<div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin:14px 0 6px;">'
+      + esc((ty.icon||'')+' '+ty.type_name) + '</div>'
+      +'<table class="status-sum-table">'+
+        '<thead><tr><th>สถานะ</th>'+
+          items.map(function(it){ return '<th class="r" style="color:'+(it.color||'inherit')+';">'+esc(it.item_name)+'</th>'; }).join('')+
+          '<th class="r">รวม</th></tr></thead>'+
+        '<tbody>'+rows+'</tbody>'+
+        '<tfoot><tr class="bold-row"><td>'+esc('รวม '+ty.type_name)+'</td>'+
+          items.map(function(it){ return '<td class="r">'+_fmtN(tot.itemTotal[it.item_id]||0)+'</td>'; }).join('')+
+          '<td class="r">'+_fmtN(tot.typeTotal[ty.type_id]||0)+'</td></tr></tfoot>'+
+      '</table>';
   }).join('');
-  var plasticRows = PLASTIC_STATUS.map(function(s){
-    var b = tot.brs[s]||0, w = tot.swwi[s]||0;
-    return '<tr>'+
-      '<td>'+esc(s)+'</td>'+
-      '<td class="r" style="color:'+PV_COLOR('brs')+';">'+b+'</td>'+
-      '<td class="r" style="color:'+PV_COLOR('swwi')+';">'+w+'</td>'+
-      '<td class="r">'+(b+w)+'</td>'+
-    '</tr>';
-  }).join('');
-
-  return '<table class="status-sum-table">'+
-    '<thead><tr>'+
-      '<th>'+esc(TY_ICON('wood')+' '+TY_NAME('wood'))+'</th>'+
-      '<th class="r" style="color:'+PV_COLOR('loscam')+';">'+esc(PV_LABEL('loscam'))+'</th>'+
-      '<th class="r" style="color:'+PV_COLOR('chep')+';">'+esc(PV_LABEL('chep'))+'</th>'+
-      '<th class="r">รวม</th>'+
-    '</tr></thead>'+
-    '<tbody>'+woodRows+'</tbody>'+
-    '<tfoot><tr class="bold-row">'+
-      '<td>'+esc('รวม '+TY_NAME('wood'))+'</td>'+
-      '<td class="r">'+tot.totLoscam+'</td>'+
-      '<td class="r">'+tot.totChep+'</td>'+
-      '<td class="r">'+tot.totWood+'</td>'+
-    '</tr></tfoot>'+
-  '</table>';
 }
+function _renderSummary(tot) { return _renderStatusTable(tot); }
 
 // ===== ขั้นที่ 3: ตัวช่วยอ่านค่า Book =====
-function _bookHas() {
-  return bookBalance && (bookBalance.loscam||bookBalance.chep||bookBalance.brs||bookBalance.swwi);
-}
-function _bk(brand, f) {
-  if (!bookBalance || !bookBalance[brand] || bookBalance[brand][f] === undefined) return null;
-  return Number(bookBalance[brand][f]) || 0;
-}
-function _onhand(brand) { return _bk(brand, 'คงเหลือ'); }              // คงเหลืออย่างเดียว
-function _due(brand) {                                                  // คงเหลือ + ระหว่างโอนออก
-  var a = _bk(brand,'คงเหลือ'), b = _bk(brand,'ระหว่างโอนออก');
-  if (a === null && b === null) return null;
-  return (a||0) + (b||0);
-}
+// (_bookHas / _bk / _onhand / _due แบบ v1 ถูกแทนด้วย _reconcile + _hasBookV2)
 function _cellV(v) { return v === null ? '<span style="color:var(--muted);">—</span>' : v; }
 function _varCell(phys, base) {
   if (base === null) return '<span style="color:var(--muted);">—</span>';
@@ -1661,72 +1805,42 @@ function _s3title(t) {
 }
 
 // บล็อก "จำนวนในระบบ" (PCS) — ตัด "รวมทั้งหมด" ออก ใส่ "รวมยอดคงค้างในบัญชีเช่า" แทน
-function _sysBlock(title, h1, h2, b1, b2, c1, c2) {
-  var rows = PCS_BOOK_FIELDS.map(function(f){
-    return '<tr><td>'+esc(f)+'</td>'+
-      '<td class="r" style="color:'+c1+';">'+_cellV(_bk(b1,f))+'</td>'+
-      '<td class="r" style="color:'+c2+';">'+_cellV(_bk(b2,f))+'</td></tr>';
-  }).join('');
-  return _s3title(title)+
-  '<table class="status-sum-table">'+
-    '<thead><tr><th>รายการ (ระบบ PCS)</th>'+
-      '<th class="r" style="color:'+c1+';">'+h1+'</th>'+
-      '<th class="r" style="color:'+c2+';">'+h2+'</th></tr></thead>'+
-    '<tbody>'+rows+'</tbody>'+
-    '<tfoot><tr class="bold-row" style="background:var(--accent-bg);">'+
-      '<td>รวมยอดคงค้างในบัญชีเช่า <span style="font-weight:400;font-size:10px;color:var(--muted);">(คงเหลือ + ระหว่างโอนออก)</span></td>'+
-      '<td class="r">'+_cellV(_due(b1))+'</td>'+
-      '<td class="r">'+_cellV(_due(b2))+'</td></tr></tfoot>'+
-  '</table>';
-}
-
-// บล็อก "จำนวนนับจริง" + Variance (นับจริง − คงเหลือ)
-function _countBlock(title, statuses, h1, h2, b1, b2, c1, c2, tot, t1, t2, tAll) {
-  var rows = statuses.map(function(s){
-    var x = tot[b1][s]||0, y = tot[b2][s]||0;
-    return '<tr><td>'+esc(s)+'</td>'+
-      '<td class="r" style="color:'+c1+';">'+x+'</td>'+
-      '<td class="r" style="color:'+c2+';">'+y+'</td></tr>';
-  }).join('');
-  return _s3title(title)+
-  '<table class="status-sum-table">'+
-    '<thead><tr><th>รายการ (นับจริง)</th>'+
-      '<th class="r" style="color:'+c1+';">'+h1+'</th>'+
-      '<th class="r" style="color:'+c2+';">'+h2+'</th></tr></thead>'+
-    '<tbody>'+rows+'</tbody>'+
-    '<tfoot>'+
-      '<tr class="bold-row"><td>รวม</td><td class="r">'+t1+'</td><td class="r">'+t2+'</td></tr>'+
-      '<tr class="bold-row" style="background:var(--accent-bg);"><td>± Variance (นับจริง − คงเหลือ)</td>'+
-        '<td class="r">'+_varCell(t1, _onhand(b1))+'</td>'+
-        '<td class="r">'+_varCell(t2, _onhand(b2))+'</td></tr>'+
-    '</tfoot>'+
-  '</table>';
-}
+// (_sysBlock / _countBlock แบบ v1 ถูกแทนด้วย _renderStatusTable + _renderComparison)
 
 function _buildStep3Body() {
   var tot = _calcTotals();
-  var pend = _bookHas() ? '' : '<div class="book-pending">⏳ Admin ยังไม่ได้ใส่ข้อมูลจากระบบ PCS สำหรับ '+esc(session.site)+'</div>';
+  var pend = _hasBookV2() ? '' : '<div class="book-pending">⏳ Admin ยังไม่ได้ใส่ยอดระบบสำหรับ '+esc(session.site)+'</div>';
   return pend +
-    _sysBlock('① จำนวนในระบบ — '+TY_NAME('wood')+' '+TY_ICON('wood'), PV_LABEL('loscam'),PV_LABEL('chep'),'loscam','chep',PV_COLOR('loscam'),PV_COLOR('chep')) +
-    _countBlock('② จำนวนนับจริง — '+TY_NAME('wood')+' '+TY_ICON('wood'), WOOD_STATUS, PV_LABEL('loscam'),PV_LABEL('chep'),'loscam','chep',PV_COLOR('loscam'),PV_COLOR('chep'), tot, tot.totLoscam, tot.totChep, tot.totWood) +
-    _sysBlock('③ จำนวนในระบบ — '+TY_NAME('plastic')+' '+TY_ICON('plastic'), PV_LABEL('brs'),PV_LABEL('swwi'),'brs','swwi',PV_COLOR('brs'),PV_COLOR('swwi')) +
-    _countBlock('④ จำนวนนับจริง — '+TY_NAME('plastic')+' '+TY_ICON('plastic'), PLASTIC_STATUS, PV_LABEL('brs'),PV_LABEL('swwi'),'brs','swwi',PV_COLOR('brs'),PV_COLOR('swwi'), tot, tot.totBrs, tot.totSwwi, tot.totPlastic) +
+    _s3title('① ยอดนับจริง แยกตามสถานะ') + _renderStatusTable(tot) +
+    _s3title('② งบกระทบยอด — เทียบกับยอดระบบ') + _renderComparison(tot) +
     _offBlock() +
-    '<button class="btn-print" onclick="printDoc()">🖨️ พิมพ์เอกสารยืนยัน</button>';
+    '<div style="margin-top:14px;padding:11px 13px;border-radius:var(--rs);background:rgba(245,158,11,.12);color:#a16207;font-size:12px;line-height:1.6;">'+
+      '🖨️ เอกสารยืนยันกำลังย้ายไปใช้ Word template ของรอบ (ก้อน C4) — ระหว่างนี้ส่งผลได้โดยไม่ต้องพิมพ์</div>';
 }
+
+// สรุปรายการปรับปรุงที่กรอกในขั้นที่ 3
 function _offBlock() {
-  var t = (offPcs.loscam||0)+(offPcs.chep||0)+(offPcs.brs||0)+(offPcs.swwi||0);
-  return _s3title('⑤ พาเลทที่ควบคุมนอกระบบ PCS (ระดับ Site)') +
+  var adjList = ADJUSTS();
+  if (!adjList.length) return '';
+  var items = ALL_ITEMS();
+  var rows = adjList.map(function(a){
+    var need = a.require_file && adjSumOf(a.adjust_id) > 0 && !(ADJFILES[a.adjust_id]||[]).length;
+    return '<tr><td>'+esc(a.adjust_name)+(need?' <span style="color:var(--danger);font-size:11px;">⚠ ยังไม่แนบไฟล์</span>':'')+'</td>'+
+      items.map(function(it){ return '<td class="r">'+_fmtN(adjGet(a.adjust_id, it.item_id))+'</td>'; }).join('')+
+      '<td class="r">'+_fmtN(adjSumOf(a.adjust_id))+'</td></tr>';
+  }).join('');
+  var nFiles = adjList.reduce(function(s,a){ return s + (ADJFILES[a.adjust_id]||[]).length; }, 0);
+  return _s3title('③ รายการปรับปรุงระดับ Site') +
   '<table class="status-sum-table">'+
-    '<thead><tr><th>ผู้ให้บริการ</th><th class="r">จำนวน (พาเลท)</th></tr></thead>'+
-    '<tbody>'+
-      PV_OF('wood').concat(PV_OF('plastic')).map(function(pk){
-        return '<tr><td>'+esc(PV_LABEL(pk)+' ('+TY_NAME(PV(pk).type||_PROV_FALLBACK[pk].type)+')')+'</td><td class="r">'+_cellV(offPcs[pk]||0)+'</td></tr>';
-      }).join('')+
-    '</tbody>'+
-    '<tfoot><tr class="bold-row" style="background:var(--accent-bg);"><td>รวมนอกระบบ PCS</td><td class="r">'+_cellV(t)+'</td></tr></tfoot>'+
+    '<thead><tr><th>รายการ</th>'+
+      items.map(function(it){ return '<th class="r">'+esc(it.item_name)+'</th>'; }).join('')+
+      '<th class="r">รวม</th></tr></thead>'+
+    '<tbody>'+rows+'</tbody>'+
+    '<tfoot><tr class="bold-row" style="background:var(--accent-bg);"><td>รวมทั้งหมด</td>'+
+      items.map(function(it){ return '<td class="r">'+_fmtN(adjSumItem(it.item_id))+'</td>'; }).join('')+
+      '<td class="r">'+_fmtN(_offSum())+'</td></tr></tfoot>'+
   '</table>'+
-  (offPcsFiles.length?'<div style="font-size:12px;color:var(--muted);margin:4px 0 8px;">📎 แนบไฟล์หลักฐาน '+offPcsFiles.length+' ไฟล์</div>':'');
+  (nFiles ? '<div style="font-size:12px;color:var(--muted);margin:4px 0 8px;">📎 แนบไฟล์หลักฐาน '+nFiles+' ไฟล์</div>' : '');
 }
 
 function toggleStep3() {
@@ -1759,11 +1873,6 @@ function toggleStep2() {
 
 // ปุ่ม "ไปขั้นที่ 3" — พับขั้น 2 + ปลดล็อก + เปิดสรุป + เลื่อนไปหา
 function goStep3() {
-  // ⛔ C2: ขั้นที่ 3–5 ยังเป็นโค้ด v1 (อ้างชนิด/ผู้ให้บริการแบบ hardcode)
-  //    เปิดใช้จะได้ยอดผิดโครง — ปลดล็อคในก้อน C3
-  showToast('ขั้นที่ 3–5 ยังอยู่ระหว่างย้ายเป็น v2 — ตอนนี้ทดสอบได้ถึงขั้นที่ 2 (ยอดที่กรอกไว้ไม่หาย)', 'warn');
-  return;
-  /* eslint-disable no-unreachable */
   if (locations.length === 0) { showToast('กรุณาบันทึกอย่างน้อย 1 Location ก่อน', 'warn'); return; }
   // พับซ่อนขั้นที่ 2
   var s2body = document.getElementById('step2Body');
@@ -2049,109 +2158,59 @@ function removeFile(i) {
 }
 
 // ── ขั้นที่ 3: พาเลทนอกระบบ PCS (ระดับ Site) + ไฟล์หลักฐาน ──
-function _offInput(label,key){
-  return '<div class="field" style="margin-bottom:0;"><label>'+label+'</label>'+
-    '<input class="input" id="off_'+key+'" type="number" min="0" inputmode="numeric" value="'+(offPcs[key]||0)+'" '+
-    'onchange="setOffPcs(\''+key+'\',this.value)" oninput="setOffPcs(\''+key+'\',this.value)"></div>';
-}
-function setOffPcs(key,val){ offPcs[key]=Math.max(0,Math.floor(Number(val)||0)); _offDone=false; updateSubmitCard(); }
-function _offSum(){ return (offPcs.loscam||0)+(offPcs.chep||0)+(offPcs.brs||0)+(offPcs.swwi||0); }
-function _offOk(){ return _offSum()===0 || offPcsFiles.length>0; }
-function _offSummaryTxt(){ var s=_offSum(); if(s===0) return '(0 — ไม่ต้องแนบไฟล์)'; return '('+s+' พาเลท · '+(offPcsFiles.length?offPcsFiles.length+' ไฟล์':'⚠ ต้องแนบไฟล์')+')'; }
-function handleOffFiles(fileList){ Array.from(fileList).forEach(function(f){ offPcsFiles.push(f); }); var el=document.getElementById('offFileList'); if(el) el.innerHTML=_renderOffFileList(); _offDone=false; updateSubmitCard(); }
-function _renderOffFileList(){ return offPcsFiles.map(function(f,i){ return '<div class="file-item"><span>📄</span><span class="fname">'+esc(f.name)+'</span><span style="font-size:11px;color:var(--muted);">'+_fmtSize(f.size)+'</span><button class="fdel" onclick="removeOffFile('+i+')" title="ลบ">✕</button></div>'; }).join(''); }
-function removeOffFile(i){ offPcsFiles.splice(i,1); var el=document.getElementById('offFileList'); if(el) el.innerHTML=_renderOffFileList(); _offDone=false; updateSubmitCard(); }
-function handleOffDrop(e){ e.preventDefault(); var z=document.getElementById('offUploadZone'); if(z) z.classList.remove('drag'); handleOffFiles(e.dataTransfer.files); }
+// (ตัวช่วยขั้นที่ 3 ย้ายไปบล็อก "รายการปรับปรุง" ด้านบน)
+// (handleOffDrop แบบ v1 ไม่ใช้แล้ว — แต่ละรายการปรับปรุงมีช่องแนบไฟล์ของตัวเอง)
 
+// งบกระทบยอด — 1 ตารางต่อชนิด, แถว = ขั้นของสูตร, คอลัมน์ = รายการ
 function _renderComparison(tot) {
-  var hasB = bookBalance && Object.keys(bookBalance).some(function(k){ return bookBalance[k] && typeof bookBalance[k]==='object'; });
-
-  function val(brand, field) {
-    if (!hasB || !bookBalance[brand]) return '—';
-    return (bookBalance[brand][field] !== undefined) ? bookBalance[brand][field] : '—';
-  }
-  function bookTotal(brand) {
-    if (!hasB || !bookBalance[brand]) return null;
-    return PCS_BOOK_FIELDS.reduce(function(s,f){ return s + (Number(bookBalance[brand][f])||0); }, 0);
-  }
-  function varNum(phys, book) {
-    if (book === null || book === undefined) return '<span style="color:var(--muted);">—</span>';
-    var v = phys - book;
-    var col = v>0 ? 'var(--success)' : v<0 ? 'var(--danger)' : 'var(--muted)';
-    return '<span style="color:'+col+';font-weight:700;">'+(v>0?'+':'')+v+'</span>';
-  }
-
+  var rec = _reconcile(tot);
+  var byId = {}; rec.forEach(function(r){ byId[r.item_id] = r; });
+  var base = BSTAT_BASE(), outs = BSTATS_OUT();
   var html = '';
-  if (!hasB) {
-    html += '<div class="book-pending">⏳ Admin ยังไม่ได้ใส่ข้อมูลจากระบบ PCS สำหรับ '+esc(session.site)+'</div>';
+  if (!_hasBookV2()) {
+    html += '<div class="book-pending">⏳ Admin ยังไม่ได้ใส่ยอดระบบสำหรับ '+esc(session.site)+'</div>';
   }
+  var hasAddBack = (V2 && (V2.count_statuses||[]).some(function(s){ return s.add_back; }));
+  var adjList = ADJUSTS();
 
-  // ── ตาราง Wood: PCS rows x LOSCAM/CHEP column ──
-  var woodPCSrows = PCS_BOOK_FIELDS.map(function(f) {
-    var vL = val('loscam', f), vC = val('chep', f);
-    return '<tr>'+
-      '<td>'+esc(f)+'</td>'+
-      '<td class="r" style="color:'+PV_COLOR('loscam')+';">'+(vL!=='—'?vL:'<span style="color:var(--muted);">—</span>')+'</td>'+
-      '<td class="r" style="color:'+PV_COLOR('chep')+';">'+(vC!=='—'?vC:'<span style="color:var(--muted);">—</span>')+'</td>'+
-    '</tr>';
+  html += V2TYPES().map(function(ty){
+    var items = ITEMS_OF(ty.type_id);
+    if (!items.length) return '';
+    var row = function(label, pick, opts){
+      opts = opts || {};
+      return '<tr'+(opts.bg?' class="bold-row" style="background:var(--accent-bg);"':(opts.bold?' class="bold-row"':''))+'>'+
+        '<td'+(opts.indent?' style="padding-left:'+(opts.indent*12)+'px;"':'')+'>'+esc(label)+'</td>'+
+        items.map(function(it){
+          var r = byId[it.item_id] || {};
+          var v = pick(r);
+          return '<td class="r">'+(opts.diff ? _diffCell(v) : _fmtN(v))+'</td>';
+        }).join('')+
+      '</tr>';
+    };
+    return '<div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin:16px 0 6px;">'
+      + esc((ty.icon||'')+' งบกระทบยอด — '+ty.type_name) + '</div>'
+      +'<table class="status-sum-table">'+
+        '<thead><tr><th>รายการ</th>'+
+          items.map(function(it){ return '<th class="r" style="color:'+(it.color||'inherit')+';">'+esc(it.item_name)+'</th>'; }).join('')+
+        '</tr></thead>'+
+        '<tbody>'+
+          row(base ? base.status_name : 'ยอดตั้งต้น (ยังไม่ได้ตั้ง flag)', function(r){ return r.baseline; })+
+          (outs.length > 1 ? row('รวมยอดคงค้างตามระบบ ('+outs.map(function(s){return s.status_name;}).join(' + ')+')', function(r){ return r.outstanding; }, {bold:true}) : '')+
+          row('รวมที่ตรวจนับได้จริง', function(r){ return r.actual; }, {bold:true})+
+          row('ส่วนต่าง (นับจริง − '+(base?base.status_name:'ยอดตั้งต้น')+')', function(r){ return r.diff; }, {diff:true})+
+          (hasAddBack ? row('บวกกลับ (สถานะที่ตั้ง add_back)', function(r){ return r.add_back; }, {indent:1}) : '')+
+          adjList.map(function(a){
+            return row('บวก '+a.adjust_name, function(r){ return adjGet(a.adjust_id, r.item_id); }, {indent:1});
+          }).join('')+
+          row('ส่วนต่างสุทธิ', function(r){ return r.net_diff; }, {diff:true, bg:true})+
+        '</tbody>'+
+      '</table>';
   }).join('');
 
-  var btL = bookTotal('loscam'), btC = bookTotal('chep');
-  html += '<div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin:14px 0 6px;">ข้อมูลจากระบบควบคุมพาเลท (PCS) — '+esc(TY_NAME('wood'))+'</div>'+
-  '<table class="status-sum-table">'+
-    '<thead><tr>'+
-      '<th>รายการ</th>'+
-      '<th class="r" style="color:'+PV_COLOR('loscam')+';">'+esc(PV_LABEL('loscam'))+'</th>'+
-      '<th class="r" style="color:'+PV_COLOR('chep')+';">'+esc(PV_LABEL('chep'))+'</th>'+
-    '</tr></thead>'+
-    '<tbody>'+woodPCSrows+'</tbody>'+
-    '<tfoot>'+
-      '<tr class="bold-row">'+
-        '<td>รวม Book</td>'+
-        '<td class="r">'+(btL!==null?btL:'—')+'</td>'+
-        '<td class="r">'+(btC!==null?btC:'—')+'</td>'+
-      '</tr>'+
-      '<tr class="bold-row" style="background:var(--accent-bg);">'+
-        '<td>± Variance (นับจริง − Book)</td>'+
-        '<td class="r">'+varNum(tot.totLoscam, btL)+'</td>'+
-        '<td class="r">'+varNum(tot.totChep, btC)+'</td>'+
-      '</tr>'+
-    '</tfoot>'+
-  '</table>';
-
-  // ── ตาราง Plastic: PCS rows x BRS/SWWI column ──
-  var plasticPCSrows = PCS_BOOK_FIELDS.map(function(f) {
-    var vB = val('brs', f), vS = val('swwi', f);
-    return '<tr>'+
-      '<td>'+esc(f)+'</td>'+
-      '<td class="r" style="color:'+PV_COLOR('brs')+';">'+(vB!=='—'?vB:'<span style="color:var(--muted);">—</span>')+'</td>'+
-      '<td class="r" style="color:'+PV_COLOR('swwi')+';">'+(vS!=='—'?vS:'<span style="color:var(--muted);">—</span>')+'</td>'+
-    '</tr>';
-  }).join('');
-
-  var btB = bookTotal('brs'), btS = bookTotal('swwi');
-  html += '<div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin:14px 0 6px;">ข้อมูลจากระบบควบคุมพาเลท (PCS) — '+esc(TY_NAME('plastic'))+'</div>'+
-  '<table class="status-sum-table">'+
-    '<thead><tr>'+
-      '<th>รายการ</th>'+
-      '<th class="r" style="color:'+PV_COLOR('brs')+';">'+esc(PV_LABEL('brs'))+'</th>'+
-      '<th class="r" style="color:'+PV_COLOR('swwi')+';">'+esc(PV_LABEL('swwi'))+'</th>'+
-    '</tr></thead>'+
-    '<tbody>'+plasticPCSrows+'</tbody>'+
-    '<tfoot>'+
-      '<tr class="bold-row">'+
-        '<td>รวม Book</td>'+
-        '<td class="r">'+(btB!==null?btB:'—')+'</td>'+
-        '<td class="r">'+(btS!==null?btS:'—')+'</td>'+
-      '</tr>'+
-      '<tr class="bold-row" style="background:var(--accent-bg);">'+
-        '<td>± Variance (นับจริง − Book)</td>'+
-        '<td class="r">'+varNum(tot.totBrs, btB)+'</td>'+
-        '<td class="r">'+varNum(tot.totSwwi, btS)+'</td>'+
-      '</tr>'+
-    '</tfoot>'+
-  '</table>';
-
+  if (!base) {
+    html += '<div style="margin-top:10px;padding:10px 12px;border-radius:var(--rs);background:rgba(245,158,11,.12);color:#a16207;font-size:12px;line-height:1.6;">'
+      + '⚠ รอบนี้ยังไม่ได้ตั้งสถานะยอดระบบเป็น “ยอดตั้งต้น” (is_baseline) — ส่วนต่างจะเทียบกับ 0 แจ้ง Admin ให้ตั้งก่อน</div>';
+  }
   return html;
 }
 
@@ -2587,21 +2646,25 @@ async function submitCount() {
   btn.innerHTML = '<span class="spinner"></span>กำลังส่ง...';
 
   try {
-    // upload ไฟล์ก่อน — ไฟล์แรก = รายงานที่เซ็นแล้ว ใช้เป็น pdf_url
+    // upload ไฟล์ก่อน — ไฟล์แรก = รายงานที่เซ็นแล้ว
     var fileUrls = [];
     for (var i = 0; i < files.length; i++) {
       var url = await uploadFile(files[i], { kind:'report', extra:(i+1) });
       if (url) fileUrls.push(url);
     }
-    // upload ไฟล์หลักฐานนอกระบบ PCS (คนละชุด)
-    var offUrls = [];
-    for (var j = 0; j < offPcsFiles.length; j++) {
-      var ou = await uploadFile(offPcsFiles[j], { kind:'offpcs', extra:(j+1) });
-      if (ou) offUrls.push(ou);
+    // upload ไฟล์หลักฐานของแต่ละรายการปรับปรุง (แยกตาม adjust_id)
+    var adjUrls = {};
+    var ajIds = Object.keys(ADJFILES);
+    for (var a = 0; a < ajIds.length; a++) {
+      var ajId = ajIds[a], list = ADJFILES[ajId] || [];
+      adjUrls[ajId] = [];
+      for (var k = 0; k < list.length; k++) {
+        var au = await uploadFile(list[k], { kind:'adj-'+_safeSeg(ajId,20), extra:(k+1) });
+        if (au) adjUrls[ajId].push(au);
+      }
     }
 
-    // upload รูปถ่ายราย Location (ขั้นที่ 2) → เก็บเป็น URL (เดิมถูกทิ้ง)
-    // และแทน base64 ใน locations ด้วย URL เพื่อลดขนาด payload มหาศาล
+    // upload รูปถ่ายราย Location (ขั้นที่ 2) → เก็บเป็น URL
     var locPhotos    = [];
     var locationsOut = [];
     for (var li = 0; li < locations.length; li++) {
@@ -2611,53 +2674,25 @@ async function submitCount() {
         var up = await _uploadDataUrl(L.photo, _buildFileName('loc.jpg', { kind:'loc', extra:L.name }));
         lurl = up.url; lid = up.id;                    // ถ่ายใหม่ → อัปขึ้น Drive
       } else if (L._photoUrl || (L.photo && /^https?:/.test(L.photo))) {
-        lurl = L._photoUrl || L.photo;                 // รูปเดิม (reopen) → ใช้ไฟล์เดิม ไม่อัปซ้ำ
+        lurl = L._photoUrl || L.photo;                 // รูปเดิม (reopen) → ใช้ของเดิม
         lid  = L._photoId || '';
       }
       if (lurl) locPhotos.push({ name:L.name, url:lurl, id:lid });
-      var copy = JSON.parse(JSON.stringify(L));
-      delete copy._photoUrl; delete copy._photoId;     // ตัด field ชั่วคราวออก
-      delete copy.photo_url; delete copy.photo_id; delete copy.photo_thumb;
-      copy.photo = lurl;   // เก็บ URL (ไม่ใช่ base64) ใน locations_json
-      locationsOut.push(copy);
+      locationsOut.push({ name:L.name, photo:lurl, values:L.q });
     }
 
-    var tot = _calcTotals();
-    var tmpId = 'SC-' + new Date().toISOString().slice(0,10).replace(/-/g,'') + '-' + Math.floor(Math.random()*900+100);
-
     var payload = {
-      action        : 'submitCount',
-      round         : session.round,
-      site          : session.site,
+      action        : 'submitCountV2',
+      round_id      : (roundInfo && roundInfo.round_id) || '',
       site_id       : session.site_id || _siteIdByName(session.site),
+      site_name     : session.site,
       counter_name  : session.name,
-      timestamp     : new Date().toISOString(),
-      locations     : locationsOut,
+      locations     : locationsOut,              // [{ name, photo, values[item_id][status_id] }]
+      adjustments   : ADJ,                       // { adjust_id: { item_id: qty } }
+      adjust_files  : adjUrls,                   // { adjust_id: [url,...] }
       location_photos: locPhotos,
-      // ── contract ใหม่ ──
-      actual        : { loscam:tot.totLoscam, chep:tot.totChep, brs:tot.totBrs, swwi:tot.totSwwi },
-      off_pcs       : {
-        loscam: offPcs.loscam||0, chep: offPcs.chep||0,
-        brs:    offPcs.brs||0,    swwi: offPcs.swwi||0,
-        files:  offUrls
-      },
-      production    : {
-        loscam: tot.loscam['พาเลทที่ใช้ในสายการผลิต']||0,
-        chep:   tot.chep['พาเลทที่ใช้ในสายการผลิต']||0,
-        brs:    tot.brs['พาเลทที่ใช้ในสายการผลิต']||0,
-        swwi:   tot.swwi['พาเลทที่ใช้ในสายการผลิต']||0
-      },
-      pdf_url       : fileUrls[0] || '',
-      // ── เผื่อ backward-compat ──
-      total_loscam  : tot.totLoscam,
-      total_chep    : tot.totChep,
-      total_brs     : tot.totBrs,
-      total_swwi    : tot.totSwwi,
-      total_wood    : tot.totWood,
-      total_plastic : tot.totPlastic,
-      grand_total   : tot.grand,
-      file_urls     : fileUrls,
-      status        : 'pending'
+      doc_url       : fileUrls[0] || '',
+      file_urls     : fileUrls
     };
 
     var res  = await fetch(API_URL, {
@@ -2668,11 +2703,11 @@ async function submitCount() {
     var data = await res.json();
     if (data.status !== 'ok') throw new Error(data.message || 'Error');
 
-    var newId = data.count_id || tmpId;
+    var newId  = data.count_id || '';
     var revTxt = (data.revision && data.revision > 1) ? ' (ฉบับแก้ไขครั้งที่ '+data.revision+')' : '';
-    // ตั้งสถานะเป็น pending → เข้าหน้าจอล็อก "รอ Admin ตรวจสอบ/อนุมัติ" ตรง ๆ (ไม่มี pop-up กัน user เข้าใจผิดว่าจบ process)
+    // ตั้งสถานะเป็น pending → เข้าหน้าจอล็อกรออนุมัติ
     siteSubmission = { count_id: newId, revision: data.revision || 1, status: 'pending', review_comment: '' };
-    _printed = false; // ถ้าถูกตีกลับแล้วส่งใหม่ ต้องพิมพ์เอกสารใหม่ (เลขฉบับแก้ไข)
+    _printed = false; // ถ้าถูกตีกลับแล้วส่งใหม่ ต้องพิมพ์ใหม่
     showToast('📤 ส่งแล้ว ('+newId+revTxt+') — รอ Admin ตรวจสอบ', 'success');
     render(); // siteSubmission = pending → หน้าจอล็อกรออนุมัติ
   } catch(err) {
