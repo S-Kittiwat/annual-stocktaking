@@ -5,6 +5,9 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, viewport-fit=cover">
 <title>StockCount — นับสต็อก Pallet</title>
 <script src="stockcount_config.js"></script>
+<!-- สร้างเอกสาร Word จากแม่แบบของรอบ (เติมแท็กในเบราว์เซอร์) -->
+<script src="https://cdn.jsdelivr.net/npm/pizzip@3.1.7/dist/pizzip.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/docxtemplater@3.47.4/build/docxtemplater.js"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Thai:wght@300;400;500;600;700&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -1441,8 +1444,7 @@ function renderStep2(content) {
     // ── Submit Card ──
     (function(){
       var _isRe = siteSubmission && (siteSubmission.status==='rejected'||siteSubmission.status==='reopened');
-      // C3: ยังไม่บังคับพิมพ์เอกสาร (printDoc รอก้อน C4) — ใช้ _step3Seen พอ
-      var ready = hasLoc && _offDone && files.length>0 && (_isRe || _step3Seen);
+      var ready = hasLoc && _offDone && files.length>0 && (_isRe || (_step3Seen && _printed));
       return '<div class="submit-card" id="submitCard">'+
       '<div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:8px;">📋 ตรวจสอบก่อน Submit</div>'+
       '<div class="step-check" id="chk1">'+_chkIcon(true)+'ขั้นที่ 1 — เลือก Site และผู้นับ</div>'+
@@ -1529,8 +1531,7 @@ function updateSubmitCard() {
   var hasLoc  = locations.length > 0;
   var hasFile = files.length > 0;
   var _isRe   = siteSubmission && (siteSubmission.status==='rejected'||siteSubmission.status==='reopened');
-  // C3: ยังไม่บังคับพิมพ์เอกสาร (printDoc รอก้อน C4)
-  var ready   = hasLoc && _offDone && hasFile && (_isRe || _step3Seen);
+  var ready   = hasLoc && _offDone && hasFile && (_isRe || (_step3Seen && _printed));
 
   // ปลดล็อกขั้น 3/4 + ปุ่มไปขั้น 3 ทันทีที่มี Location (กันต้อง refresh)
   var goBtn = document.getElementById('btnGoStep3');
@@ -1562,7 +1563,7 @@ function updateSubmitCard() {
   }
   if (chk3b) {
     chk3b.style.display = _isRe ? 'none' : '';
-    chk3b.innerHTML = '';
+    chk3b.innerHTML = _chkIcon(_printed)+'ขั้นที่ 4 — สร้างเอกสารยืนยันแล้ว'+(!_printed?' <span style="color:var(--warn);">(กด 🖨️ สร้างเอกสารยืนยัน)</span>':'');
     chk3b.className = 'step-check '+(_printed?'done':'pending');
   }
   if (chk4) {
@@ -1814,8 +1815,8 @@ function _buildStep3Body() {
     _s3title('① ยอดนับจริง แยกตามสถานะ') + _renderStatusTable(tot) +
     _s3title('② งบกระทบยอด — เทียบกับยอดระบบ') + _renderComparison(tot) +
     _offBlock() +
-    '<div style="margin-top:14px;padding:11px 13px;border-radius:var(--rs);background:rgba(245,158,11,.12);color:#a16207;font-size:12px;line-height:1.6;">'+
-      '🖨️ เอกสารยืนยันกำลังย้ายไปใช้ Word template ของรอบ (ก้อน C4) — ระหว่างนี้ส่งผลได้โดยไม่ต้องพิมพ์</div>';
+    '<button class="btn-print" onclick="printDoc()">🖨️ สร้างเอกสารยืนยัน (Word)</button>'+
+    '<div style="font-size:11px;color:var(--muted);text-align:center;margin-top:6px;line-height:1.6;">ได้ไฟล์ .docx จากแม่แบบของรอบ — เปิดใน Word สั่งพิมพ์ เซ็น แล้วสแกนกลับมาอัปในขั้นที่ 5</div>';
 }
 
 // สรุปรายการปรับปรุงที่กรอกในขั้นที่ 3
@@ -2245,382 +2246,154 @@ function _thaiDocDate(raw) {
   return ('0' + day).slice(-2) + ' ' + _TH_MONTHS[mon0] + ' ' + year;
 }
 
-function printDoc() {
-  showToast('เอกสารสรุปยังอยู่ระหว่างย้ายไปใช้ Word template ของรอบ (ก้อน C4)', 'warn');
-  return;
-  /* eslint-disable no-unreachable */
-  var tot = _calcTotals();
+/* ════════════════════════════════════════════════════════════
+   C4 — ประกอบข้อมูลสำหรับเติมลง Word template ของรอบ
+   ชุดแท็กต้องตรงกับ getDocTags() ฝั่ง backend ทุกตัว
+   ════════════════════════════════════════════════════════════ */
+function _buildDocData() {
+  var tot  = _calcTotals();
+  var rec  = _reconcile(tot);
+  var byId = {}; rec.forEach(function(r){ byId[r.item_id] = r; });
+  var base = BSTAT_BASE(), outs = BSTATS_OUT(), adjList = ADJUSTS();
+  var d = {};
 
-  // ── ดึงข้อมูลจาก Admin config (backend) ──
-  // LOGO_BASE64, DOC_NUMBER, DOC_DATE, DOC_YEAR จะถูก inject โดย Admin
-  // ตอนนี้ใช้ค่า placeholder รอ Admin กำหนด
-  var LOGO_BASE64 = (typeof PRINT_CONFIG !== 'undefined' && PRINT_CONFIG.logo)   || BRS_LOGO_DEFAULT;
-  // ── ข้อมูลหัวเอกสารจาก Admin (เลขที่=ต่อ site, วันที่/ปี=ต่อรอบ) ──
-  var DOC_NUMBER  = siteDocNo || (typeof PRINT_CONFIG !== 'undefined' && PRINT_CONFIG.docNo) || _docRef();
-  var DOC_DATE    = _thaiDocDate(docDate || (typeof PRINT_CONFIG !== 'undefined' && PRINT_CONFIG.date) || '') || '___________';
-  var DOC_YEAR    = docYear   || (typeof PRINT_CONFIG !== 'undefined' && PRINT_CONFIG.year)  || (roundInfo && roundInfo.year) || '____';
+  // ── แท็กเดี่ยว ──
+  d['site']            = session ? String(session.site||'') : '';
+  d['ผู้นับ']          = session ? String(session.name||'') : '';
+  d['วันที่']          = _thaiDocDate(docDate || '') || '';
+  d['เลขที่เอกสาร']    = siteDocNo || '';
+  d['ชื่อรอบ']         = (roundInfo && roundInfo.round_name) || '';
+  d['ปี']              = String(docYear || (roundInfo && roundInfo.year) || '');
+  d['วันที่พิมพ์']     = _nowBangkok();
 
-  // ── ฟอนต์เอกสาร PDF — เปลี่ยนได้ที่นี่ (ใช้ฟอนต์ไทยของ Google Docs) ──
-  // ตัวเลือก: 'Sarabun'(ทางการ) 'Kanit' 'Prompt' 'Mitr' 'Maitree' 'Niramit' 'Bai Jamjuree' 'Chonburi' 'Pridi'
-  var PRINT_FONT  = (typeof PRINT_CONFIG !== 'undefined' && PRINT_CONFIG.font)   || 'Sarabun';
-
-  var sigNames = session.names || {};
-
-  // ── คำนวณ totals ──
-  var WOOD_EXCLUDE    = ['พาเลทที่ใช้ในสายการผลิต','พาเลทที่ควบคุมนอกระบบ PCS'];
-  var PLASTIC_EXCLUDE = ['พาเลทที่ใช้ในสายการผลิต','พาเลทที่ควบคุมนอกระบบ PCS',
-                         'พาเลทชำรุด โอน BRS-900 แล้ว (ตัวเอง)','พาเลทชำรุด โอน BRS-900 แล้ว (ที่อื่น)'];
-  function sumExclude(obj, ex) {
-    return Object.keys(obj).reduce(function(s,k){ return ex.indexOf(k)===-1?s+(Number(obj[k])||0):s; },0);
+  // แถวของตาราง: { แถว:'ชื่อรายการ', ค1:.., ค2:.. }
+  function mkRow(label, items, pick) {
+    var r = { 'แถว': label };
+    items.forEach(function(it, i){ r['ค'+(i+1)] = _fmtN(pick(it)); });
+    return r;
   }
 
-  var bL = bookBalance.loscam||{}, bC = bookBalance.chep||{};
-  var bB = bookBalance.brs||{},    bS = bookBalance.swwi||{};
-
-  var wL_counted=sumExclude(tot.loscam,WOOD_EXCLUDE), wC_counted=sumExclude(tot.chep,WOOD_EXCLUDE);
-  var wL_sai=tot.loscam['พาเลทที่ใช้ในสายการผลิต']||0, wC_sai=tot.chep['พาเลทที่ใช้ในสายการผลิต']||0;
-  var wL_nok=offPcs.loscam||0, wC_nok=offPcs.chep||0;   // ดึงจากขั้นที่ 3 (ระดับ Site)
-  var wL_pcs=bL['คงเหลือ']||0, wC_pcs=bC['คงเหลือ']||0;
-  var wL_out=bL['ระหว่างโอนออก']||0, wC_out=bC['ระหว่างโอนออก']||0;
-  var wL_due=wL_pcs+wL_out, wC_due=wC_pcs+wC_out;
-  var wL_diff=wL_counted-wL_pcs, wC_diff=wC_counted-wC_pcs;   // ส่วนต่าง = นับจริง − คงเหลือ (Actual − Book)
-  var wL_net=wL_diff+wL_sai+wL_nok, wC_net=wC_diff+wC_sai+wC_nok;
-
-  var pB_counted=sumExclude(tot.brs,PLASTIC_EXCLUDE), pS_counted=sumExclude(tot.swwi,PLASTIC_EXCLUDE);
-  var pB_sai=tot.brs['พาเลทที่ใช้ในสายการผลิต']||0, pS_sai=tot.swwi['พาเลทที่ใช้ในสายการผลิต']||0;
-  var pB_nok=offPcs.brs||0, pS_nok=offPcs.swwi||0;   // ดึงจากขั้นที่ 3 (ระดับ Site)
-  var pB_brs1=tot.brs['พาเลทชำรุด โอน BRS-900 แล้ว (ตัวเอง)']||0, pS_brs1=tot.swwi['พาเลทชำรุด โอน BRS-900 แล้ว (ตัวเอง)']||0;
-  var pB_brs2=tot.brs['พาเลทชำรุด โอน BRS-900 แล้ว (ที่อื่น)']||0, pS_brs2=tot.swwi['พาเลทชำรุด โอน BRS-900 แล้ว (ที่อื่น)']||0;
-  var pB_pcs=bB['คงเหลือ']||0, pS_pcs=bS['คงเหลือ']||0;
-  var pB_out=bB['ระหว่างโอนออก']||0, pS_out=bS['ระหว่างโอนออก']||0;
-  var pB_due=pB_pcs+pB_out, pS_due=pS_pcs+pS_out;
-  var pB_diff=pB_counted-pB_pcs, pS_diff=pS_counted-pS_pcs;   // ส่วนต่าง = นับจริง − คงเหลือ (Actual − Book)
-  var pB_net=pB_diff+pB_sai+pB_nok;   // BRS-900 โอนออกแล้ว = ไม่ใช่ของเรา → ไม่นำมาคิด (ถูกกันออกจาก counted แล้ว)
-  var pS_net=pS_diff+pS_sai+pS_nok;
-
-  function n(v){ return (Number(v)||0).toLocaleString('th-TH'); }
-  // row: label กำหนด nowrap ไว้ใน CSS แล้ว ไม่ต้องใส่ทีละ row
-  function row(label,lv,rv,bold,indent){
-    var s=bold?'font-weight:700;':'';
-    var il=indent?'padding-left:'+(indent*10)+'px;':'';
-    return '<tr><td style="'+il+s+'">'+label+'</td>'+
-      '<td class="num" style="'+s+'">'+n(lv)+'</td>'+
-      '<td class="num" style="'+s+'">'+n(rv)+'</td></tr>';
-  }
-  function tbl(title,h1,h2,rows){
-    return '<div><div class="tbl-title">'+title+'</div>'+
-      '<table class="dt"><thead><tr><th>'+h1+'</th><th>'+h2[0]+'</th><th>'+h2[1]+'</th></tr></thead>'+
-      '<tbody>'+rows+'</tbody></table></div>';
-  }
-
-  // ── Logo HTML ──
-  var logoHtml = LOGO_BASE64
-    ? '<img src="'+LOGO_BASE64+'" style="width:100%;max-width:38mm;height:auto;object-fit:contain;">'
-    : '<div style="font-size:16pt;font-weight:900;letter-spacing:-1px;line-height:1;">BRS<br><span style="font-size:7pt;font-weight:400;color:#555;letter-spacing:0;">BOON RAWD SUPPLY CHAIN</span></div>';
-
-  // ── สร้าง logo HTML สำหรับ upload version (ไม่มี base64 — ลดขนาด payload) ──
-  // ใช้ text fallback แทนเพื่อให้ GAS รับได้ (~32KB limit บน postData)
-  var logoHtmlUpload = '<div style="font-size:16pt;font-weight:900;letter-spacing:-1px;line-height:1;">BRS<br><span style="font-size:7pt;font-weight:400;color:#555;letter-spacing:0;">BOON RAWD SUPPLY CHAIN</span></div>';
-
-  var html = '<!DOCTYPE html><html lang="th"><head><meta charset="UTF-8">'+
-  '<title>รายงานผลการตรวจนับสต็อกพาเลท '+DOC_YEAR+'</title>'+
-  '<meta name="viewport" content="width=device-width,initial-scale=1">'+
-  '<style>'+
-  '@import url("https://fonts.googleapis.com/css2?family=Sarabun:wght@400;500;600;700&display=swap");'+
-  '@page{size:A4 portrait;margin:0;}'+
-  '*{box-sizing:border-box;}'+
-  'html,body{margin:0;padding:0;background:#fff;}'+
-  // ── Screen view: แสดง A4 จำลองบนหน้าจอ ──
-  'body{display:flex;flex-direction:column;align-items:center;padding:8px;background:#e0e0e0;min-height:100vh;}'+
-  '.page-wrap{background:#fff;box-shadow:0 2px 12px rgba(0,0,0,.2);}'+
-  '.page{'+
-    'width:210mm;min-height:297mm;'+
-    'padding:12mm 10mm 10mm 14mm;'+
-    'font-family:\''+PRINT_FONT+'\',"Sarabun",sans-serif;font-size:11pt;color:#000;'+
-  '}'+
-  // ── Print: scale ให้พอดี A4 เสมอ ──
-  '@media print{'+
-    'html,body{background:#fff;display:block;padding:0;}'+
-    '.no-print{display:none!important;}'+
-    '.page-wrap{box-shadow:none;width:100%;display:block;}'+
-    '.page{'+
-      'width:210mm;padding:12mm 10mm 10mm 14mm;'+
-      'transform-origin:top left;'+
-    '}'+
-  '}'+
-  // Header
-  '.hdr{margin-bottom:1mm;}'+
-  '.hdr-logo{margin-bottom:1mm;}'+
-  '.hdr-meta{width:100%;font-size:9pt;line-height:1.55;border-collapse:collapse;}'+
-  '.hdr-meta td.lbl{font-weight:700;white-space:nowrap;padding-right:8px;vertical-align:top;width:22mm;padding-left:8mm;}'+
-  '.hdr-meta td{vertical-align:top;}'+
-  'hr{border:none;border-top:1.5px solid #000;margin:2mm 0;}'+
-  '.intro{font-size:9pt;margin:1.5mm 0 2mm;line-height:1.5;}'+
-  // 2-column tables
-  '.two-col{display:grid;grid-template-columns:1fr 1fr;gap:4mm;margin-bottom:3mm;}'+
-  '.tbl-title{font-weight:700;text-align:center;font-size:10pt;margin-bottom:1mm;}'+
-  'table.dt{width:100%;border-collapse:collapse;font-size:8.5pt;}'+
-  'table.dt th{background:#d9d9d9;font-weight:700;text-align:center;border:1px solid #888;padding:1px 4px;white-space:nowrap;}'+
-  'table.dt td{border:1px solid #aaa;padding:1px 4px;vertical-align:middle;}'+
-  'table.dt td.num{text-align:right;white-space:nowrap;}'+
-  'table.dt td:first-child{width:62%;}'+
-  '.section-label{font-weight:700;background:#ebebeb;border:1px solid #888 !important;padding:1px 4px !important;}'+
-  // Signatures
-  '.sig-wrap{margin-top:3mm;}'+
-  '.sig-row{display:grid;grid-template-columns:repeat(3,1fr);gap:3mm;margin-bottom:2mm;}'+
-  '.sig-box{border:1px solid #999;padding:3px 6px;min-height:50px;font-size:9pt;}'+
-  '.sig-lbl{font-size:8pt;color:#333;line-height:1.3;}'+
-  '.sig-name{font-size:9pt;font-weight:700;margin-top:24px;}'+
-  // Footer
-  '.footer{font-size:8pt;color:#666;border-top:1px solid #ccc;padding-top:2mm;margin-top:2mm;}'+
-  // Print-safe
-  '@media print{button{display:none!important;} body{-webkit-print-color-adjust:exact;print-color-adjust:exact;}}'+
-  '</style></head><body>'+
-  // ── ปุ่มพิมพ์ (ซ่อนตอน print) ──
-  '<div class="no-print" style="width:210mm;margin:0 auto 8px;display:flex;gap:8px;align-items:center;">'+
-    '<button onclick="doPrint()" style="background:#2e7d32;color:#fff;border:none;border-radius:6px;padding:8px 20px;font-size:13pt;font-family:sans-serif;cursor:pointer;font-weight:700;">🖨️ พิมพ์เอกสาร</button>'+
-  '</div>'+
-  '<div class="page-wrap"><div class="page" id="docPage">'+
-
-  // ── Header ──
-  '<div class="hdr">'+
-    // Logo บนซ้าย
-    '<div class="hdr-logo">'+logoHtml+'</div>'+
-    // Meta table ด้านล่าง — เลขที่ซ้าย วันที่ขวา
-    '<table class="hdr-meta"><tbody>'+
-      '<tr>'+
-        '<td class="lbl">เลขที่</td>'+
-        '<td>'+DOC_NUMBER+'</td>'+
-        '<td style="font-weight:700;white-space:nowrap;padding-right:8px;text-align:right;width:12mm;">วันที่</td>'+
-        '<td style="text-align:left;width:40mm;">'+DOC_DATE+'</td>'+
-      '</tr>'+
-      '<tr><td class="lbl">เรื่อง</td><td colspan="3">รายงานผลการตรวจนับสต็อก'+TY_NAME('wood')+'และ'+TY_NAME('plastic')+' ประจำปี '+DOC_YEAR+'</td></tr>'+
-      '<tr><td class="lbl">เรียน</td><td colspan="3">ส่วนงาน Pallet and Operation Support บจก. บุญรอด ซัพพลายเชน</td></tr>'+
-      '<tr>'+
-        '<td class="lbl" style="vertical-align:top;">เอกสารแนบ</td>'+
-        '<td colspan="3">'+
-          '1. ภาพการลงพื้นที่ตรวจนับ<br>'+
-          '2. รูปภาพหน้าแรกของระบบควบคุมพาเลท'+
-        '</td>'+
-      '</tr>'+
-    '</tbody></table>'+
-  '</div>'+
-  '<hr>'+
-
-  // ── Intro ──
-  '<div class="intro">ตามที่ส่วนงาน Pallet Management and Operation Support ได้ดำเนินการตรวจนับสต็อก'+TY_NAME('wood')+'และ'+TY_NAME('plastic')+' '+
-    'ประจำปี '+DOC_YEAR+' เมื่อวันที่ '+DOC_DATE+' ณ สถานที่ตรวจนับ <strong>'+esc(session.site)+'</strong> '+
-    'คณะผู้ตรวจนับและผู้ดูแลพื้นที่ได้ทำการเข้าตรวจนับและขอสรุปผลตามตารางที่แสดงด้านล่างนี้</div>'+
-
-  // ── 2 ตาราง ──
-  '<div class="two-col">'+
-    tbl('ตารางข้อมูลจำนวน'+TY_NAME('wood'),'ข้อมูลจากระบบควบคุมพาเลท (PCS)',[PV_LABEL('loscam'),PV_LABEL('chep')],
-      // PCS
-      row('1. คงเหลือ',bL['คงเหลือ']||0,bC['คงเหลือ']||0)+
-      row('2. ระหว่างโอนออก',bL['ระหว่างโอนออก']||0,bC['ระหว่างโอนออก']||0)+
-      row('3. ระหว่างโอนเข้า',bL['ระหว่างโอนเข้า']||0,bC['ระหว่างโอนเข้า']||0)+
-      row('4. ชำรุดเสียหาย',bL['ชำรุดเสียหาย']||0,bC['ชำรุดเสียหาย']||0)+
-      row('5. สูญหาย',bL['สูญหาย']||0,bC['สูญหาย']||0)+
-      '<tr><td class="section-label" colspan="3">ข้อมูลจากการตรวจนับ</td></tr>'+
-      row('พาเลทเปล่า RFI',tot.loscam['พาเลทเปล่า RFI']||0,tot.chep['พาเลทเปล่า RFI']||0)+
-      row('พาเลทเปล่า TBR',tot.loscam['พาเลทเปล่า TBR']||0,tot.chep['พาเลทเปล่า TBR']||0)+
-      row('พาเลทเปล่า BER',tot.loscam['พาเลทเปล่า BER']||0,tot.chep['พาเลทเปล่า BER']||0)+
-      row('พาเลทเปล่า TBC',tot.loscam['พาเลทเปล่า TBC']||0,tot.chep['พาเลทเปล่า TBC']||0)+
-      row('พาเลทเปล่า TBS',tot.loscam['พาเลทเปล่า TBS']||0,tot.chep['พาเลทเปล่า TBS']||0)+
-      row('พาเลทที่ใช้วางสินค้า',tot.loscam['พาเลทที่ใช้วางสินค้า']||0,tot.chep['พาเลทที่ใช้วางสินค้า']||0)+
-      row('พาเลทที่ใช้ในสายการผลิต',tot.loscam['พาเลทที่ใช้ในสายการผลิต']||0,tot.chep['พาเลทที่ใช้ในสายการผลิต']||0)+
-      row('พาเลทที่ควบคุมนอกระบบ PCS',offPcs.loscam||0,offPcs.chep||0)+
-      '<tr><td class="section-label" colspan="3">สรุปผลการตรวจนับ</td></tr>'+
-      row('จำนวนคงเหลือบนระบบ',wL_pcs,wC_pcs)+
-      row('บวก ระหว่างโอนออก',wL_out,wC_out)+
-      row('รวมจำนวนยอดคงค้างในหน้าบัญชีเช่า',wL_due,wC_due,true)+
-      row('รวมจำนวนพาเลทที่ตรวจนับได้จริง',wL_counted,wC_counted,true)+
-      row('ส่วนต่าง',wL_diff,wC_diff)+
-      row('บวก พาเลทที่ใช้ในสายการผลิต',wL_sai,wC_sai,false,1)+
-      row('บวก พาเลทที่ควบคุมนอกระบบ PCS',wL_nok,wC_nok,false,1)+
-      row('ส่วนต่างสุทธิ',wL_net,wC_net,true)
-    )+
-    tbl('ตารางข้อมูลจำนวน'+TY_NAME('plastic'),'ข้อมูลจากระบบควบคุมพาเลท (PCS)',[PV_LABEL('brs'),PV_LABEL('swwi')],
-      row('1. คงเหลือ',bB['คงเหลือ']||0,bS['คงเหลือ']||0)+
-      row('2. ระหว่างโอนออก',bB['ระหว่างโอนออก']||0,bS['ระหว่างโอนออก']||0)+
-      row('3. ระหว่างโอนเข้า',bB['ระหว่างโอนเข้า']||0,bS['ระหว่างโอนเข้า']||0)+
-      row('4. ชำรุดเสียหาย',bB['ชำรุดเสียหาย']||0,bS['ชำรุดเสียหาย']||0)+
-      row('5. สูญหาย',bB['สูญหาย']||0,bS['สูญหาย']||0)+
-      '<tr><td class="section-label" colspan="3">ข้อมูลจากการตรวจนับ</td></tr>'+
-      row('พาเลทเปล่า RFI',tot.brs['พาเลทเปล่า RFI']||0,tot.swwi['พาเลทเปล่า RFI']||0)+
-      row('พาเลทเปล่า TBS',tot.brs['พาเลทเปล่า TBS']||0,tot.swwi['พาเลทเปล่า TBS']||0)+
-      row('พาเลทที่ใช้วางสินค้า',tot.brs['พาเลทที่ใช้วางสินค้า']||0,tot.swwi['พาเลทที่ใช้วางสินค้า']||0)+
-      row('พาเลทที่ใช้ในสายการผลิต',tot.brs['พาเลทที่ใช้ในสายการผลิต']||0,tot.swwi['พาเลทที่ใช้ในสายการผลิต']||0)+
-      row('ชำรุด รออนุมัติ BRS-900',tot.brs['พาเลทชำรุด รออนุมัติโอนเข้า BRS-900']||0,tot.swwi['พาเลทชำรุด รออนุมัติโอนเข้า BRS-900']||0)+
-      row('ชำรุด โอน BRS-900 (ตัวเอง)',tot.brs['พาเลทชำรุด โอน BRS-900 แล้ว (ตัวเอง)']||0,tot.swwi['พาเลทชำรุด โอน BRS-900 แล้ว (ตัวเอง)']||0)+
-      row('ชำรุด โอน BRS-900 (ที่อื่น)',tot.brs['พาเลทชำรุด โอน BRS-900 แล้ว (ที่อื่น)']||0,tot.swwi['พาเลทชำรุด โอน BRS-900 แล้ว (ที่อื่น)']||0)+
-      row('พาเลทที่ควบคุมนอกระบบ PCS',offPcs.brs||0,offPcs.swwi||0)+
-      '<tr><td class="section-label" colspan="3">สรุปผลการตรวจนับ</td></tr>'+
-      row('จำนวนคงเหลือบนระบบ',pB_pcs,pS_pcs)+
-      row('บวก ระหว่างโอนออก',pB_out,pS_out)+
-      row('รวมจำนวนยอดคงค้างในหน้าบัญชีเช่า',pB_due,pS_due,true)+
-      row('รวมจำนวนพาเลทที่ตรวจนับได้จริง',pB_counted,pS_counted,true)+
-      row('ส่วนต่าง',pB_diff,pS_diff)+
-      row('บวก พาเลทที่ใช้ในสายการผลิต',pB_sai,pS_sai,false,1)+
-      row('บวก พาเลทที่ควบคุมนอกระบบ PCS',pB_nok,pS_nok,false,1)+
-      row('ส่วนต่างสุทธิ',pB_net,pS_net,true)
-    )+
-  '</div>'+
-
-  // ── ลายเซ็น 5 ช่อง (แถว 3+2) ──
-  '<div class="sig-wrap">'+
-    '<div class="sig-row">'+
-      _sigBox2('ลายเซ็นผู้ตรวจนับจาก<br>ทีมพาเลทส่วนกลาง',sigNames['pallet'])+
-      _sigBox2('ลายเซ็นผู้ตรวจนับจาก<br>โรงงาน/คลัง (ฝ่ายบริหาร/แผนกคลังสินค้า)',sigNames['admin'])+
-      _sigBox2('ลายเซ็นผู้ตรวจนับจาก<br>โรงงาน/คลัง (ฝ่ายผลิต)',sigNames['production'])+
-    '</div>'+
-    '<div class="sig-row">'+
-      _sigBox2('ลายเซ็นผู้ตรวจนับจาก<br>BRB-Fixed-asset Accounting',sigNames['fixedasset'])+
-      _sigBox2('ลายเซ็นผู้ตรวจนับจาก<br>สำนักงานตรวจสอบบัญชี',sigNames['audit'])+
-      '<div></div>'+
-    '</div>'+
-  '</div>'+
-
-  // ── Footer ──
-  '<div class="footer">'+
-    'บริษัท บุญรอด ซัพพลายเชน จำกัด | 999 ถนนสามเสน แขวงนครไชยศรี เขตดุสิต กรุงเทพมหานคร 10300 | โทร +66 2242-4000 | เลขประจำตัวผู้เสียภาษี 0105561113924'+
-  '</div>'+
-  '</div></div></div>'+  // .page #docPage, .page-wrap, body
-  '<script>'+
-  // ── Auto-scale สำหรับ iOS Safari และทุก browser ──
-  // วัดขนาด page จริง แล้ว scale ให้พอดีกับ printable area
-  'function doPrint(){'+
-    'var page=document.getElementById("docPage");'+
-    // A4 printable width ที่ margin 0 = 210mm = ~794px at 96dpi
-    // แต่ iOS Safari print viewport ต่างกัน ใช้ window.innerWidth แทน
-    'var A4_W_PT=793.7;'+ // 210mm in points (1mm = 3.7795px)
-    'var actualW=page.offsetWidth;'+
-    'var scale=Math.min(1, A4_W_PT/actualW);'+
-    'page.style.transformOrigin="top left";'+
-    'page.style.transform="scale("+scale+")";'+
-    'page.style.width=(100/scale)+"%";'+
-    'setTimeout(function(){'+
-      'window.print();'+
-      // reset หลังพิมพ์
-      'setTimeout(function(){'+
-        'page.style.transform="";'+
-        'page.style.width="";'+
-      '},500);'+
-    '},300);'+
-  '}'+
-  // เปิดหน้าแสดงผลก่อน ไม่ auto-print ทันที ให้ user กดปุ่มเอง
-  // (iOS Safari ต้องการ user gesture สำหรับ window.print())
-  '<\/script>'+
-  '</body></html>';
-
-  // ── Upload HTML → GAS → แสดง link ──
-  var sid   = (session && session.site_id) ? String(session.site_id).replace(/[:\/\\*?"<>|]/g,'_') : '';
-  var site  = (session && session.site ? session.site.replace(/[:\/\\*?"<>|]/g,'_') : 'report');
-  var docNo = DOC_NUMBER.replace(/[:\/\\*?"<>|]/g,'_');
-  var fname = (sid ? sid + '_' : '') + site + '__print__' + docNo + '.html';
-
-  // ── สร้าง html สำหรับ upload แยกต่างหาก (แทน logo base64 ด้วย text) ──
-  var htmlUpload = html.replace(
-    '<div class="hdr-logo">'+logoHtml+'</div>',
-    '<div class="hdr-logo">'+logoHtmlUpload+'</div>'
-  );
-
-  if (!API_URL) {
-    showToast('❌ ไม่พบ API_URL — ตรวจสอบ stockcount_config.js', 'error');
-    return;
-  }
-  // เก็บ html ไว้ใช้กับปุ่ม "พิมพ์ในเบราว์เซอร์"
-  _lastPrintHtml = html;
-  _lastPrintName = fname;
-
-  showToast('⏳ กำลังสร้างลิงก์เอกสาร...', 'info');
-  fetch(API_URL, {
-    method: 'POST', redirect: 'follow', headers: { 'Content-Type': 'text/plain' },
-    body: JSON.stringify({ action: 'uploadPrintFile', filename: fname, html: html })
-  })
-  .then(function(r){
-    var ct = r.headers.get('content-type') || '';
-    if (!ct.includes('json')) return r.text().then(function(t){ throw new Error('GAS ตอบไม่ใช่ JSON: ' + t.substring(0,120)); });
-    return r.json();
-  })
-  .then(function(data) {
-    if (data.status !== 'ok') throw new Error(data.message || 'upload failed');
-    _showPrintLinkModal(data.url, fname);  // url = ลิงก์ download ตรง
-    _printed = true; updateSubmitCard();
-  })
-  .catch(function(err) {
-    showToast('❌ สร้างลิงก์ไม่สำเร็จ: ' + err.message + ' — โหลดไฟล์ลงเครื่องแทน', 'error');
-    // fallback: download ตรงจากเครื่อง
-    var blob = new Blob([html], { type: 'text/html;charset=utf-8' });
-    var u = URL.createObjectURL(blob);
-    var a = document.createElement('a'); a.href = u; a.download = fname;
-    document.body.appendChild(a); a.click(); document.body.removeChild(a);
-    setTimeout(function(){ URL.revokeObjectURL(u); }, 1000);
-    _printed = true; updateSubmitCard();
-  });
-}
-
-var _lastPrintHtml = '', _lastPrintName = 'document.html';
-
-// เปิดเอกสารในแท็บใหม่เพื่อพิมพ์/Save as PDF แบบ native (สำรอง)
-function _openPrintWindow() {
-  if (!_lastPrintHtml) { showToast('ยังไม่มีเอกสาร — กดสร้างเอกสารก่อน', 'warn'); return; }
-  var w = window.open('', '_blank');
-  if (!w) { showToast('เบราว์เซอร์บล็อก popup — อนุญาตก่อน', 'warn'); return; }
-  w.document.open(); w.document.write(_lastPrintHtml); w.document.close();
-}
-
-function _showPrintLinkModal(url, fname) {
-  // สร้าง modal แสดง link + ปุ่ม copy
-  var existing = document.getElementById('printLinkModal');
-  if (existing) existing.remove();
-
-  var modal = document.createElement('div');
-  modal.id = 'printLinkModal';
-  modal.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px;';
-  modal.innerHTML =
-    '<div style="background:#fff;border-radius:12px;padding:24px;width:100%;max-width:480px;box-shadow:0 20px 60px rgba(0,0,0,.2);">'+
-      '<div style="font-size:32px;text-align:center;margin-bottom:8px;">📄</div>'+
-      '<div style="font-size:15px;font-weight:700;text-align:center;margin-bottom:4px;">เอกสารพร้อมแล้ว</div>'+
-      '<div style="font-size:12px;color:#666;text-align:center;line-height:1.6;margin-bottom:14px;">📱➜💻 <b>ใช้มือถือ:</b> กด “Copy Link” แล้วส่งลิงก์ไปเปิดที่<b>คอม</b><br>กดลิงก์ที่คอม → ไฟล์ HTML จะถูกดาวน์โหลด → เปิดแล้วสั่งพิมพ์ออกมาเซ็น</div>'+
-      '<div style="background:#f3f0e8;border:1.5px solid #d4c99a;border-radius:8px;padding:10px 12px;font-size:12px;font-family:monospace;word-break:break-all;margin-bottom:12px;color:#1a1612;" id="printLinkText">'+url+'</div>'+
-      '<div style="display:flex;gap:8px;">'+
-        '<button id="btnCopyLink" style="flex:1;background:#f5c842;border:none;border-radius:8px;padding:12px;font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer;min-height:44px;">📋 Copy Link</button>'+
-        '<button id="btnOpenLink" style="flex:1;background:#1e293b;border:none;border-radius:8px;padding:12px;font-family:var(--font);font-size:14px;font-weight:700;cursor:pointer;min-height:44px;color:#fff;">🔗 Open Link</button>'+
-        '<button id="btnCloseModal" style="flex:1;background:#f3f0e8;border:1.5px solid #d4c99a;border-radius:8px;padding:12px;font-family:var(--font);font-size:14px;font-weight:600;cursor:pointer;min-height:44px;">ปิด</button>'+
-      '</div>'+
-      '<div style="font-size:11px;color:#888;text-align:center;margin-top:10px;line-height:1.5;">'+
-        '<b>Copy Link</b> = คัดลอกไปส่งต่อ · <b>Open Link</b> = เปิด/โหลดไฟล์เลย<br>ไฟล์: '+fname+'</div>'+
-    '</div>';
-  document.body.appendChild(modal);
-  document.getElementById('btnCopyLink').addEventListener('click', function(){ _copyPrintLink(url); });
-  document.getElementById('btnCloseModal').addEventListener('click', function(){ modal.remove(); });
-  document.getElementById('btnOpenLink').addEventListener('click', function(){ window.open(url, '_blank'); });
-}
-
-function _copyPrintLink(url) {
-  if (navigator.clipboard && navigator.clipboard.writeText) {
-    navigator.clipboard.writeText(url).then(function(){
-      showToast('✅ Copy แล้ว — วาง link ในคอมเพื่อเปิด', 'success');
+  V2TYPES().forEach(function(ty, ti) {
+    var items = ITEMS_OF(ty.type_id);
+    var n = ti + 1;
+    d['ชนิด'+n]  = ty.type_name;
+    d['หน่วย'+n] = String((items[0]||{}).unit || '');
+    items.forEach(function(it, j){
+      d['ชื่อ'+n+'_'+(j+1)] = it.item_name;
+      if (ti === 0) d['ชื่อ'+(j+1)] = it.item_name;   // แบบสั้น ใช้ได้เฉพาะชนิดแรก
     });
-  } else {
-    // fallback สำหรับ browser เก่า
-    var el = document.getElementById('printLinkText');
-    var range = document.createRange();
-    range.selectNode(el);
-    window.getSelection().removeAllRanges();
-    window.getSelection().addRange(range);
-    document.execCommand('copy');
-    window.getSelection().removeAllRanges();
-    showToast('✅ Copy แล้ว — วาง link ในคอมเพื่อเปิด', 'success');
-  }
+
+    // ① ยอดตามบัญชี — ทุกสถานะยอดระบบ
+    var rowsBook = BSTATS().map(function(bs){
+      return mkRow(bs.status_name, items, function(it){
+        return Number((V2BOOK[it.item_id]||{})[bs.status_id]) || 0;
+      });
+    });
+
+    // ② ยอดที่นับได้ — สถานะที่ไม่ได้ซ่อนในเอกสาร + รายการปรับปรุง
+    var rowsCount = CS_OF(ty.type_id).filter(function(s){ return !s.doc_hide; }).map(function(s){
+      return mkRow(s.status_name, items, function(it){
+        return Number((tot.byItem[it.item_id]||{})[s.status_id]) || 0;
+      });
+    }).concat(adjList.map(function(a){
+      return mkRow(a.adjust_name, items, function(it){ return adjGet(a.adjust_id, it.item_id); });
+    }));
+
+    // ③ สรุป — เรียงตามโครงเอกสารเดิม
+    var rowsSum = [];
+    if (base) rowsSum.push(mkRow(base.status_name, items, function(it){ return (byId[it.item_id]||{}).baseline || 0; }));
+    if (outs.length > 1) {
+      rowsSum.push(mkRow('รวมยอดคงค้างตามระบบ', items, function(it){ return (byId[it.item_id]||{}).outstanding || 0; }));
+    }
+    rowsSum.push(mkRow('รวมที่ตรวจนับได้จริง', items, function(it){ return (byId[it.item_id]||{}).actual || 0; }));
+    rowsSum.push(mkRow('ส่วนต่าง', items, function(it){ return (byId[it.item_id]||{}).diff || 0; }));
+    if (CS_OF(ty.type_id).some(function(s){ return s.add_back; })) {
+      rowsSum.push(mkRow('บวกกลับ', items, function(it){ return (byId[it.item_id]||{}).add_back || 0; }));
+    }
+    adjList.forEach(function(a){
+      rowsSum.push(mkRow('บวก '+a.adjust_name, items, function(it){ return adjGet(a.adjust_id, it.item_id); }));
+    });
+    rowsSum.push(mkRow('ส่วนต่างสุทธิ', items, function(it){ return (byId[it.item_id]||{}).net_diff || 0; }));
+
+    var all = rowsBook.concat(rowsCount, rowsSum);
+    // ตั้งทั้งชื่อจริงและชื่อย่อ {ชนิดN_...} ให้ใช้ได้ทั้งสองแบบ
+    d[ty.type_name + '_บัญชี'] = rowsBook;  d['ชนิด'+n+'_บัญชี'] = rowsBook;
+    d[ty.type_name + '_นับ']   = rowsCount; d['ชนิด'+n+'_นับ']   = rowsCount;
+    d[ty.type_name + '_สรุป']  = rowsSum;   d['ชนิด'+n+'_สรุป']  = rowsSum;
+    // ชื่อบล็อก "ทั้งหมด" ต้องไม่ชนกับแท็กเดี่ยว {ชนิดN} ที่เป็นชื่อชนิด
+    d[ty.type_name+'_ทั้งหมด'] = all;       d['ชนิด'+n+'_ทั้งหมด'] = all;
+  });
+
+  // ── เงื่อนไขซ่อนบล็อก: มี_<ชื่อรายการปรับปรุง> ──
+  adjList.forEach(function(a){ d['มี_'+a.adjust_name] = adjSumOf(a.adjust_id) > 0; });
+
+  // ── ช่องลายเซ็น: เว้นว่างให้เซ็นมือ, ตำแหน่ง = ป้ายจาก config ──
+  var sigs = (V2 && V2.signatures || []).filter(_act).sort(_bySort);
+  sigs.forEach(function(x, i){
+    d['ผู้เซ็น'+(i+1)]  = '';
+    d['ตำแหน่ง'+(i+1)] = x.sig_label || '';
+  });
+
+  return d;
 }
 
-function _sigBox2(label, name) {
-  return '<div class="sig-box">'+
-    '<div class="sig-lbl">'+label+'</div>'+
-    '<div class="sig-name">'+(name?esc(name):'')+'</div>'+
-  '</div>';
+// วันเวลาปัจจุบัน เขตเวลาไทย
+function _nowBangkok() {
+  try {
+    return new Intl.DateTimeFormat('th-TH', {
+      timeZone:'Asia/Bangkok', year:'numeric', month:'short', day:'2-digit',
+      hour:'2-digit', minute:'2-digit', hour12:false
+    }).format(new Date());
+  } catch (e) { return new Date().toISOString(); }
+}
+
+function printDoc() {
+  if (!V2_OK())      { showToast('ยังไม่มี config ของรอบ — กดตรวจสอบสถานะอีกครั้ง', 'warn'); return; }
+  if (!locations.length) { showToast('ยังไม่มีข้อมูลนับ', 'warn'); return; }
+  if (typeof window.PizZip === 'undefined' || typeof window.docxtemplater === 'undefined') {
+    showToast('โหลดตัวสร้างเอกสารไม่สำเร็จ — เช็คอินเทอร์เน็ตแล้วรีเฟรชหน้า', 'error'); return;
+  }
+  var btns = document.querySelectorAll('.btn-print');
+  for (var i=0;i<btns.length;i++) { btns[i].disabled = true; }
+  showToast('⏳ กำลังสร้างเอกสาร...', 'info');
+
+  fetch(API_URL + '?action=getDocTemplateFile&round_id=' + encodeURIComponent((roundInfo&&roundInfo.round_id)||''))
+    .then(function(r){ return r.json(); })
+    .then(function(t){
+      if (t.status !== 'ok' || !t.data) throw new Error(t.message || 'ยังไม่ได้อัปโหลดแม่แบบเอกสาร — แจ้ง Admin');
+      var zip = new window.PizZip(t.data, { base64:true });
+      var doc = new window.docxtemplater(zip, { paragraphLoop:true, linebreaks:true });
+      doc.render(_buildDocData());
+      var blob = doc.getZip().generate({ type:'blob',
+        mimeType:'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+      var fname = _buildFileName('report.docx', { kind:'doc', extra:(siteDocNo||'') });
+      _downloadBlob(blob, fname);
+      _printed = true; updateSubmitCard();
+      showToast('✅ ได้ไฟล์ '+fname+' — เปิดใน Word แล้วสั่งพิมพ์ เซ็น แล้วสแกนกลับมาอัปในขั้นที่ 5', 'success');
+    })
+    .catch(function(err){
+      var m = String(err && err.message || err);
+      // docxtemplater แจ้งรายละเอียดแท็กที่พังไว้ใน properties.errors
+      if (err && err.properties && err.properties.errors && err.properties.errors.length) {
+        m = err.properties.errors.map(function(e){
+          return (e.properties && e.properties.explanation) || e.message;
+        }).join(' · ');
+        m = 'แม่แบบมีแท็กที่เติมไม่ได้: ' + m;
+      }
+      showToast('❌ สร้างเอกสารไม่สำเร็จ: ' + m, 'error');
+    })
+    .then(function(){
+      var bs = document.querySelectorAll('.btn-print');
+      for (var j=0;j<bs.length;j++) { bs[j].disabled = false; }
+    });
+}
+
+function _downloadBlob(blob, filename) {
+  var u = URL.createObjectURL(blob);
+  var a = document.createElement('a');
+  a.href = u; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  setTimeout(function(){ URL.revokeObjectURL(u); }, 1000);
 }
 
 // ── ตัวแปร placeholder สำหรับ Admin กำหนด ──
