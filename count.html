@@ -310,6 +310,32 @@ td.brs-c   {color:#1a1612;}
   </div>
 </div>
 
+<!-- Document link modal -->
+<div class="overlay" id="docLinkModal" onclick="if(event.target===this)closeDocLink()">
+  <div class="overlay-box" style="max-width:460px;padding:26px 24px;text-align:left;">
+    <div style="text-align:center;margin-bottom:16px;">
+      <div class="overlay-icon" style="font-size:44px;margin-bottom:8px;">📄</div>
+      <div class="overlay-title" id="dlTitle">เอกสารพร้อมแล้ว</div>
+    </div>
+    <div id="dlHint" style="font-size:12.5px;color:var(--muted);line-height:1.75;margin-bottom:14px;"></div>
+    <input class="input" id="docLinkInput" type="text" readonly onclick="this.select()"
+      style="font-size:12px;margin-bottom:12px;">
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">
+      <button class="btn btn-success" type="button" onclick="_copyDocLink()" style="flex:1;min-width:130px;">📋 คัดลอกลิงก์</button>
+      <a class="btn btn-primary" id="dlOpen" href="#" target="_blank" rel="noopener"
+         style="flex:1;min-width:130px;text-align:center;text-decoration:none;line-height:1.9;">⬇️ เปิด / โหลดไฟล์</a>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;">
+      <button class="btn btn-outline" type="button" onclick="_saveDocHere()" style="flex:1;min-width:130px;">📱 โหลดลงเครื่องนี้</button>
+      <button class="btn btn-outline" type="button" onclick="closeDocLink()" style="flex:1;min-width:130px;">ปิด</button>
+    </div>
+    <div style="font-size:11px;color:var(--muted);line-height:1.7;margin-top:12px;text-align:center;">
+      <b>คัดลอกลิงก์</b> = ส่งต่อไปเปิดบนคอม · <b>โหลดลงเครื่องนี้</b> = เก็บไฟล์ในเครื่องที่ใช้อยู่<br>
+      <span id="dlFile" style="font-family:var(--mono);font-size:10.5px;"></span>
+    </div>
+  </div>
+</div>
+
 <!-- Photo choice modal -->
 <div class="overlay" id="photoChoiceModal" onclick="if(event.target===this)closePhotoChoice()">
   <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r);width:100%;max-width:320px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.15);">
@@ -603,8 +629,10 @@ function PV_OF(typeId){
 }
 // (emptyLoc / locTotal / brandTotal เวอร์ชัน v1 ถูกย้ายไปบล็อก v2 schema ด้านบน)
 
-function fetchBookBalance(site) {
-  fetch(API_URL + '?action=getBookBalance&site=' + encodeURIComponent(site))
+async function fetchBookBalance(site) {
+  // รีเฟรชใบส่งผล v2 ก่อนเสมอ — ของ v1 (getBookBalance) จะว่างในรอบที่นับด้วย v2
+  try { await _loadCountSetup(site); } catch (e) {}
+  return fetch(API_URL + '?action=getBookBalance&site=' + encodeURIComponent(site))
     .then(function(r){ return r.json(); })
     .then(function(data) {
       siteSubmission = data.submission || V2SUB || null; // v2 ชนะ v1 ถ้า v1 ไม่มีใบ
@@ -2467,54 +2495,53 @@ function _uploadDocForLink(blob, fname) {
 
 // ทำลิงก์ไม่ได้ — เอกสารสร้างเสร็จแล้ว ให้กดโหลดลงเครื่องแทน
 function _showDocFallback(reason) {
-  var el = document.getElementById('docLinkBox');
-  if (!el) {
-    el = document.createElement('div');
-    el.id = 'docLinkBox';
-    var host = document.getElementById('step3Body') || document.getElementById('mainContent');
-    if (host) host.appendChild(el);
-  }
-  el.style.cssText = 'border-radius:var(--rs);padding:13px 14px;margin:12px 0;'
-    + 'background:rgba(245,158,11,.12);border:1.5px solid rgba(245,158,11,.35);font-size:13px;line-height:1.6;';
-  el.innerHTML =
-    '<div style="font-weight:700;margin-bottom:6px;">⚠ เอกสารสร้างเสร็จแล้ว แต่ยังทำลิงก์ไม่ได้</div>'+
-    '<div style="font-size:12px;color:var(--muted);margin-bottom:8px;">'+esc(String(reason||''))+'</div>'+
-    '<button class="btn btn-outline" type="button" onclick="_saveDocHere()" style="width:100%;">📱 โหลดลงเครื่องนี้</button>'+
-    '<button class="btn btn-outline" type="button" onclick="printDoc()" style="width:100%;margin-top:8px;">🔄 ลองทำลิงก์อีกครั้ง</button>';
-  if (el.scrollIntoView) el.scrollIntoView({ behavior:'smooth', block:'nearest' });
-  showToast('⚠ ทำลิงก์ไม่สำเร็จ — กด “โหลดลงเครื่องนี้” ได้เลย', 'warn');
+  _openDocLinkModal({
+    title : '⚠ ทำลิงก์ไม่สำเร็จ',
+    hint  : 'เอกสารสร้างเสร็จแล้ว แต่ยังอัปขึ้น Drive ไม่ได้<br>'
+          + '<span style="color:var(--muted);">' + esc(String(reason||'')) + '</span><br>'
+          + 'กด <b>โหลดลงเครื่องนี้</b> เพื่อเก็บไฟล์ไว้ก่อน แล้วค่อยกดสร้างใหม่เพื่อลองทำลิงก์อีกครั้ง',
+    url   : ''
+  });
+  showToast('⚠ ทำลิงก์ไม่สำเร็จ — กด "โหลดลงเครื่องนี้" ได้เลย', 'warn');
 }
 
-// กล่องแสดงลิงก์ + ปุ่มคัดลอก (ให้หน้างานส่งต่อไปเปิดบนคอม)
+// popup ลิงก์ดาวน์โหลด (ให้หน้างานส่งต่อไปเปิดบนคอม)
 function _showDocLink(url, view, fname) {
-  var el = document.getElementById('docLinkBox');
-  if (!el) {
-    el = document.createElement('div');
-    el.id = 'docLinkBox';
-    var host = document.getElementById('step3Body') || document.getElementById('mainContent');
-    if (host) host.appendChild(el);
-  }
-  el.style.cssText = 'border-radius:var(--rs);padding:13px 14px;margin:12px 0;'
-    + 'background:rgba(16,110,86,.1);border:1.5px solid rgba(16,110,86,.3);font-size:13px;line-height:1.6;';
-  el.innerHTML =
-    '<div style="font-weight:700;margin-bottom:6px;">🔗 ลิงก์ดาวน์โหลดเอกสาร</div>'+
-    '<div style="font-size:12px;color:var(--muted);margin-bottom:8px;word-break:break-all;">'+esc(fname)+'</div>'+
-    '<input class="input" id="docLinkInput" type="text" readonly value="'+esc(url)+'" '+
-      'onclick="this.select()" style="font-size:12px;margin-bottom:8px;">'+
-    '<div style="display:flex;gap:8px;flex-wrap:wrap;">'+
-      '<button class="btn btn-outline" type="button" onclick="_copyDocLink()" style="flex:1;min-width:120px;">📋 คัดลอกลิงก์</button>'+
-      '<a class="btn btn-outline" href="'+esc(url)+'" target="_blank" rel="noopener" style="flex:1;min-width:120px;text-align:center;text-decoration:none;">⬇️ โหลดไฟล์</a>'+
-      '<button class="btn btn-outline" type="button" onclick="_saveDocHere()" style="flex:1;min-width:120px;">📱 โหลดลงเครื่องนี้</button>'+
-      (view ? '<a class="btn btn-outline" href="'+esc(view)+'" target="_blank" rel="noopener" style="flex:1;min-width:120px;text-align:center;text-decoration:none;">👁️ เปิดดู</a>' : '')+
-    '</div>'+
-    '<div style="font-size:11px;color:var(--muted);margin-top:8px;">เปิดลิงก์นี้บนคอมเพื่อโหลดไปพิมพ์ แล้วเซ็นและสแกนกลับมาอัปในขั้นที่ 5 — หรือกด “โหลดลงเครื่องนี้” ถ้าจะเก็บไฟล์ไว้ในเครื่องที่กำลังใช้</div>';
-  el.scrollIntoView({ behavior:'smooth', block:'nearest' });
+  _openDocLinkModal({
+    title : 'เอกสารพร้อมแล้ว',
+    hint  : '📱 → 💻 <b>ใช้มือถือ:</b> กด “คัดลอกลิงก์” แล้วส่งลิงก์ไปเปิดที่<b>คอม</b><br>'
+          + 'กดลิงก์ที่คอม → ไฟล์ Word จะถูกดาวน์โหลด → เปิดแล้วสั่งพิมพ์ เซ็น แล้วสแกนกลับมาอัปในขั้นที่ 5',
+    url   : url,
+    fname : fname
+  });
   showToast('🔗 ได้ลิงก์แล้ว — คัดลอกไปเปิดบนคอมได้', 'success');
+}
+
+function _openDocLinkModal(o) {
+  var m = document.getElementById('docLinkModal');
+  if (!m) { showToast('เอกสารพร้อมแล้ว — กดสร้างอีกครั้งถ้าไม่เห็นลิงก์', 'info'); return; }
+  document.getElementById('dlTitle').textContent = o.title || 'เอกสารพร้อมแล้ว';
+  document.getElementById('dlHint').innerHTML   = o.hint || '';
+  document.getElementById('dlFile').textContent = o.fname || _lastDocName || '';
+  var inp = document.getElementById('docLinkInput');
+  var op  = document.getElementById('dlOpen');
+  if (o.url) {
+    inp.style.display = 'block'; inp.value = o.url;
+    op.style.display = 'inline-block'; op.href = o.url;
+  } else {
+    inp.style.display = 'none'; inp.value = '';
+    op.style.display = 'none'; op.href = '#';
+  }
+  m.classList.add('open');
+}
+function closeDocLink() {
+  var m = document.getElementById('docLinkModal');
+  if (m) m.classList.remove('open');
 }
 
 function _copyDocLink() {
   var i = document.getElementById('docLinkInput');
-  if (!i) return;
+  if (!i || !i.value) { showToast('ยังไม่มีลิงก์ — ลองกดสร้างเอกสารอีกครั้ง', 'warn'); return; }
   var done = function(){ showToast('📋 คัดลอกลิงก์แล้ว', 'success'); };
   if (navigator.clipboard && navigator.clipboard.writeText) {
     navigator.clipboard.writeText(i.value).then(done).catch(function(){ i.select(); document.execCommand('copy'); done(); });
