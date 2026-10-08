@@ -2405,9 +2405,10 @@ function printDoc() {
       doc.render(_buildDocData());
       var blob = doc.getZip().generate({ type:'blob',
         mimeType:'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
-      _downloadBlob(blob, fname);
+      // ไม่โหลดลงเครื่องอัตโนมัติ — เก็บไว้ให้กดเองจากกล่องลิงก์
+      _lastDocBlob = blob; _lastDocName = fname;
       _printed = true; updateSubmitCard();
-      showToast('✅ ได้ไฟล์ '+fname+' — กำลังทำลิงก์สำหรับโหลดบนคอม...', 'success');
+      showToast('✅ สร้างเอกสารแล้ว — กำลังทำลิงก์สำหรับโหลดบนคอม...', 'info');
       return _uploadDocForLink(blob, fname);
     })
     .catch(function(err){
@@ -2431,7 +2432,7 @@ function _uploadDocForLink(blob, fname) {
   return new Promise(function(resolve){
     var reader;
     try { reader = new FileReader(); } catch (e) {
-      showToast('⚠ ไฟล์โหลดลงเครื่องแล้ว แต่ทำลิงก์ไม่สำเร็จ', 'warn'); resolve(null); return;
+      _showDocFallback('ทำลิงก์ไม่สำเร็จ'); resolve(null); return;
     }
     reader.onload = function(e){
       fetch(API_URL, {
@@ -2448,20 +2449,40 @@ function _uploadDocForLink(blob, fname) {
         resolve(d);
       })
       .catch(function(err){
-        showToast('⚠ ไฟล์โหลดลงเครื่องแล้ว แต่ทำลิงก์ไม่สำเร็จ: '+err.message, 'warn');
+        _showDocFallback('ทำลิงก์ไม่สำเร็จ: '+err.message);
         resolve(null);
       });
     };
     reader.onerror = function(){
-      showToast('⚠ ไฟล์โหลดลงเครื่องแล้ว แต่อ่านไฟล์เพื่อทำลิงก์ไม่สำเร็จ', 'warn'); resolve(null);
+      _showDocFallback('อ่านไฟล์เพื่อทำลิงก์ไม่สำเร็จ'); resolve(null);
     };
     // อ่านไฟล์พังต้องไม่ไปโผล่เป็น "สร้างเอกสารไม่สำเร็จ" — เอกสารสร้างเสร็จและโหลดลงเครื่องแล้ว
     try { reader.readAsDataURL(blob); }
     catch (e) {
-      showToast('⚠ ไฟล์โหลดลงเครื่องแล้ว แต่ทำลิงก์ไม่สำเร็จ: '+String(e.message||e), 'warn');
+      _showDocFallback('ทำลิงก์ไม่สำเร็จ: '+String(e.message||e));
       resolve(null);
     }
   });
+}
+
+// ทำลิงก์ไม่ได้ — เอกสารสร้างเสร็จแล้ว ให้กดโหลดลงเครื่องแทน
+function _showDocFallback(reason) {
+  var el = document.getElementById('docLinkBox');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'docLinkBox';
+    var host = document.getElementById('step3Body') || document.getElementById('mainContent');
+    if (host) host.appendChild(el);
+  }
+  el.style.cssText = 'border-radius:var(--rs);padding:13px 14px;margin:12px 0;'
+    + 'background:rgba(245,158,11,.12);border:1.5px solid rgba(245,158,11,.35);font-size:13px;line-height:1.6;';
+  el.innerHTML =
+    '<div style="font-weight:700;margin-bottom:6px;">⚠ เอกสารสร้างเสร็จแล้ว แต่ยังทำลิงก์ไม่ได้</div>'+
+    '<div style="font-size:12px;color:var(--muted);margin-bottom:8px;">'+esc(String(reason||''))+'</div>'+
+    '<button class="btn btn-outline" type="button" onclick="_saveDocHere()" style="width:100%;">📱 โหลดลงเครื่องนี้</button>'+
+    '<button class="btn btn-outline" type="button" onclick="printDoc()" style="width:100%;margin-top:8px;">🔄 ลองทำลิงก์อีกครั้ง</button>';
+  if (el.scrollIntoView) el.scrollIntoView({ behavior:'smooth', block:'nearest' });
+  showToast('⚠ ทำลิงก์ไม่สำเร็จ — กด “โหลดลงเครื่องนี้” ได้เลย', 'warn');
 }
 
 // กล่องแสดงลิงก์ + ปุ่มคัดลอก (ให้หน้างานส่งต่อไปเปิดบนคอม)
@@ -2470,11 +2491,11 @@ function _showDocLink(url, view, fname) {
   if (!el) {
     el = document.createElement('div');
     el.id = 'docLinkBox';
-    el.style.cssText = 'border-radius:var(--rs);padding:13px 14px;margin:12px 0;'
-      + 'background:rgba(16,110,86,.1);border:1.5px solid rgba(16,110,86,.3);font-size:13px;line-height:1.6;';
     var host = document.getElementById('step3Body') || document.getElementById('mainContent');
     if (host) host.appendChild(el);
   }
+  el.style.cssText = 'border-radius:var(--rs);padding:13px 14px;margin:12px 0;'
+    + 'background:rgba(16,110,86,.1);border:1.5px solid rgba(16,110,86,.3);font-size:13px;line-height:1.6;';
   el.innerHTML =
     '<div style="font-weight:700;margin-bottom:6px;">🔗 ลิงก์ดาวน์โหลดเอกสาร</div>'+
     '<div style="font-size:12px;color:var(--muted);margin-bottom:8px;word-break:break-all;">'+esc(fname)+'</div>'+
@@ -2483,9 +2504,10 @@ function _showDocLink(url, view, fname) {
     '<div style="display:flex;gap:8px;flex-wrap:wrap;">'+
       '<button class="btn btn-outline" type="button" onclick="_copyDocLink()" style="flex:1;min-width:120px;">📋 คัดลอกลิงก์</button>'+
       '<a class="btn btn-outline" href="'+esc(url)+'" target="_blank" rel="noopener" style="flex:1;min-width:120px;text-align:center;text-decoration:none;">⬇️ โหลดไฟล์</a>'+
+      '<button class="btn btn-outline" type="button" onclick="_saveDocHere()" style="flex:1;min-width:120px;">📱 โหลดลงเครื่องนี้</button>'+
       (view ? '<a class="btn btn-outline" href="'+esc(view)+'" target="_blank" rel="noopener" style="flex:1;min-width:120px;text-align:center;text-decoration:none;">👁️ เปิดดู</a>' : '')+
     '</div>'+
-    '<div style="font-size:11px;color:var(--muted);margin-top:8px;">เปิดลิงก์นี้บนคอมเพื่อโหลดไปพิมพ์ แล้วเซ็นและสแกนกลับมาอัปในขั้นที่ 5</div>';
+    '<div style="font-size:11px;color:var(--muted);margin-top:8px;">เปิดลิงก์นี้บนคอมเพื่อโหลดไปพิมพ์ แล้วเซ็นและสแกนกลับมาอัปในขั้นที่ 5 — หรือกด “โหลดลงเครื่องนี้” ถ้าจะเก็บไฟล์ไว้ในเครื่องที่กำลังใช้</div>';
   el.scrollIntoView({ behavior:'smooth', block:'nearest' });
   showToast('🔗 ได้ลิงก์แล้ว — คัดลอกไปเปิดบนคอมได้', 'success');
 }
@@ -2497,6 +2519,14 @@ function _copyDocLink() {
   if (navigator.clipboard && navigator.clipboard.writeText) {
     navigator.clipboard.writeText(i.value).then(done).catch(function(){ i.select(); document.execCommand('copy'); done(); });
   } else { i.select(); document.execCommand('copy'); done(); }
+}
+
+var _lastDocBlob = null, _lastDocName = '';
+
+// โหลดไฟล์ที่สร้างไว้ลงเครื่องนี้ (กดเอง ไม่ใช่อัตโนมัติ)
+function _saveDocHere() {
+  if (!_lastDocBlob) { showToast('ยังไม่มีเอกสาร — กดสร้างเอกสารก่อน', 'warn'); return; }
+  _downloadBlob(_lastDocBlob, _lastDocName || 'report.docx');
 }
 
 function _downloadBlob(blob, filename) {
