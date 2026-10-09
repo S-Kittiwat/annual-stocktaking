@@ -2721,8 +2721,10 @@ function _qHelpPanel(c){
       +'<button class="btn btn-success" style="flex:1;min-width:150px;" onclick="qRelease()">✓ จบการช่วยเหลือ (ปล่อยกลับไปนับ)</button>'
     +'</div>';
 }
+var _qState = null;
 function renderQueue(st){
-  st = st || {agents:[],waiting:[],stats:{}};
+  st = st || _qState || {agents:[],waiting:[],stats:{}};
+  _qState = st;
   var wait = st.waiting||[], users = st.agents||[];
   // stats
   var s = st.stats||{};
@@ -2746,6 +2748,11 @@ function renderQueue(st){
       cs.sort(function(a,b){return (b.submitted_at||'').localeCompare(a.submitted_at||'');});
       sub=cs[0]||null;
     }catch(e){}
+    _qSubNow = sub;
+    var qSiteId = (sub && sub.site_id) || (function(){
+      var m=(S.sites||[]).filter(function(x){ return String(x.site_name)===String(c.site); })[0];
+      return m ? m.site_id : '';
+    })();
     // ── v2: การ์ดต่อรายการที่นับ (จาก config ของรอบ) ──
     var qCols = v2ReconItems();
     var qRec  = {};
@@ -2839,6 +2846,8 @@ function renderQueue(st){
         })()
       +'<div style="font-size:12px;color:var(--muted,#777);margin-bottom:6px;">ไฟล์แนบจากผู้นับ</div>'
       +'<div style="margin-bottom:16px;">'+pdf+'</div>'
+      + (qSiteId ? _qFolderHtml(qSiteId) : '')
+      + _qChecklistHtml(sub)
       +'<div style="display:flex;gap:10px;flex-wrap:wrap;">'
         +'<button class="btn btn-success" style="flex:1;min-width:150px;" onclick="qRelease()">✓ ปล่อยตัว (อนุมัติ)</button>'
         +'<button class="btn" style="flex:1;min-width:150px;background:#c0392b;color:#fff;" onclick="qKickback()">↩ ตีกลับ (แก้ไข)</button>'
@@ -2876,6 +2885,152 @@ function _qNumChip(label,val){
   var v=(val===undefined||val===null||val==='')?'—':val;
   return '<span style="display:inline-flex;gap:4px;padding:4px 10px;border-radius:8px;background:rgba(0,0,0,.06);font-size:12px;">'+label+': <b>'+v+'</b></span>';
 }
+/* ════════════════════════════════════════════════════════════
+   D2 — เช็คลิสต์ความครบ (ตรวจเฉพาะสิ่งที่ User ต้องส่ง)
+   ขาดตัวไหน = ต้องตีกลับทันทีตอน User ยังอยู่ ไม่ใช่ไปรู้ตอนประกอบเล่ม
+   ════════════════════════════════════════════════════════════ */
+function _qChecklist(sub){
+  var items = [];
+  if(!sub) return items;
+
+  // 1) ใบเซ็น
+  var urls = (sub.pdf_urls && sub.pdf_urls.length) ? sub.pdf_urls : (sub.pdf_url ? [sub.pdf_url] : []);
+  items.push({ key:'file', label:'ไฟล์ใบเซ็น', ok:urls.length>0,
+               detail: urls.length ? (urls.length+' ไฟล์') : 'ยังไม่ได้อัปไฟล์' });
+
+  // 2) รูปถ่ายราย Location — ต้องมีครบทุก Location
+  var locs = sub.locations || [];
+  var lp   = sub.location_photos || [];
+  var byLoc = {};
+  lp.forEach(function(p){ var n=String(p.name||''); byLoc[n]=(byLoc[n]||0)+1; });
+  var missing = locs.filter(function(L){ return !byLoc[String(L.name||'')]; })
+                    .map(function(L){ return String(L.name||''); });
+  items.push({ key:'photo', label:'รูปถ่ายราย Location', ok:(lp.length>0 && !missing.length),
+               detail: !lp.length ? 'ยังไม่มีรูปเลย'
+                     : missing.length ? (lp.length+' รูป · ขาด: '+missing.join(', '))
+                     : (lp.length+' รูป ครบทุก Location') });
+
+  // 3) หลักฐานของรายการปรับปรุงที่มียอด
+  var adjList = (V2CFG && V2CFG.adjustments || []).filter(function(a){ return a.is_active!==false; });
+  var af = sub.adjust_files || {};
+  adjList.forEach(function(a){
+    var sum = 0;
+    Object.keys(sub.totals||{}).forEach(function(id){
+      var g = sub.totals[id] && sub.totals[id].by_adjust;
+      if(g) sum += Number(g[a.adjust_id])||0;
+    });
+    if(sum === 0) return;                       // ไม่มียอด = ไม่ต้องมีหลักฐาน
+    var n = (af[a.adjust_id] || []).length;
+    items.push({ key:'adj:'+a.adjust_id, label:'หลักฐาน — '+a.adjust_name,
+                 ok:(!a.require_file || n>0),
+                 detail: n ? (n+' ไฟล์ · ยอด '+sum.toLocaleString())
+                           : ('ยอด '+sum.toLocaleString()+' แต่ยังไม่มีไฟล์') });
+  });
+  return items;
+}
+
+function _qChecklistHtml(sub){
+  var items = _qChecklist(sub);
+  if(!items.length) return '';
+  var bad = items.filter(function(i){ return !i.ok; });
+  var head = bad.length
+    ? '<div style="font-size:12.5px;font-weight:700;color:#c0392b;margin-bottom:8px;">⚠ ยังไม่ครบ '+bad.length+' รายการ — ควรตีกลับให้ผู้นับแก้ตอนนี้</div>'
+    : '<div style="font-size:12.5px;font-weight:700;color:var(--success,#1a7f5a);margin-bottom:8px;">✅ ของที่ผู้นับต้องส่ง ครบแล้ว</div>';
+  return '<div style="font-size:12px;color:var(--muted,#777);margin-bottom:6px;">ตรวจความครบก่อนปล่อยตัว</div>'
+    + '<div style="border:1px solid '+(bad.length?'#e8b4ad':'var(--border,#e2e2e2)')+';border-radius:10px;padding:12px;margin-bottom:16px;'
+    + 'background:'+(bad.length?'rgba(192,57,43,.05)':'transparent')+';">'
+    + head
+    + items.map(function(i){
+        return '<div style="display:flex;gap:8px;align-items:flex-start;padding:4px 0;font-size:13px;">'
+          + '<span style="flex:0 0 auto;">'+(i.ok?'✅':'❌')+'</span>'
+          + '<span style="flex:1;"><b>'+esc(i.label)+'</b>'
+          + '<span style="color:'+(i.ok?'var(--muted,#888)':'#c0392b')+';font-size:12px;"> — '+esc(i.detail)+'</span></span>'
+          + '</div>';
+      }).join('')
+    + (bad.length
+        ? '<button class="btn btn-sm" style="margin-top:10px;width:100%;background:#c0392b;color:#fff;" '
+          + 'onclick="qKickbackMissing()">↩ ตีกลับเฉพาะรายการที่ขาด</button>'
+        : '')
+    + '</div>';
+}
+
+// ตีกลับโดยติ๊กให้อัตโนมัติเฉพาะรายการที่ขาด
+function qKickbackMissing(){
+  var sub = _qCurrentSub();
+  var bad = _qChecklist(sub).filter(function(i){ return !i.ok; });
+  qKickback();
+  var names = bad.map(function(i){ return i.label; });
+  document.querySelectorAll('.kbStep').forEach(function(c){
+    c.checked = bad.some(function(i){ return i.key === c.value; });
+  });
+  var n = document.getElementById('kbNote');
+  if(n && !n.value) n.value = 'ยังไม่ครบ: ' + names.join(' · ');
+}
+
+// ใบที่กำลังตรวจอยู่ (ใช้ร่วมกันหลายที่)
+var _qSubNow = null;
+function _qCurrentSub(){ return _qSubNow; }
+
+/* ── โฟลเดอร์ของ Site — เปิด Drive + ดูไฟล์ที่เตรียมไว้ก่อนเริ่มนับ ── */
+var QFOLDER = { site_id:'', loading:false, url:'', files:null, err:'' };
+
+function _qFolderHtml(siteId){
+  if(QFOLDER.site_id !== siteId){   // เปลี่ยน Site → โหลดใหม่
+    QFOLDER = { site_id:siteId, loading:false, url:'', files:null, err:'' };
+  }
+  var body;
+  if(QFOLDER.err){
+    body = '<div style="font-size:12px;color:#c0392b;">'+esc(QFOLDER.err)+'</div>';
+  } else if(QFOLDER.loading){
+    body = '<div style="font-size:12px;color:var(--muted,#888);">กำลังโหลด…</div>';
+  } else if(QFOLDER.files === null){
+    body = '<button class="btn btn-sm" onclick="qLoadFolder(\''+esc(siteId)+'\')">📂 ดูไฟล์ในโฟลเดอร์</button>';
+  } else if(!QFOLDER.files.length){
+    body = '<div style="font-size:12px;color:var(--muted,#888);">ยังไม่มีไฟล์ในโฟลเดอร์นี้</div>';
+  } else {
+    body = '<div style="display:flex;flex-wrap:wrap;gap:6px;">'
+      + QFOLDER.files.map(function(f){
+          var icon = /^image\//.test(String(f.mime||'')) ? '🖼' : (/pdf/i.test(String(f.mime||'')) ? '📄' : '📎');
+          return '<a class="btn-sm btn-sm-open" href="'+esc(f.url)+'" target="_blank" rel="noopener" '
+            + 'title="'+esc(f.filename)+'" style="max-width:230px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'
+            + icon+' '+esc(f.filename)+'</a>';
+        }).join('')
+      + '</div>';
+  }
+  return '<div style="font-size:12px;color:var(--muted,#777);margin-bottom:6px;">โฟลเดอร์ของ Site '
+    + '<span style="color:var(--muted,#aaa);">— ไฟล์ที่ดึงเก็บไว้ก่อนเริ่มนับ</span></div>'
+    + '<div style="border:1px solid var(--border,#e2e2e2);border-radius:10px;padding:12px;margin-bottom:16px;">'
+    + '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:'+(QFOLDER.files&&QFOLDER.files.length?'10px':'0')+';">'
+    +   (QFOLDER.url ? '<a class="btn-sm btn-sm-open" href="'+esc(QFOLDER.url)+'" target="_blank" rel="noopener">📁 เปิดใน Drive ↗</a>'
+                     : '<button class="btn-sm" onclick="qLoadFolder(\''+esc(siteId)+'\')">📁 เปิดโฟลเดอร์</button>')
+    +   (QFOLDER.files!==null ? '<button class="btn-sm" onclick="qLoadFolder(\''+esc(siteId)+'\',1)">🔄 รีเฟรช</button>' : '')
+    + '</div>'
+    + body
+    + '</div>';
+}
+
+function qLoadFolder(siteId, force){
+  if(QFOLDER.loading) return;
+  if(!force && QFOLDER.site_id===siteId && QFOLDER.files!==null) return;
+  QFOLDER = { site_id:siteId, loading:true, url:QFOLDER.url, files:QFOLDER.files, err:'' };
+  renderQueue(_qState);
+  var rid = S.round ? S.round.round_id : '';
+  Promise.all([
+    post({ action:'getSiteFolder',  round_id:rid, site_id:siteId }),
+    post({ action:'listFolderFiles', round_id:rid, site_id:siteId })
+  ]).then(function(r){
+    var f = r[0], l = r[1];
+    QFOLDER.loading = false;
+    QFOLDER.url   = (f && f.folder && f.folder.url) || (l && l.folder_url) || '';
+    QFOLDER.files = (l && l.files) ? l.files : [];
+    if(f && f.status==='error') QFOLDER.err = f.message||'เปิดโฟลเดอร์ไม่ได้';
+    renderQueue(_qState);
+  }).catch(function(e){
+    QFOLDER.loading = false; QFOLDER.err = 'โหลดโฟลเดอร์ไม่สำเร็จ';
+    renderQueue(_qState);
+  });
+}
+
 function qAction(action, extra){
   var p={action:action}; if(extra){ for(var k in extra) p[k]=extra[k]; }
   post(p).then(function(d){
