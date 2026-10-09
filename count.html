@@ -448,6 +448,70 @@ function locTotal(loc) {
 }
 
 /* ════════════════════════════════════════════════════════════
+   ตีกลับเฉพาะส่วน — คีย์จาก config
+   count:<type_id> · adj:<adjust_id> · photo · file
+   (คีย์เก่า count_wood / count_plastic / offpcs ยังรองรับ)
+   ════════════════════════════════════════════════════════════ */
+var _keepFileUrls = [];   // ไฟล์ใบเซ็นของฉบับก่อน — ไม่ต้องอัปใหม่ถ้าไม่ได้ถูกตีกลับ
+
+function _isRevision(){
+  var st = siteSubmission && String(siteSubmission.status||'');
+  return st === 'rejected' || st === 'reopened';
+}
+function _rejSteps(){
+  if (!_isRevision()) return [];
+  var raw = (siteSubmission && siteSubmission.reject_steps) || [];
+  if (!Array.isArray(raw)) return [];
+  var out = [];
+  raw.forEach(function(k){
+    k = String(k||'').trim(); if (!k) return;
+    // คีย์เก่า → แปลงเป็นคีย์ใหม่
+    if (k === 'count_wood' || k === 'count_plastic' || k === 'count:*') {
+      V2TYPES().forEach(function(t){ out.push('count:'+t.type_id); });
+    } else if (k === 'offpcs') {
+      ADJUSTS().forEach(function(a){ out.push('adj:'+a.adjust_id); });
+    } else {
+      out.push(k);
+    }
+  });
+  return out.filter(function(v,i){ return out.indexOf(v)===i; });
+}
+// ตีกลับแบบระบุส่วน = มี steps · ตีกลับเปล่า = ต้องทำใหม่ทั้งหมด (เหมือนเดิม)
+function _rejScoped(){ return _isRevision() && _rejSteps().length > 0; }
+function _rejNeeds(key){
+  if (!_rejScoped()) return true;        // ไม่ได้ระบุส่วน → ถือว่าต้องแก้ทุกอย่าง
+  return _rejSteps().indexOf(key) >= 0;
+}
+function _rejNeedsAnyAdj(){
+  return ADJUSTS().some(function(a){ return _rejNeeds('adj:'+a.adjust_id); });
+}
+function _rejLabel(key){
+  if (key === 'photo') return 'รูปถ่ายราย Location';
+  if (key === 'file')  return 'ไฟล์ใบเซ็น';
+  if (key.indexOf('count:') === 0) return 'ยอดนับจริง — ' + TY2(key.slice(6)).type_name;
+  if (key.indexOf('adj:') === 0) {
+    var a = ADJUSTS().filter(function(x){ return x.adjust_id === key.slice(4); })[0];
+    return a ? a.adjust_name : 'รายการปรับปรุง';
+  }
+  return key;
+}
+
+// ตั้งสถานะขั้นที่ไม่ได้ถูกตีกลับให้ "ผ่านแล้ว" เพื่อไม่ต้องกดซ้ำทั้งลำดับ
+function _applyRejScope(){
+  if (!_rejScoped()) return;
+  _step3Seen = true;                       // สรุปยอดเคยตรวจแล้ว
+  _printed   = true;                       // ไม่บังคับสร้างเอกสารใหม่ (ยังกดสร้างได้)
+  if (!_rejNeedsAnyAdj()) _offDone = true; // ไม่ได้ตีกลับรายการปรับปรุง → ไม่ต้องกดจบขั้นที่ 3 ซ้ำ
+  if (_rejNeeds('file')) {
+    _keepFileUrls = [];                    // ต้องอัปใบเซ็นใหม่
+  } else {
+    var u = (siteSubmission && siteSubmission.file_urls) || [];
+    _keepFileUrls = Array.isArray(u) ? u.slice() : [];
+  }
+}
+function _hasSignedFile(){ return files.length > 0 || _keepFileUrls.length > 0; }
+
+/* ════════════════════════════════════════════════════════════
    ขั้นที่ 3 — รายการปรับปรุงระดับ Site (จาก cfg.adjustments)
    ════════════════════════════════════════════════════════════ */
 function adjGet(ajId, itemId){ return Number((ADJ[ajId]||{})[itemId]) || 0; }
@@ -499,7 +563,7 @@ function _adjInput(ajId, it){
 function _adjCard(a){
   var items = ALL_ITEMS();
   var cols  = items.length >= 2 ? 2 : 1;
-  return '<div style="border:1px solid var(--border);border-radius:var(--rs);padding:12px;margin-bottom:12px;">'+
+  return '<div id="adjCard_'+_domId(a.adjust_id)+'" style="border:1px solid var(--border);border-radius:var(--rs);padding:12px;margin-bottom:12px;">'+
     '<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px;">'+
       '<span style="font-size:13px;font-weight:700;flex:1;">'+esc(a.adjust_name)+
         (a.require_file?' <span style="font-size:11px;font-weight:600;color:var(--danger);">· ต้องแนบไฟล์ถ้ามียอด</span>':'')+'</span>'+
@@ -740,6 +804,7 @@ function _maybeRestoreFromServer() {
       ALL_ITEMS().forEach(function(it){ ADJ[a.adjust_id][it.item_id] = _n2(g[it.item_id]); });
     });
   }
+  _applyRejScope();   // ขั้นที่ไม่ถูกตีกลับ → ถือว่าผ่านแล้ว ไม่ต้องกดซ้ำทั้งลำดับ
   _serverRestoredKey = key;
   try { saveProgress(); } catch(e) {}
 }
@@ -1467,8 +1532,8 @@ function renderStep2(content) {
 
     // ── Submit Card ──
     (function(){
-      var _isRe = siteSubmission && (siteSubmission.status==='rejected'||siteSubmission.status==='reopened');
-      var ready = hasLoc && _offDone && files.length>0 && (_isRe || (_step3Seen && _printed));
+      var _isRe = _isRevision();
+      var ready = hasLoc && _offDone && _hasSignedFile() && (_isRe || (_step3Seen && _printed));
       return '<div class="submit-card" id="submitCard">'+
       '<div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:8px;">📋 ตรวจสอบก่อน Submit</div>'+
       '<div class="step-check" id="chk1">'+_chkIcon(true)+'ขั้นที่ 1 — เลือก Site และผู้นับ</div>'+
@@ -1495,43 +1560,61 @@ function renderStep2(content) {
 
 // ไฮไลต์ขั้นที่ Admin ระบุว่าต้องแก้ (ตอนถูกตีกลับ) + กางเปิดให้
 function applyRejectHl(){
-  var steps = (siteSubmission && siteSubmission.reject_steps) || [];
-  var isRe = siteSubmission && (siteSubmission.status==='rejected'||siteSubmission.status==='reopened');
-  if (!isRe || !steps.length) return;
-  var hasW = steps.indexOf('count_wood')>=0, hasP = steps.indexOf('count_plastic')>=0;
-  var cfg = [
-    { id:'step2Card',   on:(hasW||hasP), label:'ต้องแก้ไข: ยอดนับจริง'+((hasW&&hasP)?' (ไม้+พลาสติก)':(hasW?' (ไม้)':' (พลาสติก)')), body:'step2Body' },
-    { id:'stepOffCard', on:steps.indexOf('offpcs')>=0, label:'ต้องแก้ไข: พาเลทนอกระบบ PCS', body:'offBody' },
-    { id:'step4Card',   on:steps.indexOf('file')>=0,   label:'ต้องแก้ไข: ไฟล์ใบเซ็น', body:null }
-  ];
-  var firstCard=null;
-  cfg.forEach(function(c){
-    var card=document.getElementById(c.id); if(!card||!c.on) return;
-    if(!firstCard) firstCard=card;
-    card.style.border='2px solid #dc2626';
-    card.style.boxShadow='0 0 0 3px rgba(220,38,38,.08)';
-    var head=card.querySelector('.card-head');
-    if(head && !head.querySelector('.rejFlag')){
-      var b=document.createElement('div');
-      b.className='rejFlag';
-      b.style.cssText='flex-basis:100%;width:100%;background:#dc2626;color:#fff;font-size:12px;font-weight:700;padding:5px 10px;border-radius:6px;margin-top:8px;';
-      b.textContent='⚠ '+c.label;
-      head.appendChild(b);
+  if (!_isRevision()) return;
+  var steps = _rejSteps();
+  if (!steps.length) return;
+
+  var marked = [];
+  var flag = function(el, label){
+    if (!el) return;
+    el.style.border = '2px solid #dc2626';
+    el.style.borderRadius = 'var(--rs)';
+    el.style.boxShadow = '0 0 0 3px rgba(220,38,38,.08)';
+    var host = el.querySelector('.card-head') || el;
+    if (!host.querySelector('.rejFlag')) {
+      var b = document.createElement('div');
+      b.className = 'rejFlag';
+      b.style.cssText = 'flex-basis:100%;width:100%;background:#dc2626;color:#fff;font-size:12px;'
+        + 'font-weight:700;padding:5px 10px;border-radius:6px;margin:8px 0 0;';
+      b.textContent = '⚠ ต้องแก้ไข: ' + label;
+      if (host === el) host.insertBefore(b, host.firstChild); else host.appendChild(b);
     }
-    if(c.body){ var bd=document.getElementById(c.body); if(bd) bd.style.display='block'; }
+    marked.push(el);
+  };
+
+  steps.forEach(function(k){
+    if (k.indexOf('count:') === 0) {
+      flag(document.getElementById('sec_' + _domId(k.slice(6))), _rejLabel(k));
+    } else if (k.indexOf('adj:') === 0) {
+      flag(document.getElementById('adjCard_' + _domId(k.slice(4))), _rejLabel(k));
+      var ob = document.getElementById('offBody'); if (ob) ob.style.display = 'block';
+    } else if (k === 'photo') {
+      flag(document.getElementById('formBox'), _rejLabel(k));
+    } else if (k === 'file') {
+      flag(document.getElementById('step4Card'), _rejLabel(k));
+    }
   });
-  // เด้งไปหาการ์ดแรกที่ต้องแก้ + กะพริบเรียกสายตา (ครั้งเดียวต่อการเปิด/รอบแก้)
-  if(firstCard){
-    var key=(siteSubmission.count_id||'')+'#'+(siteSubmission.revision||0)+'#'+steps.join(',');
-    if(_rejHlSeen!==key){
-      _rejHlSeen=key;
-      setTimeout(function(){
-        firstCard.scrollIntoView({behavior:'smooth',block:'center'});
-        firstCard.animate(
-          [{transform:'scale(1)'},{transform:'scale(1.015)'},{transform:'scale(1)'}],
-          {duration:600,iterations:2}
-        );
-      }, 200);
+
+  // สรุปด้านบนว่าต้องแก้อะไรบ้าง — ผู้นับจะได้ไม่ต้องไล่หาเอง
+  var host = document.getElementById('mainContent');
+  if (host && !document.getElementById('rejSummary')) {
+    var box = document.createElement('div');
+    box.id = 'rejSummary';
+    box.style.cssText = 'border-radius:var(--rs);padding:12px 14px;margin-bottom:12px;'
+      + 'background:rgba(220,38,38,.08);border:1.5px solid #dc2626;font-size:13px;line-height:1.7;';
+    box.innerHTML = '<b>↩️ ต้องแก้ไขเฉพาะส่วนนี้</b> — ส่วนอื่นไม่ต้องทำซ้ำ'
+      + '<ul style="margin:6px 0 0;padding-left:20px;">'
+      + steps.map(function(k){ return '<li>'+esc(_rejLabel(k))+'</li>'; }).join('')
+      + '</ul>';
+    host.insertBefore(box, host.firstChild);
+  }
+
+  // เด้งไปหาจุดแรกที่ต้องแก้ (ครั้งเดียวต่อฉบับ)
+  if (marked.length) {
+    var key = (siteSubmission.count_id||'')+'#'+(siteSubmission.revision||0)+'#'+steps.join(',');
+    if (_rejHlSeen !== key) {
+      _rejHlSeen = key;
+      setTimeout(function(){ marked[0].scrollIntoView({ behavior:'smooth', block:'center' }); }, 250);
     }
   }
 }
@@ -1553,8 +1636,8 @@ function updateSubmitCard() {
   if (!card) return;
 
   var hasLoc  = locations.length > 0;
-  var hasFile = files.length > 0;
-  var _isRe   = siteSubmission && (siteSubmission.status==='rejected'||siteSubmission.status==='reopened');
+  var hasFile = _hasSignedFile();
+  var _isRe   = _isRevision();
   var ready   = hasLoc && _offDone && hasFile && (_isRe || (_step3Seen && _printed));
 
   // ปลดล็อกขั้น 3/4 + ปุ่มไปขั้น 3 ทันทีที่มี Location (กันต้อง refresh)
@@ -1575,7 +1658,10 @@ function updateSubmitCard() {
   }
   var chkOff = document.getElementById('chkOff');
   if (chkOff) {
-    chkOff.innerHTML = _chkIcon(_offDone)+'ขั้นที่ 3 — พาเลทนอกระบบ PCS '+(_offDone?_offSummaryTxt():'<span style="color:var(--warn);">(กด “จบขั้นที่ 3 — ไปสรุป”)</span>');
+    var _adjSkip = _rejScoped() && !_rejNeedsAnyAdj();
+    chkOff.innerHTML = _chkIcon(_offDone)+'ขั้นที่ 3 — รายการปรับปรุง '
+      + (_adjSkip ? '<span style="color:var(--muted);">(ไม่ถูกตีกลับ — ไม่ต้องทำซ้ำ)</span>'
+                  : (_offDone?_offSummaryTxt():'<span style="color:var(--warn);">(กด “จบขั้นที่ 3 — ไปสรุป”)</span>'));
     chkOff.className = 'step-check '+(_offDone?'done':'pending');
   }
   var chk3a = document.getElementById('chk3a');
@@ -1591,7 +1677,11 @@ function updateSubmitCard() {
     chk3b.className = 'step-check '+(_printed?'done':'pending');
   }
   if (chk4) {
-    chk4.innerHTML = _chkIcon(hasFile)+'ขั้นที่ 5 — Upload รายงาน '+(hasFile?'('+files.length+' ไฟล์)':'(ยังไม่มีไฟล์)');
+    var _keepN = _keepFileUrls.length;
+    chk4.innerHTML = _chkIcon(hasFile)+'ขั้นที่ 5 — Upload รายงาน '
+      + (files.length ? '('+files.length+' ไฟล์ใหม่)'
+         : (_keepN ? '<span style="color:var(--muted);">(ใช้ไฟล์เดิม '+_keepN+' ไฟล์ — ไม่ถูกตีกลับ)</span>'
+                   : '(ยังไม่มีไฟล์)'));
     chk4.className = 'step-check '+(hasFile?'done':'pending');
   }
   if (btn) btn.disabled = !ready;
@@ -1665,7 +1755,7 @@ function _renderTypeSections() {
       + '⚠ รอบนี้ยังไม่ได้ตั้งค่าชนิดที่นับ — แจ้ง Admin ให้ตั้งค่าก่อน</div>';
   }
   return tys.map(function(t){
-    return '<div class="material-section">'+
+    return '<div class="material-section" id="sec_'+_domId(t.type_id)+'">'+
       '<div class="material-head">'+
         '<span class="material-icon">'+esc(t.icon||'📦')+'</span>'+
         '<span class="material-label">'+esc(t.type_name)+'</span>'+
@@ -2591,9 +2681,9 @@ async function submitCount() {
 
   try {
     // upload ไฟล์ก่อน — ไฟล์แรก = รายงานที่เซ็นแล้ว
-    var fileUrls = [];
+    var fileUrls = _keepFileUrls.slice();   // ไฟล์ใบเซ็นเดิม (ส่วนที่ไม่ถูกตีกลับ)
     for (var i = 0; i < files.length; i++) {
-      var url = await uploadFile(files[i], { kind:'report', extra:(i+1) });
+      var url = await uploadFile(files[i], { kind:'report', extra:(fileUrls.length+1) });
       if (url) fileUrls.push(url);
     }
     // upload ไฟล์หลักฐานของแต่ละรายการปรับปรุง (แยกตาม adjust_id)
@@ -2650,7 +2740,8 @@ async function submitCount() {
     var newId  = data.count_id || '';
     var revTxt = (data.revision && data.revision > 1) ? ' (ฉบับแก้ไขครั้งที่ '+data.revision+')' : '';
     // ตั้งสถานะเป็น pending → เข้าหน้าจอล็อกรออนุมัติ
-    siteSubmission = { count_id: newId, revision: data.revision || 1, status: 'pending', review_comment: '' };
+    siteSubmission = { count_id: newId, revision: data.revision || 1, status: 'pending', review_comment: '', reject_steps: [] };
+    _keepFileUrls = []; files.length = 0; _rejHlSeen = null;
     _printed = false; // ถ้าถูกตีกลับแล้วส่งใหม่ ต้องพิมพ์ใหม่
     showToast('📤 ส่งแล้ว ('+newId+revTxt+') — รอ Admin ตรวจสอบ', 'success');
     render(); // siteSubmission = pending → หน้าจอล็อกรออนุมัติ
