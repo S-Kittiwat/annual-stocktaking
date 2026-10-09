@@ -746,10 +746,7 @@ table.recon .grp{border-left:1px solid var(--border);}
     </div>
     <div class="modal-body">
       <div class="modal-note">ติ๊กขั้นที่ผู้นับต้อง <b>แก้ไข</b> — ผู้นับจะเห็นขั้นนั้นถูกไฮไลต์ในหน้านับ</div>
-      <label style="display:flex;align-items:center;gap:8px;padding:8px 0;cursor:pointer;"><input type="checkbox" class="kbStep" value="count_wood"> ขั้นที่ 2 — ยอดนับจริง (พาเลทไม้)</label>
-      <label style="display:flex;align-items:center;gap:8px;padding:8px 0;cursor:pointer;"><input type="checkbox" class="kbStep" value="count_plastic"> ขั้นที่ 2 — ยอดนับจริง (พลาสติก)</label>
-      <label style="display:flex;align-items:center;gap:8px;padding:8px 0;cursor:pointer;"><input type="checkbox" class="kbStep" value="offpcs"> ขั้นที่ 3 — พาเลทนอกระบบ PCS</label>
-      <label style="display:flex;align-items:center;gap:8px;padding:8px 0;cursor:pointer;"><input type="checkbox" class="kbStep" value="file"> ขั้นที่ 5 — ไฟล์ใบเซ็น</label>
+      <div id="kbStepList"></div>
       <div class="field" style="gap:8px;margin-top:10px;">
         <label>สิ่งที่ต้องแก้ไข (จำเป็น)</label>
         <textarea class="input" id="kbNote" rows="3" placeholder="อธิบายสิ่งที่ต้องแก้ให้ผู้นับเข้าใจ..."></textarea>
@@ -2890,9 +2887,35 @@ function qAction(action, extra){
 function qCallNext(){ qAction('callNext'); }
 function qRelease(){ if(!confirm('ยืนยัน “ปล่อยตัว” = อนุมัติ Site นี้?')) return; qAction('release'); }
 function qKickback(){
+  _renderKbSteps();
   document.querySelectorAll('.kbStep').forEach(function(c){ c.checked=false; });
   var n=document.getElementById('kbNote'); if(n) n.value='';
   openOverlay('kickbackModal');
+}
+
+// รายการ "ต้องแก้ไข" สร้างจาก config ของรอบ — ไม่ใช่ไม้/พลาสติกตายตัว
+function _renderKbSteps(){
+  var el = document.getElementById('kbStepList'); if(!el) return;
+  var act = function(o){ return o && o.is_active!==false && String(o.is_active).toUpperCase()!=='FALSE'; };
+  var bs  = function(a,b){ return (Number(a.sort)||0)-(Number(b.sort)||0); };
+  var row = function(val, label){
+    return '<label style="display:flex;align-items:center;gap:8px;padding:8px 0;cursor:pointer;">'
+      + '<input type="checkbox" class="kbStep" value="'+esc(val)+'"> '+esc(label)+'</label>';
+  };
+  var html = '';
+  if(V2CFG && (V2CFG.types||[]).length){
+    (V2CFG.types||[]).filter(act).sort(bs).forEach(function(t){
+      html += row('count:'+t.type_id, 'ขั้นที่ 2 — ยอดนับจริง ('+t.type_name+')');
+    });
+    (V2CFG.adjustments||[]).filter(act).sort(bs).forEach(function(a){
+      html += row('adj:'+a.adjust_id, 'ขั้นที่ 3 — '+a.adjust_name);
+    });
+  } else {
+    html += row('count:*', 'ขั้นที่ 2 — ยอดนับจริง');
+  }
+  html += row('photo', 'ขั้นที่ 2 — รูปถ่ายราย Location');
+  html += row('file',  'ขั้นที่ 5 — ไฟล์ใบเซ็น');
+  el.innerHTML = html;
 }
 function confirmKickback(){
   var note=(document.getElementById('kbNote').value||'').trim();
