@@ -722,9 +722,10 @@ function saveProgress() {
       return copy;
     });
     localStorage.setItem('stockCountLocations', JSON.stringify(slim));
-    // รายการปรับปรุงขั้นที่ 3 — ผูก round_id ไว้ด้วย (ไฟล์แนบเก็บไม่ได้ ต้องแนบใหม่)
+    // รายการปรับปรุงขั้นที่ 3 — ผูกทั้ง round_id และ site_id
+    // (ยอดเป็นของ Site นั้นๆ ถ้าผูกแค่รอบ ยอดจะติดไปไซต์ถัดไป)
     localStorage.setItem('stockCountAdj', JSON.stringify({
-      round_id: (roundInfo && roundInfo.round_id) || '', adj: ADJ
+      round_id: _curRoundId(), site_id: _curSiteId(), adj: ADJ
     }));
   } catch(e) {
     console.warn('saveProgress failed (quota exceeded?):', e.message);
@@ -733,13 +734,26 @@ function saveProgress() {
   }
 }
 
-// ADJ ถูกโหลดตอน loadProgress() ซึ่งยังไม่รู้ round_id — ตรวจซ้ำเมื่อรู้แล้ว
+function _curRoundId(){ return (roundInfo && roundInfo.round_id) || ''; }
+function _curSiteId(){
+  if (!session) return '';
+  return session.site_id || _siteIdByName(session.site) || String(session.site||'');
+}
+// ยอดที่เก็บไว้ต้องเป็นของรอบนี้ + Site นี้เท่านั้น
+function _adjMatches(a){
+  if (!a || !a.adj) return false;
+  var rid = _curRoundId(), sid = _curSiteId();
+  if (rid && a.round_id && a.round_id !== rid) return false;
+  if (sid && a.site_id  && a.site_id  !== sid) return false;
+  if (sid && !a.site_id) return false;   // ของเก่าที่ไม่ได้ผูก Site → ไม่เอามาใช้ กันยอดข้ามไซต์
+  return true;
+}
+// ADJ ถูกโหลดตอน loadProgress() ซึ่งยังไม่รู้ round_id/site_id — ตรวจซ้ำเมื่อรู้แล้ว
 function _revalidateAdj() {
   try {
     var a = JSON.parse(localStorage.getItem('stockCountAdj') || 'null');
-    var rid = (roundInfo && roundInfo.round_id) || '';
-    if (rid && a && a.round_id && a.round_id !== rid) {
-      ADJ = {}; ADJFILES = {};
+    if (a && !_adjMatches(a)) {
+      ADJ = {}; ADJFILES = {}; _offDone = false;
       localStorage.removeItem('stockCountAdj');
     }
   } catch(e) {}
@@ -750,11 +764,10 @@ function loadProgress() {
     var saved = localStorage.getItem('stockCountLocations');
     if (saved) locations = JSON.parse(saved);
   } catch(e) { locations = []; }
-  // ADJ ต้องตรงรอบ ไม่ตรงให้ล้าง (กันยอดข้ามรอบปนกัน)
+  // ADJ ต้องตรงทั้งรอบและ Site ไม่ตรงให้ล้าง (กันยอดข้ามไซต์/ข้ามรอบปนกัน)
   try {
     var a = JSON.parse(localStorage.getItem('stockCountAdj') || 'null');
-    var rid = (roundInfo && roundInfo.round_id) || '';
-    ADJ = (a && a.adj && (!rid || !a.round_id || a.round_id === rid)) ? a.adj : {};
+    ADJ = _adjMatches(a) ? a.adj : {};
   } catch(e) { ADJ = {}; }
   ADJFILES = {};   // ไฟล์แนบเก็บใน localStorage ไม่ได้ — ต้องแนบใหม่ทุกครั้งที่เปิดหน้า
 }
@@ -1217,8 +1230,11 @@ function renderStep1(content) {
 // เปลี่ยน Site → รีเซ็ตขั้นตอน ต้องกดตรวจสอบสถานะใหม่
 function onSiteChange() {
   var site = document.getElementById('selSite').value;
-  _checkinPhotoFile = null; _bookReady = true; _offDone = false;
-  V2 = null; V2BOOK = {}; V2PHASE = ''; V2SUB = null;
+  _checkinPhotoFile = null; _bookReady = true;
+  V2 = null; V2BOOK = {}; V2PHASE = '';
+  // ล้างงานค้างของไซต์เดิมให้หมด — ยอดรายการปรับปรุง/รูป/ไฟล์เป็นของไซต์นั้นๆ
+  _resetSiteState();
+  try { localStorage.removeItem('stockCountAdj'); localStorage.removeItem('stockCountLocations'); } catch(e) {}
   var b = document.getElementById('btnCheckStatus'); if (b) b.disabled = !site;
   var sb = document.getElementById('statusBox'); if (sb) sb.style.display = 'none';
   var cs = document.getElementById('checkinSection'); if (cs) cs.style.display = 'none';
@@ -2893,14 +2909,33 @@ async function uploadFile(file, opts) {
 }
 
 function resetSession() {
-  localStorage.removeItem('stockCountSession');
-  localStorage.removeItem('stockCountLocations');
+  try {
+    localStorage.removeItem('stockCountSession');
+    localStorage.removeItem('stockCountLocations');
+    localStorage.removeItem('stockCountAdj');   // ยอดรายการปรับปรุงเป็นของไซต์เดิม
+  } catch(e) {}
+  _resetSiteState();
+  document.getElementById('successOverlay').classList.remove('open');
+  render();
+}
+
+// ล้างทุกอย่างที่ผูกกับ "ไซต์ที่กำลังนับ" — ใช้ทั้งตอนเริ่มใหม่และตอนเปลี่ยนไซต์
+// (ลืมตัวใดตัวหนึ่ง = ข้อมูลไซต์เก่าติดไปไซต์ใหม่)
+function _resetSiteState() {
   session = null;
   locations = [];
   files = [];
   siteSubmission = null;
-  document.getElementById('successOverlay').classList.remove('open');
-  render();
+  V2SUB = null;
+  ADJ = {}; ADJFILES = {};
+  PHOTO_DRAFT = [];
+  _keepFileUrls = [];
+  _offDone = false; _step3Seen = false; _printed = false;
+  _editingIdx = null;
+  _serverRestoredKey = null; _rejHlSeen = null;
+  _lastDocBlob = null; _lastDocName = '';
+  siteDocNo = '';
+  try { closeDocLink(); } catch(e) {}
 }
 
 // ปิด overlay หลัง submit — คงยอดที่นับไว้ (เผื่อ Admin ตีกลับจะได้แก้ต่อ) แต่ล็อกหน้า "รออนุมัติ"
