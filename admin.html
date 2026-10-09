@@ -2697,7 +2697,10 @@ function stopQueuePoll(){ if(_queueTimer){ clearInterval(_queueTimer); _queueTim
 function fetchQueue(){
   if(!API_URL) return;
   fetch(API_URL+'?action=getState').then(function(r){return r.json();}).then(function(d){
-    if(d && d.state) renderQueue(d.state);
+    if(!d || !d.state) return;
+    // กำลังแก้ยอดระบบอยู่ → เก็บ state ไว้เฉย ๆ ห้าม re-render ทับช่องที่พิมพ์ค้าง
+    if(typeof QBOOK!=='undefined' && QBOOK.open){ _qState = d.state; return; }
+    renderQueue(d.state);
   }).catch(function(){});
 }
 function _qTypeBadge(t){
@@ -2800,6 +2803,7 @@ function renderQueue(st){
       +itemGrid(function(id){ var r=qRec[id]; return r?r.outstanding:null; })
       +'<div style="font-size:12px;color:var(--muted,#777);margin-bottom:6px;">ส่วนต่างสุทธิ</div>'
       +itemGrid(function(id){ var r=qRec[id]; return r?r.net_diff:null; })
+      + (qSiteId ? _qBookHtml(qSiteId) : '')
       + (adjList.length
           ? adjList.map(function(a){
               return '<div style="font-size:12px;color:var(--muted,#777);margin-bottom:6px;">'+esc(a.adjust_name)
@@ -2971,6 +2975,128 @@ function qKickbackMissing(){
 var _qSubNow = null;
 function _qCurrentSub(){ return _qSubNow; }
 
+/* ════════════════════════════════════════════════════════════
+   แก้ยอดระบบจากแผงตรวจ — Admin กรอกผิดแก้ได้ตรงนี้ ไม่ต้องย้อนไปแท็บตั้งค่า
+   ยอดระบบไม่ได้ถูก snapshot ลงใบส่ง (reconcileV2_ อ่าน v2_Book สด)
+   → บันทึกแล้วตัวเลขกระทบยอดอัปเดตทันที แต่เอกสารที่เซ็นมาแล้วเป็นยอดเก่า
+     ต้องตีกลับด้วยหัวข้อ "ยอดระบบ" ให้ผู้นับพิมพ์เอกสารใหม่
+   ════════════════════════════════════════════════════════════ */
+var QBOOK = { site_id:'', open:false, draft:null, saving:false, changed:false };
+
+function _qBookStats(){
+  var act = function(o){ return o && o.is_active!==false && String(o.is_active).toUpperCase()!=='FALSE'; };
+  return (V2CFG && V2CFG.book_statuses || []).filter(act)
+    .sort(function(a,b){ return (Number(a.sort)||0)-(Number(b.sort)||0); });
+}
+
+function _qBookHtml(siteId){
+  if(QBOOK.site_id !== siteId) QBOOK = { site_id:siteId, open:false, draft:null, saving:false, changed:QBOOK.changed && QBOOK.site_id===siteId };
+  var items = v2ReconItems(), stats = _qBookStats();
+  if(!items.length || !stats.length) return '';
+  var cur = (S.booksV2||{})[siteId] || {};
+  var get = function(it,st){
+    var src = (QBOOK.open && QBOOK.draft) ? QBOOK.draft : cur;
+    return Number(((src[it]||{})[st]) || 0);
+  };
+  var cells = '';
+  stats.forEach(function(st){
+    var tags = (st.is_baseline ? '<span style="font-size:10px;font-weight:700;color:var(--accent,#8a6526);"> ★ ยอดตั้งต้น</span>' : '')
+             + (st.is_outstanding ? '<span style="font-size:10px;color:var(--muted,#999);"> · คงค้าง</span>' : '');
+    cells += '<tr><td style="font-size:12.5px;padding:6px 8px;border-top:1px solid var(--border,#eee);">'
+      + esc(st.status_name) + tags + '</td>';
+    items.forEach(function(it){
+      var v = get(it.item_id, st.status_id);
+      cells += '<td style="padding:4px 6px;border-top:1px solid var(--border,#eee);text-align:right;">'
+        + (QBOOK.open
+            ? '<input class="input qbk" type="number" inputmode="numeric" value="'+(v||'')+'" '
+              + 'data-it="'+esc(it.item_id)+'" data-st="'+esc(st.status_id)+'" '
+              + 'oninput="qBookSet(this)" style="width:92px;text-align:right;padding:4px 6px;font-size:13px;">'
+            : '<span class="mono" style="font-size:13px;font-weight:600;">'+v.toLocaleString()+'</span>')
+        + '</td>';
+    });
+    cells += '</tr>';
+  });
+  var head = '<tr><th style="text-align:left;font-size:11px;color:var(--muted,#999);padding:0 8px 6px;">สถานะในระบบ</th>'
+    + items.map(function(it){ return '<th style="text-align:right;font-size:11px;color:var(--muted,#999);padding:0 6px 6px;white-space:nowrap;">'+esc(it.label)+'</th>'; }).join('')
+    + '</tr>';
+  var bar = QBOOK.open
+    ? '<button class="btn-sm btn-sm-approve" onclick="qBookSave()" '+(QBOOK.saving?'disabled':'')+'>'
+        + (QBOOK.saving?'กำลังบันทึก…':'💾 บันทึกยอด')+'</button>'
+      + '<button class="btn-sm" onclick="qBookCancel()" '+(QBOOK.saving?'disabled':'')+'>ยกเลิก</button>'
+    : '<button class="btn-sm" onclick="qBookEdit(\''+esc(siteId)+'\')">✏️ แก้ยอดระบบ</button>';
+  var warn = QBOOK.changed
+    ? '<div style="margin-top:10px;border-radius:8px;padding:9px 11px;background:rgba(192,57,43,.07);'
+      + 'border:1px solid #e8b4ad;font-size:12px;line-height:1.6;">'
+      + '<b style="color:#c0392b;">⚠ ยอดระบบถูกแก้แล้ว</b> — เอกสารที่ผู้นับเซ็นมาเป็นยอดเก่า '
+      + 'ต้องตีกลับหัวข้อ “ยอดระบบ” ให้พิมพ์และเซ็นใหม่'
+      + '<button class="btn-sm" style="display:block;margin-top:8px;background:#c0392b;color:#fff;" '
+      + 'onclick="qKickbackBook()">↩ ตีกลับให้พิมพ์เอกสารใหม่</button></div>'
+    : '';
+  return '<div style="font-size:12px;color:var(--muted,#777);margin-bottom:6px;">ยอดระบบที่ Admin กรอก '
+    + '<span style="color:var(--muted,#aaa);">— กรอกผิดแก้ได้ที่นี่</span></div>'
+    + '<div style="border:1px solid var(--border,#e2e2e2);border-radius:10px;padding:12px;margin-bottom:16px;">'
+    + '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;">'
+    + '<thead>'+head+'</thead><tbody>'+cells+'</tbody></table></div>'
+    + '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">'+bar+'</div>'
+    + warn
+    + '</div>';
+}
+
+function qBookEdit(siteId){
+  var cur = (S.booksV2||{})[siteId] || {};
+  var draft = {};
+  v2ReconItems().forEach(function(it){
+    draft[it.item_id] = {};
+    _qBookStats().forEach(function(st){
+      draft[it.item_id][st.status_id] = Number(((cur[it.item_id]||{})[st.status_id]) || 0);
+    });
+  });
+  QBOOK = { site_id:siteId, open:true, draft:draft, saving:false, changed:false };
+  renderQueue(_qState);
+}
+function qBookCancel(){ QBOOK.open=false; QBOOK.draft=null; renderQueue(_qState); }
+
+// เก็บค่าลง draft เท่านั้น — ไม่ re-render ระหว่างพิมพ์ (กฎข้อ 6)
+function qBookSet(el){
+  if(!QBOOK.draft) return;
+  var it=el.getAttribute('data-it'), st=el.getAttribute('data-st');
+  if(!QBOOK.draft[it]) QBOOK.draft[it]={};
+  QBOOK.draft[it][st] = Number(el.value)||0;
+}
+
+function qBookSave(){
+  if(QBOOK.saving || !QBOOK.draft) return;
+  // อ่านค่าจากช่องจริงอีกรอบ กันกรณี oninput ไม่ยิง (autofill / วางค่า)
+  document.querySelectorAll('.qbk').forEach(function(el){ qBookSet(el); });
+  var siteId = QBOOK.site_id;
+  var before = JSON.stringify((S.booksV2||{})[siteId] || {});
+  QBOOK.saving = true; renderQueue(_qState);
+  post({ action:'saveBookV2', round_id:S.round?S.round.round_id:'', site_id:siteId, book:QBOOK.draft })
+  .then(function(r){
+    if(r && r.status==='error') throw new Error(r.message||'บันทึกยอดระบบไม่สำเร็จ');
+    QBOOK.saving=false; QBOOK.open=false;
+    var draft=QBOOK.draft; QBOOK.draft=null;
+    return loadData(false).then(function(){
+      var after = JSON.stringify((S.booksV2||{})[siteId] || {});
+      QBOOK.changed = (after !== before);
+      renderQueue(_qState);
+      toast(QBOOK.changed ? 'บันทึกยอดระบบแล้ว — ตัวเลขกระทบยอดอัปเดตตามแล้ว' : 'ยอดไม่มีอะไรเปลี่ยน',
+            QBOOK.changed ? 'success' : 'info');
+    });
+  }).catch(function(err){
+    QBOOK.saving=false; renderQueue(_qState);
+    toast(String(err && err.message || err),'error');
+  });
+}
+
+// ตีกลับเพราะยอดระบบเปลี่ยน → ติ๊ก "ยอดระบบ" ให้เลย (count.html จะบังคับพิมพ์เอกสารใหม่)
+function qKickbackBook(){
+  qKickback();
+  document.querySelectorAll('.kbStep').forEach(function(c){ c.checked = (c.value==='book'); });
+  var n=document.getElementById('kbNote');
+  if(n && !n.value) n.value='Admin แก้ยอดระบบใหม่ — กรุณาสร้างเอกสารยืนยันใหม่แล้วเซ็นอีกครั้ง';
+}
+
 /* ── โฟลเดอร์ของ Site — เปิด Drive + ดูไฟล์ที่เตรียมไว้ก่อนเริ่มนับ ── */
 var QFOLDER = { site_id:'', loading:false, url:'', files:null, err:'' };
 
@@ -3069,6 +3195,7 @@ function _renderKbSteps(){
     html += row('count:*', 'ขั้นที่ 2 — ยอดนับจริง');
   }
   html += row('photo', 'ขั้นที่ 2 — รูปถ่ายราย Location');
+  html += row('book',  'ขั้นที่ 4 — ยอดระบบเปลี่ยน (ต้องพิมพ์เอกสาร + เซ็นใหม่)');
   html += row('file',  'ขั้นที่ 5 — ไฟล์ใบเซ็น');
   el.innerHTML = html;
 }
