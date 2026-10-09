@@ -1607,9 +1607,22 @@ function applyRejectHl(){
     marked.push(el);
   };
 
+  // ยอดที่ต้องแก้อยู่ใน Location ที่บันทึกไว้แล้ว ไม่ใช่ฟอร์มเพิ่มใหม่
+  var countKeys = steps.filter(function(k){ return k.indexOf('count:') === 0; });
+  if (countKeys.length) {
+    var names = countKeys.map(_rejLabel).join(' · ');
+    flag(document.getElementById('locListContainer'), names + ' — กด ✏️ แก้ไข ในรายการด้านล่าง');
+    // ตีกรอบทุกแถวที่บันทึกไว้ ให้เห็นว่าต้องเข้าไปแก้ทีละอัน
+    var rows = document.querySelectorAll('#locListContainer .loc-item');
+    for (var ri = 0; ri < rows.length; ri++) {
+      rows[ri].style.borderColor = '#dc2626';
+      rows[ri].style.boxShadow = '0 0 0 2px rgba(220,38,38,.10)';
+    }
+  }
+
   steps.forEach(function(k){
     if (k.indexOf('count:') === 0) {
-      flag(document.getElementById('sec_' + _domId(k.slice(6))), _rejLabel(k));
+      return;   // จัดการไปแล้วด้านบน
     } else if (k.indexOf('adj:') === 0) {
       flag(document.getElementById('adjCard_' + _domId(k.slice(4))), _rejLabel(k));
       var ob = document.getElementById('offBody'); if (ob) ob.style.display = 'block';
@@ -2093,6 +2106,8 @@ function refreshLocList() {
   c.style.display = 'none';
   void c.offsetHeight; // trigger reflow
   c.style.display = '';
+  // รายการถูกวาดใหม่ → กรอบแดงของแถวหายไปด้วย ต้องตีกลับเข้าไป
+  try { applyRejectHl(); } catch(e) {}
 }
 
 // ── เคลียร์ฟอร์มกลับเป็นค่าว่าง — ใช้ตอนบันทึกสำเร็จหรือกด "เพิ่มใหม่" ──
@@ -2108,6 +2123,7 @@ function _clearForm() {
     inp.classList.remove('has-val');
   });
   PHOTO_DRAFT = []; _renderPhotoStrip();
+  _rejFormHl();          // ออกจากโหมดแก้ไข → เอากรอบแดงในฟอร์มออก
   _updateLiveTotal();
 }
 
@@ -2144,7 +2160,28 @@ function _fillFormFromLocation(i) {
   });
   PHOTO_DRAFT = (loc.photos||[]).map(function(p){ return { src:p.src, url:p.url||'', id:p.id||'' }; });
   _renderPhotoStrip();
+  _rejFormHl();          // เปิดแก้ไขแล้ว → ชี้ว่าตารางชนิดไหนต้องแก้
   _updateLiveTotal();
+}
+
+// ไฮไลต์ตารางชนิดที่ถูกตีกลับ — เฉพาะตอนกำลังแก้ไข Location ที่บันทึกไว้
+function _rejFormHl() {
+  V2TYPES().forEach(function(t){
+    var el = document.getElementById('sec_' + _domId(t.type_id));
+    if (!el) return;
+    var old = el.querySelector('.rejFlag'); if (old) old.remove();
+    var need = (_editingIdx !== null) && _rejScoped() && _rejNeeds('count:' + t.type_id);
+    if (!need) { el.style.border = ''; el.style.boxShadow = ''; return; }
+    el.style.border = '2px solid #dc2626';
+    el.style.borderRadius = 'var(--rs)';
+    el.style.boxShadow = '0 0 0 3px rgba(220,38,38,.08)';
+    var b = document.createElement('div');
+    b.className = 'rejFlag';
+    b.style.cssText = 'background:#dc2626;color:#fff;font-size:12px;font-weight:700;'
+      + 'padding:5px 10px;border-radius:6px;margin:0 0 8px;';
+    b.textContent = '⚠ ต้องแก้ไข: ' + t.type_name;
+    el.insertBefore(b, el.firstChild);
+  });
 }
 
 function editLocation(i) {
