@@ -482,10 +482,13 @@ function _rejNeeds(key){
   if (!_rejScoped()) return true;        // ไม่ได้ระบุส่วน → ถือว่าต้องแก้ทุกอย่าง
   return _rejSteps().indexOf(key) >= 0;
 }
+// Admin แก้ยอดระบบ → บังคับสร้างเอกสารใหม่ (เฉพาะตอนระบุหัวข้อ book มาจริง ๆ)
+function _rejNeedsBook(){ return _rejScoped() && _rejSteps().indexOf('book') >= 0; }
 function _rejNeedsAnyAdj(){
   return ADJUSTS().some(function(a){ return _rejNeeds('adj:'+a.adjust_id); });
 }
 function _rejLabel(key){
+  if (key === 'book')  return 'ยอดระบบเปลี่ยน — ต้องสร้างเอกสารยืนยันใหม่และเซ็นใหม่';
   if (key === 'photo') return 'รูปถ่ายราย Location';
   if (key === 'file')  return 'ไฟล์ใบเซ็น';
   if (key.indexOf('count:') === 0) return 'ยอดนับจริง — ' + TY2(key.slice(6)).type_name;
@@ -499,11 +502,13 @@ function _rejLabel(key){
 // ตั้งสถานะขั้นที่ไม่ได้ถูกตีกลับให้ "ผ่านแล้ว" เพื่อไม่ต้องกดซ้ำทั้งลำดับ
 function _applyRejScope(){
   if (!_rejScoped()) return;
+  var _bookRe = _rejNeedsBook();
   _step3Seen = true;                       // สรุปยอดเคยตรวจแล้ว
-  _printed   = true;                       // ไม่บังคับสร้างเอกสารใหม่ (ยังกดสร้างได้)
+  _printed   = !_bookRe;                   // ยอดระบบเปลี่ยน → บังคับกดสร้างเอกสารใหม่
+  if (_bookRe) { _lastDocBlob = null; _lastDocName = ''; }   // ทิ้งเอกสารยอดเก่าที่ค้างอยู่
   if (!_rejNeedsAnyAdj()) _offDone = true; // ไม่ได้ตีกลับรายการปรับปรุง → ไม่ต้องกดจบขั้นที่ 3 ซ้ำ
-  if (_rejNeeds('file')) {
-    _keepFileUrls = [];                    // ต้องอัปใบเซ็นใหม่
+  if (_rejNeeds('file') || _bookRe) {
+    _keepFileUrls = [];                    // ต้องอัปใบเซ็นใหม่ (เอกสารยอดเก่าใช้ไม่ได้)
   } else {
     var u = (siteSubmission && siteSubmission.file_urls) || [];
     _keepFileUrls = Array.isArray(u) ? u.slice() : [];
@@ -1557,15 +1562,16 @@ function renderStep2(content) {
     // ── Submit Card ──
     (function(){
       var _isRe = _isRevision();
-      var ready = hasLoc && _offDone && _hasSignedFile() && (_isRe || (_step3Seen && _printed));
+      var _needPrint = !_isRe || _rejNeedsBook();
+      var ready = hasLoc && _offDone && _hasSignedFile() && (!_needPrint || (_step3Seen && _printed));
       return '<div class="submit-card" id="submitCard">'+
       '<div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:8px;">📋 ตรวจสอบก่อน Submit</div>'+
       '<div class="step-check" id="chk1">'+_chkIcon(true)+'ขั้นที่ 1 — เลือก Site และผู้นับ</div>'+
       '<div class="step-check" id="chk2">'+_chkIcon(hasLoc)+'ขั้นที่ 2 — กรอกยอดนับ ('+(hasLoc?locations.length+' Location':'ยังไม่มี Location')+')</div>'+
       '<div class="step-check" id="chkOff">'+_chkIcon(_offDone)+'ขั้นที่ 3 — พาเลทนอกระบบ PCS '+(_offDone?_offSummaryTxt():'(กด “จบขั้นที่ 3 — ไปสรุป”)')+'</div>'+
-      (_isRe ? '' : '<div class="step-check" id="chk3a">'+_chkIcon(_step3Seen)+'ขั้นที่ 4 — ตรวจสอบสรุปยอดแล้ว'+(!_step3Seen?' (กด "▸ แสดง" ก่อน)':'')+'</div>')+
-      ''+
-      (_isRe ? '<div class="step-check done">'+_chkIcon(true)+'ฉบับแก้ไข — ไม่ต้องพิมพ์/ตรวจสอบซ้ำ</div>' : '')+
+      (_needPrint ? '<div class="step-check" id="chk3a">'+_chkIcon(_step3Seen)+'ขั้นที่ 4 — ตรวจสอบสรุปยอดแล้ว'+(!_step3Seen?' (กด "▸ แสดง" ก่อน)':'')+'</div>' : '')+
+      (_needPrint ? '<div class="step-check" id="chk3b">'+_chkIcon(_printed)+'ขั้นที่ 4 — สร้างเอกสารยืนยันแล้ว'+(!_printed?' (กด 🖨️ สร้างเอกสารยืนยัน)':'')+'</div>' : '')+
+      (_isRe && !_needPrint ? '<div class="step-check done">'+_chkIcon(true)+'ฉบับแก้ไข — ไม่ต้องพิมพ์/ตรวจสอบซ้ำ</div>' : '')+
       '<div class="step-check" id="chk4">'+_chkIcon(files.length>0)+'ขั้นที่ 5 — Upload รายงาน '+(files.length>0?'('+files.length+' ไฟล์)':'(ยังไม่มีไฟล์)')+'</div>'+
       '<button class="btn btn-success" id="btnSubmit" onclick="submitCount()" '+(ready?'':'disabled')+' style="width:100%;margin-top:8px;">'+
         '📤 Submit ผลการนับ'+
@@ -1626,6 +1632,10 @@ function applyRejectHl(){
     } else if (k.indexOf('adj:') === 0) {
       flag(document.getElementById('adjCard_' + _domId(k.slice(4))), _rejLabel(k));
       var ob = document.getElementById('offBody'); if (ob) ob.style.display = 'block';
+    } else if (k === 'book') {
+      flag(document.getElementById('step3Card'), _rejLabel(k));
+      var sb = document.getElementById('step3Body');
+      if (sb && sb.style.display === 'none') { try { toggleStep3(); } catch(e) { sb.style.display = 'block'; } }
     } else if (k === 'photo') {
       flag(document.getElementById('formBox'), _rejLabel(k));
     } else if (k === 'file') {
@@ -1676,7 +1686,8 @@ function updateSubmitCard() {
   var hasLoc  = locations.length > 0;
   var hasFile = _hasSignedFile();
   var _isRe   = _isRevision();
-  var ready   = hasLoc && _offDone && hasFile && (_isRe || (_step3Seen && _printed));
+  var _needPrint = !_isRe || _rejNeedsBook();
+  var ready   = hasLoc && _offDone && hasFile && (!_needPrint || (_step3Seen && _printed));
 
   // ปลดล็อกขั้น 3/4 + ปุ่มไปขั้น 3 ทันทีที่มี Location (กันต้อง refresh)
   var goBtn = document.getElementById('btnGoStep3');
@@ -1705,12 +1716,12 @@ function updateSubmitCard() {
   var chk3a = document.getElementById('chk3a');
   var chk3b = document.getElementById('chk3b');
   if (chk3a) {
-    chk3a.style.display = _isRe ? 'none' : '';
+    chk3a.style.display = '';
     chk3a.innerHTML = _chkIcon(_step3Seen)+'ขั้นที่ 4 — ตรวจสอบสรุปยอดแล้ว'+(!_step3Seen?' <span style="color:var(--warn);">(กด ▸ แสดง ก่อน)</span>':'');
     chk3a.className = 'step-check '+(_step3Seen?'done':'pending');
   }
   if (chk3b) {
-    chk3b.style.display = _isRe ? 'none' : '';
+    chk3b.style.display = '';
     chk3b.innerHTML = _chkIcon(_printed)+'ขั้นที่ 4 — สร้างเอกสารยืนยันแล้ว'+(!_printed?' <span style="color:var(--warn);">(กด 🖨️ สร้างเอกสารยืนยัน)</span>':'');
     chk3b.className = 'step-check '+(_printed?'done':'pending');
   }
@@ -1728,8 +1739,8 @@ function updateSubmitCard() {
     : (!hasLoc      ? 'กรุณาเพิ่มอย่างน้อย 1 Location'
       : !_offDone   ? 'กรุณากด “จบขั้นที่ 3 — ไปสรุป” ก่อน'
       : (!hasFile)  ? 'กรุณา Upload รายงาน (พร้อมลายเซ็น) ก่อน Submit'
-      : (!_isRe && !_step3Seen) ? 'กรุณาเปิดดูสรุปยอดในขั้นที่ 4 ก่อน'
-      : (!_isRe && !_printed)   ? 'กรุณาพิมพ์เอกสารยืนยันก่อน'
+      : (_needPrint && !_step3Seen) ? 'กรุณาเปิดดูสรุปยอดในขั้นที่ 4 ก่อน'
+      : (_needPrint && !_printed)   ? 'Admin แก้ยอดระบบใหม่ — กรุณากด “สร้างเอกสารยืนยัน” ใหม่ก่อน'
       : '');
 
   // ── คุมตามสถานะใบส่งผล ──
