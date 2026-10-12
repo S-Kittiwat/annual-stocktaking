@@ -3173,9 +3173,9 @@ function _qAttachHtml(sub, pdfHtml){
 
   return '<div style="font-size:12px;color:var(--muted,#777);margin-bottom:6px;">รูปถ่าย &amp; เอกสารแนบ</div>'
     + '<div style="border:1px solid var(--border,#e2e2e2);border-radius:10px;padding:12px;margin-bottom:16px;">'
-    + sec('📷 รูปถ่ายราย Location', photos, lp.length ? (lp.length+' รูป') : '')
     + sec('🧾 ไฟล์แนบนอกระบบ', outside, 'หลักฐานของรายการปรับปรุง')
     + sec('📄 ไฟล์สรุป', pdfHtml || none, 'เอกสารยืนยันที่ผู้นับเซ็นแล้ว')
+    + sec('📷 รูปถ่ายราย Location', photos, lp.length ? (lp.length+' รูป') : '')
     + '</div>';
 }
 
@@ -3248,19 +3248,23 @@ function qKickbackBook(){
 }
 
 /* ── โฟลเดอร์ของ Site — เปิด Drive + ดูไฟล์ที่เตรียมไว้ก่อนเริ่มนับ ── */
-var QFOLDER = { site_id:'', loading:false, url:'', files:null, err:'' };
+var QFOLDER = { site_id:'', loading:false, url:'', files:null, err:'', tried:false };
 
 function _qFolderHtml(siteId){
   if(QFOLDER.site_id !== siteId){   // เปลี่ยน Site → โหลดใหม่
-    QFOLDER = { site_id:siteId, loading:false, url:'', files:null, err:'' };
+    QFOLDER = { site_id:siteId, loading:false, url:'', files:null, err:'', tried:false };
+  }
+  // ยังไม่เคยโหลด → ยิงให้เองเลย ไม่ต้องให้ผู้ตรวจกดปุ่ม
+  // (เลื่อนออกนอก render ด้วย setTimeout กัน re-render ซ้อนตัวเอง · tried กันวนซ้ำตอน error)
+  if(QFOLDER.files === null && !QFOLDER.loading && !QFOLDER.err && !QFOLDER.tried){
+    QFOLDER.tried = true;
+    setTimeout(function(){ qLoadFolder(siteId); }, 0);
   }
   var body;
   if(QFOLDER.err){
     body = '<div style="font-size:12px;color:#c0392b;">'+esc(QFOLDER.err)+'</div>';
-  } else if(QFOLDER.loading){
-    body = '<div style="font-size:12px;color:var(--muted,#888);">กำลังโหลด…</div>';
-  } else if(QFOLDER.files === null){
-    body = '<button class="btn btn-sm" onclick="qLoadFolder(\''+esc(siteId)+'\')">📂 ดูไฟล์ในโฟลเดอร์</button>';
+  } else if(QFOLDER.loading || QFOLDER.files === null){
+    body = '<div style="font-size:12px;color:var(--muted,#888);"><span class="spinner"></span> กำลังโหลดไฟล์…</div>';
   } else if(!QFOLDER.files.length){
     body = '<div style="font-size:12px;color:var(--muted,#888);">ยังไม่มีไฟล์ในโฟลเดอร์นี้</div>';
   } else {
@@ -3276,10 +3280,9 @@ function _qFolderHtml(siteId){
   return '<div style="font-size:12px;color:var(--muted,#777);margin-bottom:6px;">โฟลเดอร์ของ Site '
     + '<span style="color:var(--muted,#aaa);">— ไฟล์ที่ดึงเก็บไว้ก่อนเริ่มนับ</span></div>'
     + '<div style="border:1px solid var(--border,#e2e2e2);border-radius:10px;padding:12px;margin-bottom:16px;">'
-    + '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:'+(QFOLDER.files&&QFOLDER.files.length?'10px':'0')+';">'
-    +   (QFOLDER.url ? '<a class="btn-sm btn-sm-open" href="'+esc(QFOLDER.url)+'" target="_blank" rel="noopener">📁 เปิดใน Drive ↗</a>'
-                     : '<button class="btn-sm" onclick="qLoadFolder(\''+esc(siteId)+'\')">📁 เปิดโฟลเดอร์</button>')
-    +   (QFOLDER.files!==null ? '<button class="btn-sm" onclick="qLoadFolder(\''+esc(siteId)+'\',1)">🔄 รีเฟรช</button>' : '')
+    + '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;">'
+    +   (QFOLDER.url ? '<a class="btn-sm btn-sm-open" href="'+esc(QFOLDER.url)+'" target="_blank" rel="noopener">📁 เปิดใน Drive ↗</a>' : '')
+    +   (QFOLDER.loading ? '' : '<button class="btn-sm" onclick="qLoadFolder(\''+esc(siteId)+'\',1)">🔄 รีเฟรช</button>')
     + '</div>'
     + body
     + '</div>';
@@ -3288,7 +3291,7 @@ function _qFolderHtml(siteId){
 function qLoadFolder(siteId, force){
   if(QFOLDER.loading) return;
   if(!force && QFOLDER.site_id===siteId && QFOLDER.files!==null) return;
-  QFOLDER = { site_id:siteId, loading:true, url:QFOLDER.url, files:QFOLDER.files, err:'' };
+  QFOLDER = { site_id:siteId, loading:true, url:QFOLDER.url, files:QFOLDER.files, err:'', tried:true };
   renderQueue(_qState);
   var rid = S.round ? S.round.round_id : '';
   Promise.all([
