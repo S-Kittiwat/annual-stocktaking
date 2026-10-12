@@ -308,6 +308,20 @@ table.recon .grp{border-left:1px solid var(--border);}
 .fav-pick img{display:block;width:100%;height:110px;object-fit:cover;}
 .fav-cap{padding:6px 8px;font-size:11.5px;line-height:1.35;color:var(--muted);}
 .fav-cap b{color:var(--text);}
+/* ── แผงตรวจ: ตัวเลขซ้าย · ไฟล์ขวา (ตรึงไว้ เลื่อนดูตัวเลขแล้วไฟล์ยังอยู่ในจอ) ── */
+.qSplit{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:18px;align-items:start;}
+.qRail{position:sticky;top:112px;max-height:calc(100vh - 128px);overflow-y:auto;overflow-x:hidden;
+  border-left:1px solid var(--border);padding-left:16px;}
+.qRail::-webkit-scrollbar{width:8px;}
+.qRail::-webkit-scrollbar-thumb{background:rgba(0,0,0,.18);border-radius:4px;}
+.railHead{font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;
+  color:var(--muted);margin:0 0 10px;}
+/* จอแคบ: พับเป็นคอลัมน์เดียว และดันไฟล์ขึ้นก่อนตัวเลข (เหมือนลำดับเดิม) */
+@media (max-width:980px){
+  .qSplit{grid-template-columns:1fr;gap:0;}
+  .qRail{position:static;max-height:none;overflow:visible;border-left:0;padding-left:0;order:-1;}
+  .railHead{display:none;}
+}
 </style>
 </head>
 <body>
@@ -2760,22 +2774,6 @@ function renderQueue(st){
     var qCols = v2ReconItems();
     var qRec  = {};
     if(sub && Array.isArray(sub.recon)) sub.recon.forEach(function(r){ qRec[r.item_id]=r; });
-    function opv(x){ return (x===null||x===undefined||x==='')?'—':Number(x).toLocaleString(); }
-    function opCell(lbl,val){ return '<div style="border:1px solid var(--border,#e2e2e2);border-radius:8px;padding:8px;text-align:center;"><div style="font-size:11px;color:var(--muted,#999);">'+esc(lbl)+'</div><div style="font-size:16px;font-weight:700;">'+opv(val)+'</div></div>'; }
-    // pick(item_id) → ตัวเลขที่จะโชว์ในการ์ดนั้น
-    function itemGrid(pick){
-      if(!qCols.length) return '<div style="font-size:12px;color:var(--muted);margin-bottom:14px;">รอบนี้ยังไม่ได้ตั้งค่ารายการที่นับ</div>';
-      var cols = Math.min(qCols.length, 4), t = 0, cells = '';
-      qCols.forEach(function(c){
-        var v = pick(c.item_id);
-        if(v!=null) t += Number(v)||0;
-        cells += opCell(c.label, v);
-      });
-      return '<div style="display:grid;grid-template-columns:repeat('+cols+',1fr) auto;gap:8px;align-items:stretch;margin-bottom:14px;">'
-        +cells
-        +'<div style="border:1px solid var(--border,#e2e2e2);border-radius:8px;padding:8px 14px;text-align:center;background:rgba(0,0,0,.03);"><div style="font-size:11px;color:var(--muted,#999);">รวม</div><div style="font-size:18px;font-weight:800;">'+t.toLocaleString()+'</div></div>'
-        +'</div>';
-    }
     var adjList = (V2CFG && V2CFG.adjustments || []).filter(function(a){ return a.is_active!==false; });
     var adjTotal = 0;
     qCols.forEach(function(c){ var r=qRec[c.item_id]; if(r) adjTotal += Number(r.adjust||0); });
@@ -2803,45 +2801,24 @@ function renderQueue(st){
         +'<div style="background:rgba(0,0,0,.04);border-radius:8px;padding:10px 12px;"><div style="font-size:11px;color:var(--muted,#777);">⏱ ระยะเวลารอคิว</div><div class="mono" style="font-size:19px;font-weight:700;">'+(waitSec!=null?fmtDur(waitSec):'—')+'</div></div>'
         +'<div style="background:rgba(184,137,61,.12);border-radius:8px;padding:10px 12px;"><div style="font-size:11px;color:var(--accent,#8a6526);">▶ ดำเนินการ (เดินสด)</div><div class="mono q-tick" data-since="'+esc(c.calledAt||'')+'" style="font-size:19px;font-weight:700;color:var(--accent,#8a6526);">—</div></div>'
       +'</div>'
-      // ── 3) โฟลเดอร์ของ Site ──
-      + (qSiteId ? _qFolderHtml(qSiteId) : '')
-      // ── 4) ยอดระบบที่ Admin กรอก (มีแถวรวม "ยอดคงค้างตามระบบ" อยู่ในตาราง) ──
-      + (qSiteId ? _qBookHtml(qSiteId) : '')
-      // ── 5) รวมที่ตรวจนับได้จริง ──
-      +'<div style="font-size:12px;color:var(--muted,#777);margin-bottom:6px;">รวมที่ตรวจนับได้จริง</div>'
-      +itemGrid(function(id){ var r=qRec[id]; return r?r.actual:null; })
-      // ── 6) รายการปรับปรุง (ยอด) — ไฟล์หลักฐานไปอยู่หมวดเอกสารแนบ ──
-      + (adjList.length
-          ? adjList.map(function(a){
-              var sum = 0, af = (sub && sub.adjust_files) ? sub.adjust_files : {};
-              qCols.forEach(function(cc){
-                var g=(sub&&sub.totals&&sub.totals[cc.item_id]&&sub.totals[cc.item_id].by_adjust)?sub.totals[cc.item_id].by_adjust:null;
-                if(g) sum += Number(g[a.adjust_id])||0;
-              });
-              var nf = (af[a.adjust_id]||[]).length;
-              return '<div style="font-size:12px;color:var(--muted,#777);margin-bottom:6px;">'+esc(a.adjust_name)
-                + (a.require_file?' <span style="color:var(--muted,#aaa);">— เทียบกับไฟล์หลักฐานในหมวดเอกสารแนบ</span>':'')+'</div>'
-                + itemGrid(function(id){
-                    var g=(sub&&sub.totals&&sub.totals[id]&&sub.totals[id].by_adjust)?sub.totals[id].by_adjust:null;
-                    return g ? (Number(g[a.adjust_id])||0) : null;
-                  })
-                + ((a.require_file && sum>0 && !nf)
-                    ? '<div style="font-size:11px;color:#c0392b;margin:-6px 0 14px;">⚠ '+esc(a.adjust_name)
-                      + ' มียอด '+sum.toLocaleString()+' แต่ไม่มีไฟล์หลักฐานแนบมา</div>'
-                    : '');
-            }).join('')
-          : '')
-      // ── 7) ส่วนต่างสุทธิ ──
-      +'<div style="font-size:12px;color:var(--muted,#777);margin-bottom:6px;">ส่วนต่างสุทธิ</div>'
-      +itemGrid(function(id){ var r=qRec[id]; return r?r.net_diff:null; })
-      // ── 8) รูปถ่าย & เอกสารแนบ ──
-      + _qAttachHtml(sub, pdf)
-      // ── 9) ตรวจความครบ + ปุ่ม ──
-      + _qChecklistHtml(sub)
-      +'<div style="display:flex;gap:10px;flex-wrap:wrap;">'
-        +'<button class="btn btn-success" style="flex:1;min-width:150px;" onclick="qRelease()">✓ ปล่อยตัว (อนุมัติ)</button>'
-        +'<button class="btn" style="flex:1;min-width:150px;background:#c0392b;color:#fff;" onclick="qKickback()">↩ ตีกลับ (แก้ไข)</button>'
-      +'</div>';
+      // ── จากนี้แบ่งสองคอลัมน์: ซ้าย = ตัวเลข+เช็คลิสต์ · ขวา = ไฟล์ (ตรึงไว้) ──
+      +'<div class="qSplit"><div>'
+        // ยอดระบบที่ Admin กรอก (มีแถวรวม "ยอดคงค้างตามระบบ" อยู่ในตาราง)
+        + (qSiteId ? _qBookHtml(qSiteId) : '')
+        // ยอดนับ · รายการปรับปรุง · ส่วนต่าง — ตารางเดียว อ่านเทียบกันได้ทันที
+        + _qNumTableHtml(sub, qCols, qRec, adjList)
+        // ตรวจความครบ + ปุ่ม
+        + _qChecklistHtml(sub)
+        +'<div style="display:flex;gap:10px;flex-wrap:wrap;">'
+          +'<button class="btn btn-success" style="flex:1;min-width:150px;" onclick="qRelease()">✓ ปล่อยตัว (อนุมัติ)</button>'
+          +'<button class="btn" style="flex:1;min-width:150px;background:#c0392b;color:#fff;" onclick="qKickback()">↩ ตีกลับ (แก้ไข)</button>'
+        +'</div>'
+      +'</div>'
+      +'<aside class="qRail">'
+        +'<div class="railHead">📎 ไฟล์ของ Site นี้</div>'
+        + (qSiteId ? _qFolderHtml(qSiteId) : '')
+        + _qAttachHtml(sub, pdf)
+      +'</aside></div>';
     }
   } else {
     var onCall=(me.state==='oncall'), has=wait.length>0;
@@ -3043,6 +3020,107 @@ function _qBookHtml(siteId){
     + '</div>'
     + '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">'+bar+'</div>'
     + warn
+    + '</div>';
+}
+
+/* ── ยอดนับ · รายการปรับปรุง · ส่วนต่างสุทธิ — ตารางเดียว รูปแบบเดียวกับตารางยอดระบบ
+      แถว = รายการที่ดู · คอลัมน์ = รายการที่นับ · ไม่มีคอลัมน์ "รวม" (ข้ามชนิดกัน บวกแล้วไม่มีความหมาย) ── */
+function _qDiffColor(v){
+  if(v===null||v===undefined) return '';
+  return v>0 ? 'var(--success,#1a7f5a)' : v<0 ? '#c0392b' : 'var(--muted,#999)';
+}
+function _qNumTableHtml(sub, cols, rec, adjList){
+  if(!cols || !cols.length)
+    return '<div style="font-size:12px;color:var(--muted);margin-bottom:14px;">รอบนี้ยังไม่ได้ตั้งค่ารายการที่นับ</div>';
+  var af = (sub && sub.adjust_files) ? sub.adjust_files : {};
+  var bd = '1px solid var(--border,#eee)';
+  var num = function(v, strong, color){
+    var t = (v===null||v===undefined||v==='') ? '—' : Number(v).toLocaleString();
+    return '<td class="mono" style="padding:'+(strong?'7px':'6px')+' 6px;border-top:'
+      + (strong?'2px solid var(--border2,#d8d8d8)':bd)+';text-align:right;font-size:'
+      + (strong?'14px':'13px')+';font-weight:'+(strong?'800':'600')
+      + (color?';color:'+color:'')+';">'+t+'</td>';
+  };
+  var lab = function(txt, note, strong){
+    return '<td style="padding:'+(strong?'7px':'6px')+' 8px;border-top:'
+      + (strong?'2px solid var(--border2,#d8d8d8)':bd)+';font-size:12.5px;'
+      + (strong?'font-weight:700;':'')+'">'+esc(txt)
+      + (note?' <span style="font-size:10px;font-weight:400;color:var(--muted,#aaa);">'+esc(note)+'</span>':'')
+      + '</td>';
+  };
+  var adjSumOf = function(ajId){
+    var t = 0;
+    cols.forEach(function(c){
+      var g=(sub&&sub.totals&&sub.totals[c.item_id]&&sub.totals[c.item_id].by_adjust)?sub.totals[c.item_id].by_adjust:null;
+      if(g) t += Number(g[ajId])||0;
+    });
+    return t;
+  };
+
+  // แถวที่ 1 — ยอดตั้งต้นตามระบบ (ตัวที่สูตรใช้จริง ไม่ใช่ยอดคงค้างรวม)
+  var baseSt = (V2CFG && V2CFG.book_statuses || []).filter(function(x){
+    return !!x.is_baseline && String(x.is_baseline).toUpperCase()!=='FALSE'; })[0];
+  var body = '<tr>'+lab('ยอดตั้งต้นตามระบบ', baseSt ? ('★ '+baseSt.status_name) : '');
+  cols.forEach(function(c){ var r=rec[c.item_id]; body += num(r?r.baseline:null, false, 'var(--muted,#888)'); });
+  body += '</tr>';
+
+  // แถวที่ 2 — ยอดนับจริง
+  body += '<tr>'+lab('รวมที่ตรวจนับได้จริง');
+  cols.forEach(function(c){ var r=rec[c.item_id]; body += num(r?r.actual:null); });
+  body += '</tr>';
+
+  // แถวที่ 3 — ส่วนต่างก่อนปรับปรุง (นับจริง − ตั้งต้น) ให้เห็นที่มาของตัวเลข
+  body += '<tr>'+lab('ส่วนต่างก่อนปรับปรุง', 'นับจริง − ตั้งต้น');
+  cols.forEach(function(c){
+    var r = rec[c.item_id], v = r ? Number(r.diff)||0 : null;
+    body += num(v, false, _qDiffColor(v));
+  });
+  body += '</tr>';
+
+  // แถวบวกกลับ (ถ้ารอบนี้มีสถานะที่ตั้งธง add_back และมียอดจริง)
+  var anyAdd = cols.some(function(c){ var r=rec[c.item_id]; return r && Number(r.add_back); });
+  if(anyAdd){
+    body += '<tr>'+lab('บวกกลับเข้ายอด', 'สถานะที่ตั้งค่าให้บวกคืน');
+    cols.forEach(function(c){ var r=rec[c.item_id]; body += num(r?r.add_back:null); });
+    body += '</tr>';
+  }
+
+  // แถวรายการปรับปรุง (ชื่อมาจาก config) + เตือนเมื่อมียอดแต่ไม่มีหลักฐาน
+  var warn = '';
+  (adjList||[]).forEach(function(a){
+    var sum = adjSumOf(a.adjust_id), nf = (af[a.adjust_id]||[]).length;
+    var miss = a.require_file && sum>0 && !nf;
+    body += '<tr>'+lab(a.adjust_name, miss ? '⚠ ไม่มีไฟล์หลักฐาน' : (a.require_file?'ดูไฟล์ในหมวดเอกสารแนบ':''));
+    cols.forEach(function(c){
+      var g=(sub&&sub.totals&&sub.totals[c.item_id]&&sub.totals[c.item_id].by_adjust)?sub.totals[c.item_id].by_adjust:null;
+      body += num(g ? (Number(g[a.adjust_id])||0) : null, false, miss ? '#c0392b' : '');
+    });
+    body += '</tr>';
+    if(miss) warn += '<div style="font-size:11px;color:#c0392b;margin-top:7px;">⚠ '+esc(a.adjust_name)
+      + ' มียอด '+sum.toLocaleString()+' แต่ไม่มีไฟล์หลักฐานแนบมา</div>';
+  });
+
+  // แถวสรุป — ส่วนต่างสุทธิ (+ เขียว / − แดง / 0 เทา)
+  body += '<tr>'+lab('ส่วนต่างสุทธิ', '', true);
+  cols.forEach(function(c){
+    var r = rec[c.item_id], v = r ? Number(r.net_diff)||0 : null;
+    body += num(v, true, _qDiffColor(v));
+  });
+  body += '</tr>';
+
+  var head = '<tr><th style="text-align:left;font-size:11px;color:var(--muted,#999);padding:0 8px 6px;">รายการ</th>'
+    + cols.map(function(c){ return '<th style="text-align:right;font-size:11px;color:var(--muted,#999);padding:0 6px 6px;white-space:nowrap;">'+esc(c.label)+'</th>'; }).join('')
+    + '</tr>';
+
+  return '<div style="font-size:12px;color:var(--muted,#777);margin-bottom:6px;">ยอดนับและส่วนต่าง</div>'
+    + '<div style="border:1px solid var(--border,#e2e2e2);border-radius:10px;padding:12px;margin-bottom:16px;">'
+    + '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;">'
+    + '<thead>'+head+'</thead><tbody>'+body+'</tbody></table></div>'
+    + warn
+    + '<div style="font-size:10.5px;color:var(--muted,#aaa);margin-top:7px;line-height:1.5;">'
+    +   'ส่วนต่างสุทธิ = (นับจริง − ตั้งต้น) + บวกกลับ + รายการปรับปรุง · '
+    +   'ยอดตั้งต้นคือแถว ★ ในตารางยอดระบบ ไม่ใช่ยอดคงค้างรวม'
+    + '</div>'
     + '</div>';
 }
 
