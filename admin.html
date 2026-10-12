@@ -2856,6 +2856,13 @@ function _qNumChip(label,val){
    D2 — เช็คลิสต์ความครบ (ตรวจเฉพาะสิ่งที่ User ต้องส่ง)
    ขาดตัวไหน = ต้องตีกลับทันทีตอน User ยังอยู่ ไม่ใช่ไปรู้ตอนประกอบเล่ม
    ════════════════════════════════════════════════════════════ */
+/* รูปหน้างานของใบ — ใบใหม่เก็บระดับ Site · ใบเก่า (ก่อนเปลี่ยน Process) เก็บราย Location */
+function _qSitePhotos(sub){
+  if(!sub) return [];
+  if(sub.site_photos && sub.site_photos.length) return sub.site_photos;
+  return sub.location_photos || [];
+}
+
 function _qChecklist(sub){
   var items = [];
   if(!sub) return items;
@@ -2865,17 +2872,14 @@ function _qChecklist(sub){
   items.push({ key:'file', label:'ไฟล์ใบเซ็น', ok:urls.length>0,
                detail: urls.length ? (urls.length+' ไฟล์') : 'ยังไม่ได้อัปไฟล์' });
 
-  // 2) รูปถ่ายราย Location — ต้องมีครบทุก Location
-  var locs = sub.locations || [];
-  var lp   = sub.location_photos || [];
-  var byLoc = {};
-  lp.forEach(function(p){ var n=String(p.name||''); byLoc[n]=(byLoc[n]||0)+1; });
-  var missing = locs.filter(function(L){ return !byLoc[String(L.name||'')]; })
-                    .map(function(L){ return String(L.name||''); });
-  items.push({ key:'photo', label:'รูปถ่ายราย Location', ok:(lp.length>0 && !missing.length),
-               detail: !lp.length ? 'ยังไม่มีรูปเลย'
-                     : missing.length ? (lp.length+' รูป · ขาด: '+missing.join(', '))
-                     : (lp.length+' รูป ครบทุก Location') });
+  // 2) รูปหน้างาน — ระดับ Site ต้องครบตามจำนวนขั้นต่ำของรอบ
+  var sp  = _qSitePhotos(sub);
+  var mn  = Number((V2LIM && V2LIM.photo_min) || 3);
+  var mx  = Number((V2LIM && V2LIM.photo_max) || 6);
+  items.push({ key:'photo', label:'รูปหน้างาน', ok:(sp.length >= mn),
+               detail: !sp.length ? ('ยังไม่มีรูปเลย (ต้องมีอย่างน้อย '+mn+')')
+                     : (sp.length < mn) ? (sp.length+' รูป · ต้องมีอย่างน้อย '+mn)
+                     : (sp.length+' รูป (เกณฑ์ '+mn+'-'+mx+')') });
 
   // 3) หลักฐานของรายการปรับปรุงที่มียอด
   var adjList = (V2CFG && V2CFG.adjustments || []).filter(function(a){ return a.is_active!==false; });
@@ -3134,15 +3138,15 @@ function _qAttachHtml(sub, pdfHtml){
   };
   var none = '<div style="font-size:12px;color:#c0392b;">— ยังไม่มี —</div>';
 
-  // 8.1 รูปถ่ายราย Location
-  var lp = (sub && sub.location_photos && sub.location_photos.length) ? sub.location_photos : [];
+  // 8.1 รูปหน้างาน (ระดับ Site)
+  var lp = _qSitePhotos(sub);
   var photos = lp.length
     ? '<div style="display:flex;flex-wrap:wrap;gap:8px;">'
-      + lp.map(function(p){
+      + lp.map(function(p, i){
           var thumb = p.id ? ('https://drive.google.com/thumbnail?id='+encodeURIComponent(p.id)+'&sz=w300') : p.url;
           return '<a href="'+esc(p.url)+'" target="_blank" rel="noopener" title="'+esc(p.name||'')+'" style="display:block;width:88px;text-decoration:none;color:inherit;">'
             +'<img src="'+esc(thumb)+'" loading="lazy" referrerpolicy="no-referrer" style="width:88px;height:88px;object-fit:cover;border-radius:8px;border:1px solid var(--border,#e2e2e2);background:#f4f4f4;">'
-            +'<div style="font-size:10.5px;color:var(--muted,#888);text-align:center;margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+esc(p.name||'')+'</div>'
+            +'<div style="font-size:10.5px;color:var(--muted,#888);text-align:center;margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+esc(p.name||('รูปที่ '+(i+1)))+'</div>'
             +'</a>';
         }).join('')
       + '</div>'
@@ -3175,7 +3179,7 @@ function _qAttachHtml(sub, pdfHtml){
     + '<div style="border:1px solid var(--border,#e2e2e2);border-radius:10px;padding:12px;margin-bottom:16px;">'
     + sec('🧾 ไฟล์แนบนอกระบบ', outside, 'หลักฐานของรายการปรับปรุง')
     + sec('📄 ไฟล์สรุป', pdfHtml || none, 'เอกสารยืนยันที่ผู้นับเซ็นแล้ว')
-    + sec('📷 รูปถ่ายราย Location', photos, lp.length ? (lp.length+' รูป') : '')
+    + sec('📷 รูปหน้างาน', photos, lp.length ? (lp.length+' รูป') : '')
     + '</div>';
 }
 
@@ -3347,7 +3351,7 @@ function _renderKbSteps(){
   } else {
     html += row('count:*', 'ขั้นที่ 2 — ยอดนับจริง');
   }
-  html += row('photo', 'ขั้นที่ 2 — รูปถ่ายราย Location');
+  html += row('photo', 'ขั้นที่ 5 — รูปหน้างาน');
   html += row('book',  'ขั้นที่ 4 — ยอดระบบเปลี่ยน (ต้องพิมพ์เอกสาร + เซ็นใหม่)');
   html += row('file',  'ขั้นที่ 5 — ไฟล์ใบเซ็น');
   el.innerHTML = html;
