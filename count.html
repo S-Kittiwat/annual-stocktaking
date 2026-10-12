@@ -482,6 +482,25 @@ function _rejNeeds(key){
   if (!_rejScoped()) return true;        // ไม่ได้ระบุส่วน → ถือว่าต้องแก้ทุกอย่าง
   return _rejSteps().indexOf(key) >= 0;
 }
+/* ── เอกสารล้าสมัยหรือยัง ──────────────────────────────────
+   ลายเซ็นยอด = ตัวเลขทุกตัวที่ปรากฏบนเอกสาร (ผลลัพธ์ _reconcile)
+   ถ้ายอดเปลี่ยนหลังกดพิมพ์ → เอกสารที่เซ็นมาใช้ไม่ได้ ต้องพิมพ์+เซ็นใหม่
+   ยอดกลับไปเท่าเดิม → ลายเซ็นตรงกัน ใบเซ็นเดิมใช้ต่อได้ ไม่ต้องทำงานซ้ำฟรี ๆ
+   ──────────────────────────────────────────────────────── */
+var _printedSig = null;          // ลายเซ็นยอดตอนกดพิมพ์เอกสารครั้งล่าสุด
+function _totalsSig(){
+  try {
+    return JSON.stringify(_reconcile(_calcTotals()).map(function(r){
+      return [r.item_id, r.baseline, r.outstanding, r.actual, r.add_back, r.adjust, r.net_diff];
+    }));
+  } catch(e) { return null; }
+}
+function _docStale(){
+  if (!_isRevision() || _printedSig === null) return false;
+  var sig = _totalsSig();
+  return sig !== null && sig !== _printedSig;
+}
+
 // Admin แก้ยอดระบบ → บังคับสร้างเอกสารใหม่ (เฉพาะตอนระบุหัวข้อ book มาจริง ๆ)
 function _rejNeedsBook(){ return _rejScoped() && _rejSteps().indexOf('book') >= 0; }
 function _rejNeedsAnyAdj(){
@@ -503,6 +522,7 @@ function _rejLabel(key){
 function _applyRejScope(){
   if (!_rejScoped()) return;
   var _bookRe = _rejNeedsBook();
+  _printedSig = _bookRe ? null : _totalsSig();   // ยอดบนเอกสารที่เซ็นมา = ยอดที่กู้คืนมาตอนนี้
   _step3Seen = true;                       // สรุปยอดเคยตรวจแล้ว
   _printed   = !_bookRe;                   // ยอดระบบเปลี่ยน → บังคับกดสร้างเอกสารใหม่
   if (_bookRe) { _lastDocBlob = null; _lastDocName = ''; }   // ทิ้งเอกสารยอดเก่าที่ค้างอยู่
@@ -514,7 +534,11 @@ function _applyRejScope(){
     _keepFileUrls = Array.isArray(u) ? u.slice() : [];
   }
 }
-function _hasSignedFile(){ return files.length > 0 || _keepFileUrls.length > 0; }
+function _hasSignedFile(){
+  if (files.length > 0) return true;
+  if (!_keepFileUrls.length) return false;
+  return !_docStale();            // ยอดเปลี่ยนหลังพิมพ์ → ใบเซ็นเดิมใช้ไม่ได้
+}
 
 /* ════════════════════════════════════════════════════════════
    ขั้นที่ 3 — รายการปรับปรุงระดับ Site (จาก cfg.adjustments)
@@ -694,6 +718,21 @@ function PV_OF(typeId){
 }
 // (emptyLoc / locTotal / brandTotal เวอร์ชัน v1 ถูกย้ายไปบล็อก v2 schema ด้านบน)
 
+/* เปิดหน้าใหม่พร้อม session ค้าง แล้ว Site นั้นปิดงานไปแล้ว → ห้ามเข้าหน้ากรอก
+   เด้งกลับขั้นที่ 1 ให้เลือก Site ใหม่ (เงื่อนไขเดียวกับ gate ฝั่ง backend) */
+var _bootRestore = false;
+function _guardClosedSite(){
+  if (!_bootRestore) return false;
+  _bootRestore = false;
+  var st = String((siteSubmission||{}).status||'');
+  if (st !== 'approved' && st !== 'pending') return false;
+  _clearStaleSession(st === 'approved'
+    ? '🔒 Site นี้ได้รับอนุมัติแล้ว (ปิดงาน) — เลือก Site ใหม่ หรือให้ Admin กด "เปิดแก้ไข"'
+    : '⏳ Site นี้ส่งผลแล้ว รอ Admin ตรวจ — เลือก Site ใหม่');
+  render();
+  return true;
+}
+
 async function fetchBookBalance(site) {
   // รีเฟรชใบส่งผล v2 ก่อนเสมอ — ของ v1 (getBookBalance) จะว่างในรอบที่นับด้วย v2
   try { await _loadCountSetup(site); } catch (e) {}
@@ -705,6 +744,7 @@ async function fetchBookBalance(site) {
       if (data.status === 'ok' && data.book) {
         bookBalance = data.book;
       }
+      if (_guardClosedSite()) return;   // Site ปิดงานแล้ว — เด้งกลับขั้นที่ 1
       _maybeRestoreFromServer();  // reopen/rejected → เติมข้อมูลเดิมจาก server (แหล่งหลัก)
       render(); // re-render เพื่ออัป comparison + แบนเนอร์สถานะ
     })
@@ -853,7 +893,7 @@ window.onload = function() {
   if (session) loadProgress(); // restore locations ที่ค้างไว้
   loadConfig();
   // ดึง book + สถานะใบส่ง ของ site ที่ค้างไว้ (ให้ banner ล็อก/ตีกลับโชว์หลัง reload)
-  if (session && session.site) fetchBookBalance(session.site);
+  if (session && session.site) { _bootRestore = true; fetchBookBalance(session.site); }
   startHelpPoll();   // แถบเรียกเจ้าหน้าที่ (จะซ่อนเองถ้ายังไม่มี session / อยู่หน้าล็อก)
 };
 
@@ -1493,7 +1533,7 @@ function renderStep2(content) {
           '<div class="field" style="margin-bottom:10px;"><label>Location / Zone <span style="color:var(--danger);">*</span></label>'+
             '<input class="input" id="selLocation" type="text" placeholder="เช่น Zone A, ลานหน้าคลัง" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">'+
           '</div>'+
-          '<div style="margin-bottom:12px;">'+
+          '<div id="photoBlock" style="margin-bottom:12px;">'+
             '<label style="display:block;margin-bottom:5px;">📷 รูปหน้างาน</label>'+
             '<div id="photoStrip"></div>'+
             '<input type="file" id="photoInputCamera" accept="image/*" capture="environment" onchange="handlePhoto(this);this.value=\'\';" style="display:none;">'+
@@ -1562,16 +1602,17 @@ function renderStep2(content) {
     // ── Submit Card ──
     (function(){
       var _isRe = _isRevision();
-      var _needPrint = !_isRe || _rejNeedsBook();
-      var ready = hasLoc && _offDone && _hasSignedFile() && (!_needPrint || (_step3Seen && _printed));
+      var _stale = _docStale();
+      var _needPrint = !_isRe || _rejNeedsBook() || _stale;
+      var ready = hasLoc && _offDone && _hasSignedFile() && (!_needPrint || (_step3Seen && _printed && !_stale));
       return '<div class="submit-card" id="submitCard">'+
       '<div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:8px;">📋 ตรวจสอบก่อน Submit</div>'+
       '<div class="step-check" id="chk1">'+_chkIcon(true)+'ขั้นที่ 1 — เลือก Site และผู้นับ</div>'+
       '<div class="step-check" id="chk2">'+_chkIcon(hasLoc)+'ขั้นที่ 2 — กรอกยอดนับ ('+(hasLoc?locations.length+' Location':'ยังไม่มี Location')+')</div>'+
       '<div class="step-check" id="chkOff">'+_chkIcon(_offDone)+'ขั้นที่ 3 — พาเลทนอกระบบ PCS '+(_offDone?_offSummaryTxt():'(กด “จบขั้นที่ 3 — ไปสรุป”)')+'</div>'+
-      (_needPrint ? '<div class="step-check" id="chk3a">'+_chkIcon(_step3Seen)+'ขั้นที่ 4 — ตรวจสอบสรุปยอดแล้ว'+(!_step3Seen?' (กด "▸ แสดง" ก่อน)':'')+'</div>' : '')+
-      (_needPrint ? '<div class="step-check" id="chk3b">'+_chkIcon(_printed)+'ขั้นที่ 4 — สร้างเอกสารยืนยันแล้ว'+(!_printed?' (กด 🖨️ สร้างเอกสารยืนยัน)':'')+'</div>' : '')+
-      (_isRe && !_needPrint ? '<div class="step-check done">'+_chkIcon(true)+'ฉบับแก้ไข — ไม่ต้องพิมพ์/ตรวจสอบซ้ำ</div>' : '')+
+      '<div class="step-check" id="chk3a"'+(_needPrint?'':' style="display:none;"')+'>'+_chkIcon(_step3Seen)+'ขั้นที่ 4 — ตรวจสอบสรุปยอดแล้ว'+(!_step3Seen?' (กด "▸ แสดง" ก่อน)':'')+'</div>'+
+      '<div class="step-check" id="chk3b"'+(_needPrint?'':' style="display:none;"')+'>'+_chkIcon(_printed)+'ขั้นที่ 4 — สร้างเอกสารยืนยันแล้ว'+(!_printed?' (กด 🖨️ สร้างเอกสารยืนยัน)':'')+'</div>'+
+      '<div class="step-check done" id="chkReNoPrint"'+((_isRe && !_needPrint)?'':' style="display:none;"')+'>'+_chkIcon(true)+'ฉบับแก้ไข — ไม่ต้องพิมพ์/ตรวจสอบซ้ำ</div>'+
       '<div class="step-check" id="chk4">'+_chkIcon(files.length>0)+'ขั้นที่ 5 — Upload รายงาน '+(files.length>0?'('+files.length+' ไฟล์)':'(ยังไม่มีไฟล์)')+'</div>'+
       '<button class="btn btn-success" id="btnSubmit" onclick="submitCount()" '+(ready?'':'disabled')+' style="width:100%;margin-top:8px;">'+
         '📤 Submit ผลการนับ'+
@@ -1650,12 +1691,19 @@ function applyRejectHl(){
     box.id = 'rejSummary';
     box.style.cssText = 'border-radius:var(--rs);padding:12px 14px;margin-bottom:12px;'
       + 'background:rgba(220,38,38,.08);border:1.5px solid #dc2626;font-size:13px;line-height:1.7;';
-    box.innerHTML = '<b>↩️ ต้องแก้ไขเฉพาะส่วนนี้</b> — ส่วนอื่นไม่ต้องทำซ้ำ'
+    box.innerHTML = '<b>↩️ ต้องแก้ไขเฉพาะส่วนนี้</b> — ส่วนอื่นถูกซ่อนไว้ ไม่ต้องทำซ้ำ'
       + '<ul style="margin:6px 0 0;padding-left:20px;">'
       + steps.map(function(k){ return '<li>'+esc(_rejLabel(k))+'</li>'; }).join('')
-      + '</ul>';
+      + '</ul>'
+      + '<button type="button" id="btnRejShowAll" onclick="toggleRejShowAll()" '
+      +   'style="margin-top:8px;background:var(--surface);border:1px solid var(--border2);'
+      +   'border-radius:6px;padding:7px 12px;font-family:var(--font);font-size:12px;'
+      +   'color:var(--muted);cursor:pointer;min-height:34px;touch-action:manipulation;">'
+      + (_rejShowAll ? '🙈 ซ่อนส่วนที่ไม่ต้องแก้' : '👁 แสดงทั้งหมด') + '</button>';
     host.insertBefore(box, host.firstChild);
   }
+
+  _applyRejFocus();
 
   // เด้งไปหาจุดแรกที่ต้องแก้ (ครั้งเดียวต่อฉบับ)
   if (marked.length) {
@@ -1667,6 +1715,53 @@ function applyRejectHl(){
   }
 }
 var _rejHlSeen=null;
+var _rejShowAll = false;        // กด "แสดงทั้งหมด" แล้วหรือยัง
+
+/* ════════════════════════════════════════════════════════════
+   โหมดแก้เฉพาะส่วน — ตีกลับหัวข้อไหน เห็นแค่หัวข้อนั้น
+   ซ่อนด้วย display:none ไม่ถอดออกจาก DOM เพราะ _fillFormFromLocation
+   ยังต้องเติมค่าให้ช่องที่ซ่อน ไม่งั้น addLocation() อ่านได้ 0 แล้วยอดหาย
+   ════════════════════════════════════════════════════════════ */
+function _rejFocusOn(){ return _rejScoped() && !_rejShowAll; }
+
+function _show(id, on){
+  var el = document.getElementById(id);
+  if (el) el.style.display = on ? '' : 'none';
+}
+
+function _applyRejFocus(){
+  var ids = ['step2Card','stepOffCard','step3Card','step4Card','photoBlock'];
+  if (!_rejFocusOn()) {
+    ids.forEach(function(id){ _show(id, true); });
+    V2TYPES().forEach(function(t){ _show('sec_'+_domId(t.type_id), true); });
+    ADJUSTS().forEach(function(a){ _show('adjCard_'+_domId(a.adjust_id), true); });
+    return;
+  }
+  var needCount = V2TYPES().some(function(t){ return _rejNeeds('count:'+t.type_id); });
+  var needPhoto = _rejNeeds('photo');
+  var needAdj   = _rejNeedsAnyAdj();
+  var needPrint = _rejNeedsBook() || _docStale();
+  var needFile  = _rejNeeds('file') || needPrint;
+
+  _show('step2Card',   needCount || needPhoto);
+  _show('photoBlock',  needPhoto);
+  _show('stepOffCard', needAdj);
+  _show('step3Card',   needPrint);
+  _show('step4Card',   needFile);
+
+  // ในขั้นที่ 2 โชว์เฉพาะตารางชนิดที่ถูกตีกลับ
+  V2TYPES().forEach(function(t){ _show('sec_'+_domId(t.type_id), _rejNeeds('count:'+t.type_id)); });
+  // ในขั้นที่ 3 โชว์เฉพาะรายการปรับปรุงที่ถูกตีกลับ
+  ADJUSTS().forEach(function(a){ _show('adjCard_'+_domId(a.adjust_id), _rejNeeds('adj:'+a.adjust_id)); });
+}
+
+function toggleRejShowAll(){
+  _rejShowAll = !_rejShowAll;
+  _applyRejFocus();
+  try { _rejFormHl(); } catch(e) {}
+  var b = document.getElementById('btnRejShowAll');
+  if (b) b.textContent = _rejShowAll ? '🙈 ซ่อนส่วนที่ไม่ต้องแก้' : '👁 แสดงทั้งหมด';
+}
 
 // ── Bind events ครั้งเดียวตอนสร้าง DOM — ไม่ผูกซ้ำเมื่อสลับ view ──
 function _chkIcon(done) {
@@ -1686,8 +1781,10 @@ function updateSubmitCard() {
   var hasLoc  = locations.length > 0;
   var hasFile = _hasSignedFile();
   var _isRe   = _isRevision();
-  var _needPrint = !_isRe || _rejNeedsBook();
-  var ready   = hasLoc && _offDone && hasFile && (!_needPrint || (_step3Seen && _printed));
+  var _stale     = _docStale();
+  var _printOk   = _printed && !_stale;
+  var _needPrint = !_isRe || _rejNeedsBook() || _stale;
+  var ready   = hasLoc && _offDone && hasFile && (!_needPrint || (_step3Seen && _printOk));
 
   // ปลดล็อกขั้น 3/4 + ปุ่มไปขั้น 3 ทันทีที่มี Location (กันต้อง refresh)
   var goBtn = document.getElementById('btnGoStep3');
@@ -1715,22 +1812,28 @@ function updateSubmitCard() {
   }
   var chk3a = document.getElementById('chk3a');
   var chk3b = document.getElementById('chk3b');
+  var chkRe = document.getElementById('chkReNoPrint');
+  if (chkRe) chkRe.style.display = (_isRe && !_needPrint) ? '' : 'none';
   if (chk3a) {
-    chk3a.style.display = '';
+    chk3a.style.display = _needPrint ? '' : 'none';
     chk3a.innerHTML = _chkIcon(_step3Seen)+'ขั้นที่ 4 — ตรวจสอบสรุปยอดแล้ว'+(!_step3Seen?' <span style="color:var(--warn);">(กด ▸ แสดง ก่อน)</span>':'');
     chk3a.className = 'step-check '+(_step3Seen?'done':'pending');
   }
   if (chk3b) {
-    chk3b.style.display = '';
-    chk3b.innerHTML = _chkIcon(_printed)+'ขั้นที่ 4 — สร้างเอกสารยืนยันแล้ว'+(!_printed?' <span style="color:var(--warn);">(กด 🖨️ สร้างเอกสารยืนยัน)</span>':'');
-    chk3b.className = 'step-check '+(_printed?'done':'pending');
+    chk3b.style.display = _needPrint ? '' : 'none';
+    chk3b.innerHTML = _chkIcon(_printOk)+'ขั้นที่ 4 — สร้างเอกสารยืนยันแล้ว'
+      + (_stale ? ' <span style="color:var(--warn);">(ยอดเปลี่ยน — ต้องสร้างใหม่)</span>'
+        : (!_printed ? ' <span style="color:var(--warn);">(กด 🖨️ สร้างเอกสารยืนยัน)</span>' : ''));
+    chk3b.className = 'step-check '+(_printOk?'done':'pending');
   }
   if (chk4) {
     var _keepN = _keepFileUrls.length;
     chk4.innerHTML = _chkIcon(hasFile)+'ขั้นที่ 5 — Upload รายงาน '
       + (files.length ? '('+files.length+' ไฟล์ใหม่)'
-         : (_keepN ? '<span style="color:var(--muted);">(ใช้ไฟล์เดิม '+_keepN+' ไฟล์ — ไม่ถูกตีกลับ)</span>'
-                   : '(ยังไม่มีไฟล์)'));
+         : (_keepN
+            ? (_stale ? '<span style="color:var(--warn);">(ไฟล์เดิมใช้ไม่ได้ — ยอดเปลี่ยนหลังเซ็น)</span>'
+                      : '<span style="color:var(--muted);">(ใช้ไฟล์เดิม '+_keepN+' ไฟล์ — ไม่ถูกตีกลับ)</span>')
+            : '(ยังไม่มีไฟล์)'));
     chk4.className = 'step-check '+(hasFile?'done':'pending');
   }
   if (btn) btn.disabled = !ready;
@@ -1738,10 +1841,13 @@ function updateSubmitCard() {
     ? 'พร้อม Submit — '+locations.length+' Location · '+files.length+' ไฟล์'
     : (!hasLoc      ? 'กรุณาเพิ่มอย่างน้อย 1 Location'
       : !_offDone   ? 'กรุณากด “จบขั้นที่ 3 — ไปสรุป” ก่อน'
+      : (_stale)    ? 'ยอดเปลี่ยนจากที่พิมพ์ไว้ — กรุณากด “สร้างเอกสารยืนยัน” ใหม่แล้วเซ็นอีกครั้ง'
       : (!hasFile)  ? 'กรุณา Upload รายงาน (พร้อมลายเซ็น) ก่อน Submit'
       : (_needPrint && !_step3Seen) ? 'กรุณาเปิดดูสรุปยอดในขั้นที่ 4 ก่อน'
       : (_needPrint && !_printed)   ? 'Admin แก้ยอดระบบใหม่ — กรุณากด “สร้างเอกสารยืนยัน” ใหม่ก่อน'
       : '');
+
+  try { _applyRejFocus(); } catch(e) {}
 
   // ── คุมตามสถานะใบส่งผล ──
   var gate = _submitGate();
@@ -2664,6 +2770,9 @@ function printDoc() {
         mimeType:'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
       // ไม่โหลดลงเครื่องอัตโนมัติ — เก็บไว้ให้กดเองจากกล่องลิงก์
       _lastDocBlob = blob; _lastDocName = fname;
+      // ยอดเปลี่ยนไปแล้วก่อนพิมพ์รอบนี้ → ใบเซ็นเดิมเป็นโมฆะ ต้องเซ็นฉบับใหม่
+      if (_docStale()) _keepFileUrls = [];
+      _printedSig = _totalsSig();              // เอกสารฉบับนี้ตรงกับยอดชุดนี้
       _printed = true; updateSubmitCard();
       showToast('✅ สร้างเอกสารแล้ว — กำลังทำลิงก์สำหรับโหลดบนคอม...', 'info');
       return _uploadDocForLink(blob, fname);
@@ -2982,6 +3091,7 @@ function _resetSiteState() {
   _editingIdx = null;
   _serverRestoredKey = null; _rejHlSeen = null;
   _lastDocBlob = null; _lastDocName = '';
+  _printedSig = null; _rejShowAll = false;
   siteDocNo = '';
   try { closeDocLink(); } catch(e) {}
 }
