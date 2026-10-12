@@ -2783,74 +2783,60 @@ function renderQueue(st){
     var pdf = urls.length
       ? urls.map(function(u,i){return '<a class="btn-sm btn-sm-open" href="'+esc(u)+'" target="_blank" rel="noopener" style="margin:0 6px 6px 0;">📄 ไฟล์ '+(i+1)+'</a>';}).join('')
       : '<span class="status-badge sb-idle">ไม่มีไฟล์ใบเซ็น</span>';
-    var subline = sub ? ('<span class="mono">'+esc(sub.count_id||'')+'</span> · ผู้นับ: '+esc(sub.counter_name||'—')+((sub.revision>1)?(' · แก้ครั้งที่ '+sub.revision):'')) : ('<span class="mono">'+esc(c.ticket)+'</span>');
+    var subline = sub
+      ? ('<span class="mono">'+esc(sub.count_id||'')+'</span> · ตั๋ว <span class="mono">'+esc(c.ticket||'—')+'</span>'
+         +((sub.revision>1)?(' · แก้ครั้งที่ '+sub.revision):''))
+      : ('ตั๋ว <span class="mono">'+esc(c.ticket)+'</span>');
     var waitSec = (c.enqueuedAt&&c.calledAt) ? Math.max(0,(new Date(c.calledAt)-new Date(c.enqueuedAt))/1000) : null;
 
     meBox.innerHTML=
+      // ── 1) รายละเอียด: Site + ตัวแทนส่วนกลาง ──
       '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px;">'
         +'<div><div style="font-size:12px;color:var(--muted,#888);">งานของฉัน · กำลังตรวจ</div>'
           +'<div style="font-size:19px;font-weight:700;color:var(--accent,#b8893d);">'+esc(c.site)+'</div>'
-          +'<div style="font-size:12px;color:var(--muted,#999);margin-top:1px;">'+subline+'</div></div>'
+          +'<div style="font-size:13px;margin-top:2px;">ตัวแทนส่วนกลาง: <b>'+esc((sub&&sub.counter_name)||'—')+'</b></div>'
+          +'<div style="font-size:11.5px;color:var(--muted,#999);margin-top:1px;">'+subline+'</div></div>'
         +(c.kicks?'<span class="status-badge sb-rejected" style="white-space:nowrap;">เคยตีกลับ '+c.kicks+'</span>':'')
       +'</div>'
+      // ── 2) เวลา ──
       +'<div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px;">'
         +'<div style="background:rgba(0,0,0,.04);border-radius:8px;padding:10px 12px;"><div style="font-size:11px;color:var(--muted,#777);">⏱ ระยะเวลารอคิว</div><div class="mono" style="font-size:19px;font-weight:700;">'+(waitSec!=null?fmtDur(waitSec):'—')+'</div></div>'
         +'<div style="background:rgba(184,137,61,.12);border-radius:8px;padding:10px 12px;"><div style="font-size:11px;color:var(--accent,#8a6526);">▶ ดำเนินการ (เดินสด)</div><div class="mono q-tick" data-since="'+esc(c.calledAt||'')+'" style="font-size:19px;font-weight:700;color:var(--accent,#8a6526);">—</div></div>'
       +'</div>'
+      // ── 3) โฟลเดอร์ของ Site ──
+      + (qSiteId ? _qFolderHtml(qSiteId) : '')
+      // ── 4) ยอดระบบที่ Admin กรอก (มีแถวรวม "ยอดคงค้างตามระบบ" อยู่ในตาราง) ──
+      + (qSiteId ? _qBookHtml(qSiteId) : '')
+      // ── 5) รวมที่ตรวจนับได้จริง ──
       +'<div style="font-size:12px;color:var(--muted,#777);margin-bottom:6px;">รวมที่ตรวจนับได้จริง</div>'
       +itemGrid(function(id){ var r=qRec[id]; return r?r.actual:null; })
-      +'<div style="font-size:12px;color:var(--muted,#777);margin-bottom:6px;">ยอดคงค้างตามระบบ</div>'
-      +itemGrid(function(id){ var r=qRec[id]; return r?r.outstanding:null; })
-      +'<div style="font-size:12px;color:var(--muted,#777);margin-bottom:6px;">ส่วนต่างสุทธิ</div>'
-      +itemGrid(function(id){ var r=qRec[id]; return r?r.net_diff:null; })
-      + (qSiteId ? _qBookHtml(qSiteId) : '')
+      // ── 6) รายการปรับปรุง (ยอด) — ไฟล์หลักฐานไปอยู่หมวดเอกสารแนบ ──
       + (adjList.length
           ? adjList.map(function(a){
+              var sum = 0, af = (sub && sub.adjust_files) ? sub.adjust_files : {};
+              qCols.forEach(function(cc){
+                var g=(sub&&sub.totals&&sub.totals[cc.item_id]&&sub.totals[cc.item_id].by_adjust)?sub.totals[cc.item_id].by_adjust:null;
+                if(g) sum += Number(g[a.adjust_id])||0;
+              });
+              var nf = (af[a.adjust_id]||[]).length;
               return '<div style="font-size:12px;color:var(--muted,#777);margin-bottom:6px;">'+esc(a.adjust_name)
-                + (a.require_file?' <span style="color:var(--muted,#aaa);">— เทียบกับไฟล์หลักฐาน</span>':'')+'</div>'
+                + (a.require_file?' <span style="color:var(--muted,#aaa);">— เทียบกับไฟล์หลักฐานในหมวดเอกสารแนบ</span>':'')+'</div>'
                 + itemGrid(function(id){
                     var g=(sub&&sub.totals&&sub.totals[id]&&sub.totals[id].by_adjust)?sub.totals[id].by_adjust:null;
                     return g ? (Number(g[a.adjust_id])||0) : null;
-                  });
+                  })
+                + ((a.require_file && sum>0 && !nf)
+                    ? '<div style="font-size:11px;color:#c0392b;margin:-6px 0 14px;">⚠ '+esc(a.adjust_name)
+                      + ' มียอด '+sum.toLocaleString()+' แต่ไม่มีไฟล์หลักฐานแนบมา</div>'
+                    : '');
             }).join('')
           : '')
-      + (function(){
-          var af = (sub && sub.adjust_files) ? sub.adjust_files : {};
-          var out = '';
-          adjList.forEach(function(a){
-            var urls = af[a.adjust_id] || [];
-            var sum  = 0;
-            qCols.forEach(function(c){
-              var g=(sub&&sub.totals&&sub.totals[c.item_id]&&sub.totals[c.item_id].by_adjust)?sub.totals[c.item_id].by_adjust:null;
-              if(g) sum += Number(g[a.adjust_id])||0;
-            });
-            if(!urls.length){
-              if(a.require_file && sum>0) out += '<div style="font-size:11px;color:#c0392b;margin:-6px 0 14px;">⚠ '+esc(a.adjust_name)+' มียอด '+sum.toLocaleString()+' แต่ไม่มีไฟล์หลักฐานแนบมา</div>';
-              return;
-            }
-            out += '<div style="font-size:12px;color:var(--muted,#777);margin-bottom:6px;">ไฟล์หลักฐาน — '+esc(a.adjust_name)+'</div><div style="margin-bottom:16px;">'
-              + urls.map(function(u,i){return '<a class="btn-sm btn-sm-open" href="'+esc(u)+'" target="_blank" rel="noopener" style="margin:0 6px 6px 0;">🧾 หลักฐาน '+(i+1)+'</a>';}).join('')
-              + '</div>';
-          });
-          return out;
-        })()
-      + (function(){
-          var lp = (sub && sub.location_photos && sub.location_photos.length) ? sub.location_photos : [];
-          if(!lp.length) return '';
-          return '<div style="font-size:12px;color:var(--muted,#777);margin-bottom:6px;">รูปถ่ายราย Location (ขั้นที่ 2) · '+lp.length+' รูป</div>'
-            +'<div style="display:flex;flex-wrap:wrap;gap:8px;margin-bottom:16px;">'
-            + lp.map(function(p){
-                var thumb = p.id ? ('https://drive.google.com/thumbnail?id='+encodeURIComponent(p.id)+'&sz=w300') : p.url;
-                return '<a href="'+esc(p.url)+'" target="_blank" rel="noopener" title="'+esc(p.name||'')+'" style="display:block;width:88px;text-decoration:none;color:inherit;">'
-                  +'<img src="'+esc(thumb)+'" loading="lazy" referrerpolicy="no-referrer" style="width:88px;height:88px;object-fit:cover;border-radius:8px;border:1px solid var(--border,#e2e2e2);background:#f4f4f4;">'
-                  +'<div style="font-size:10.5px;color:var(--muted,#888);text-align:center;margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+esc(p.name||'')+'</div>'
-                  +'</a>';
-              }).join('')
-            +'</div>';
-        })()
-      +'<div style="font-size:12px;color:var(--muted,#777);margin-bottom:6px;">ไฟล์แนบจากผู้นับ</div>'
-      +'<div style="margin-bottom:16px;">'+pdf+'</div>'
-      + (qSiteId ? _qFolderHtml(qSiteId) : '')
+      // ── 7) ส่วนต่างสุทธิ ──
+      +'<div style="font-size:12px;color:var(--muted,#777);margin-bottom:6px;">ส่วนต่างสุทธิ</div>'
+      +itemGrid(function(id){ var r=qRec[id]; return r?r.net_diff:null; })
+      // ── 8) รูปถ่าย & เอกสารแนบ ──
+      + _qAttachHtml(sub, pdf)
+      // ── 9) ตรวจความครบ + ปุ่ม ──
       + _qChecklistHtml(sub)
       +'<div style="display:flex;gap:10px;flex-wrap:wrap;">'
         +'<button class="btn btn-success" style="flex:1;min-width:150px;" onclick="qRelease()">✓ ปล่อยตัว (อนุมัติ)</button>'
@@ -3016,6 +3002,21 @@ function _qBookHtml(siteId){
     });
     cells += '</tr>';
   });
+  // แถวรวม — ผลรวมเฉพาะสถานะที่ติดธง is_outstanding (สูตรเดียวกับ reconcileV2_ ฝั่ง backend)
+  var outIds = stats.filter(function(st){ return !!st.is_outstanding && String(st.is_outstanding).toUpperCase()!=='FALSE'; })
+                    .map(function(st){ return st.status_id; });
+  if (outIds.length) {
+    cells += '<tr><td style="font-size:12.5px;font-weight:700;padding:7px 8px;border-top:2px solid var(--border2,#d8d8d8);">'
+      + 'ยอดคงค้างตามระบบ <span style="font-size:10px;font-weight:400;color:var(--muted,#999);">(รวม)</span></td>';
+    items.forEach(function(it){
+      var tot = 0;
+      outIds.forEach(function(sid){ tot += get(it.item_id, sid); });
+      cells += '<td class="mono" id="qbkSum_'+esc(it.item_id)+'" style="padding:7px 6px;'
+        + 'border-top:2px solid var(--border2,#d8d8d8);text-align:right;font-size:14px;font-weight:800;">'
+        + tot.toLocaleString()+'</td>';
+    });
+    cells += '</tr>';
+  }
   var head = '<tr><th style="text-align:left;font-size:11px;color:var(--muted,#999);padding:0 8px 6px;">สถานะในระบบ</th>'
     + items.map(function(it){ return '<th style="text-align:right;font-size:11px;color:var(--muted,#999);padding:0 6px 6px;white-space:nowrap;">'+esc(it.label)+'</th>'; }).join('')
     + '</tr>';
@@ -3037,8 +3038,66 @@ function _qBookHtml(siteId){
     + '<div style="border:1px solid var(--border,#e2e2e2);border-radius:10px;padding:12px;margin-bottom:16px;">'
     + '<div style="overflow-x:auto;"><table style="width:100%;border-collapse:collapse;">'
     + '<thead>'+head+'</thead><tbody>'+cells+'</tbody></table></div>'
+    + '<div style="font-size:10.5px;color:var(--muted,#aaa);margin-top:7px;line-height:1.5;">'
+    +   '★ ยอดตั้งต้นที่ใช้หาส่วนต่าง · แถวรวม = ผลรวมเฉพาะแถวที่ติดธง “คงค้าง”'
+    + '</div>'
     + '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;">'+bar+'</div>'
     + warn
+    + '</div>';
+}
+
+/* ── หมวดที่ 8: รูปถ่าย & เอกสารแนบ — รวมไฟล์ทุกชนิดไว้ที่เดียว ── */
+function _qAttachHtml(sub, pdfHtml){
+  var sec = function(label, body, note){
+    return '<div style="margin-bottom:12px;">'
+      + '<div style="font-size:11.5px;font-weight:700;margin-bottom:6px;">'+esc(label)
+      + (note?' <span style="font-weight:400;color:var(--muted,#aaa);">'+esc(note)+'</span>':'')+'</div>'
+      + body + '</div>';
+  };
+  var none = '<div style="font-size:12px;color:#c0392b;">— ยังไม่มี —</div>';
+
+  // 8.1 รูปถ่ายราย Location
+  var lp = (sub && sub.location_photos && sub.location_photos.length) ? sub.location_photos : [];
+  var photos = lp.length
+    ? '<div style="display:flex;flex-wrap:wrap;gap:8px;">'
+      + lp.map(function(p){
+          var thumb = p.id ? ('https://drive.google.com/thumbnail?id='+encodeURIComponent(p.id)+'&sz=w300') : p.url;
+          return '<a href="'+esc(p.url)+'" target="_blank" rel="noopener" title="'+esc(p.name||'')+'" style="display:block;width:88px;text-decoration:none;color:inherit;">'
+            +'<img src="'+esc(thumb)+'" loading="lazy" referrerpolicy="no-referrer" style="width:88px;height:88px;object-fit:cover;border-radius:8px;border:1px solid var(--border,#e2e2e2);background:#f4f4f4;">'
+            +'<div style="font-size:10.5px;color:var(--muted,#888);text-align:center;margin-top:3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">'+esc(p.name||'')+'</div>'
+            +'</a>';
+        }).join('')
+      + '</div>'
+    : none;
+
+  // 8.2 ไฟล์แนบนอกระบบ — หลักฐานของรายการปรับปรุงที่มียอด
+  var adjList = (V2CFG && V2CFG.adjustments || []).filter(function(a){ return a.is_active!==false; });
+  var af = (sub && sub.adjust_files) ? sub.adjust_files : {};
+  var outRows = '';
+  adjList.forEach(function(a){
+    var sum = 0;
+    Object.keys((sub&&sub.totals)||{}).forEach(function(id){
+      var g = sub.totals[id] && sub.totals[id].by_adjust;
+      if(g) sum += Number(g[a.adjust_id])||0;
+    });
+    var urls = af[a.adjust_id] || [];
+    if(!sum && !urls.length) return;                 // ไม่มียอด ไม่มีไฟล์ → ไม่ต้องโชว์
+    outRows += '<div style="margin-bottom:8px;">'
+      + '<div style="font-size:11.5px;color:var(--muted,#888);margin-bottom:4px;">'+esc(a.adjust_name)
+      + ' · ยอด '+sum.toLocaleString()+'</div>'
+      + (urls.length
+          ? urls.map(function(u,i){ return '<a class="btn-sm btn-sm-open" href="'+esc(u)+'" target="_blank" rel="noopener" style="margin:0 6px 6px 0;">🧾 หลักฐาน '+(i+1)+'</a>'; }).join('')
+          : (a.require_file ? '<div style="font-size:12px;color:#c0392b;">— ยังไม่มีไฟล์หลักฐาน —</div>'
+                            : '<div style="font-size:12px;color:var(--muted,#aaa);">— ไม่ได้บังคับแนบ —</div>'))
+      + '</div>';
+  });
+  var outside = outRows || '<div style="font-size:12px;color:var(--muted,#aaa);">— ไม่มีรายการปรับปรุงที่มียอด —</div>';
+
+  return '<div style="font-size:12px;color:var(--muted,#777);margin-bottom:6px;">รูปถ่าย &amp; เอกสารแนบ</div>'
+    + '<div style="border:1px solid var(--border,#e2e2e2);border-radius:10px;padding:12px;margin-bottom:16px;">'
+    + sec('📷 รูปถ่ายราย Location', photos, lp.length ? (lp.length+' รูป') : '')
+    + sec('🧾 ไฟล์แนบนอกระบบ', outside, 'หลักฐานของรายการปรับปรุง')
+    + sec('📄 ไฟล์สรุป', pdfHtml || none, 'เอกสารยืนยันที่ผู้นับเซ็นแล้ว')
     + '</div>';
 }
 
@@ -3057,11 +3116,24 @@ function qBookEdit(siteId){
 function qBookCancel(){ QBOOK.open=false; QBOOK.draft=null; renderQueue(_qState); }
 
 // เก็บค่าลง draft เท่านั้น — ไม่ re-render ระหว่างพิมพ์ (กฎข้อ 6)
+// แถวรวมอัปเดตแบบเจาะเซลล์ ผู้ตรวจจะเห็นยอดคงค้างเปลี่ยนทันทีก่อนกดบันทึก
 function qBookSet(el){
   if(!QBOOK.draft) return;
   var it=el.getAttribute('data-it'), st=el.getAttribute('data-st');
   if(!QBOOK.draft[it]) QBOOK.draft[it]={};
   QBOOK.draft[it][st] = Number(el.value)||0;
+  qBookSumRefresh(it);
+}
+
+// คิดแถวรวมของรายการเดียวใหม่ (สูตรเดียวกับ reconcileV2_: เฉพาะสถานะที่ is_outstanding)
+function qBookSumRefresh(itemId){
+  var cell=document.getElementById('qbkSum_'+itemId); if(!cell || !QBOOK.draft) return;
+  var tot=0;
+  _qBookStats().forEach(function(st){
+    if(!st.is_outstanding || String(st.is_outstanding).toUpperCase()==='FALSE') return;
+    tot += Number((QBOOK.draft[itemId]||{})[st.status_id]) || 0;
+  });
+  cell.textContent = tot.toLocaleString();
 }
 
 function qBookSave(){
@@ -3985,4 +4057,4 @@ function loadStats(){
 }
 </script>
 </body>
-</html> 
+</html>
