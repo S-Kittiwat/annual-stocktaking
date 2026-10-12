@@ -434,7 +434,7 @@ function emptyLoc(name) {
       sts.forEach(function(s){ q[it.item_id][s.status_id] = 0; });
     });
   });
-  return { name:name, photos:[], q:q };
+  return { name:name, q:q };
 }
 function itemTotal(loc, itemId) {
   var g = (loc && loc.q && loc.q[itemId]) || {};
@@ -767,6 +767,10 @@ function saveProgress() {
       return copy;
     });
     localStorage.setItem('stockCountLocations', JSON.stringify(slim));
+    // รูปหน้างาน: เก็บเฉพาะที่อัปขึ้น Drive แล้ว (base64 กินพื้นที่เกิน quota)
+    localStorage.setItem('stockCountPhotos', JSON.stringify(
+      SITE_PHOTOS.filter(function(p){ return p.url; })
+                 .map(function(p){ return { src:p.url, url:p.url, id:p.id||'' }; })));
     // รายการปรับปรุงขั้นที่ 3 — ผูกทั้ง round_id และ site_id
     // (ยอดเป็นของ Site นั้นๆ ถ้าผูกแค่รอบ ยอดจะติดไปไซต์ถัดไป)
     localStorage.setItem('stockCountAdj', JSON.stringify({
@@ -815,13 +819,17 @@ function loadProgress() {
     ADJ = _adjMatches(a) ? a.adj : {};
   } catch(e) { ADJ = {}; }
   ADJFILES = {};   // ไฟล์แนบเก็บใน localStorage ไม่ได้ — ต้องแนบใหม่ทุกครั้งที่เปิดหน้า
+  try {
+    var ph = JSON.parse(localStorage.getItem('stockCountPhotos') || '[]');
+    SITE_PHOTOS = Array.isArray(ph) ? ph : [];
+  } catch(e) { SITE_PHOTOS = []; }
 }
 
 // ล้าง session + งานค้างที่เป็นของรอบเก่า (กันยอดข้ามรอบปนกัน)
 function _clearStaleSession(msg) {
   try { localStorage.removeItem('stockCountSession'); localStorage.removeItem('stockCountLocations');
-        localStorage.removeItem('stockCountAdj'); } catch(e) {}
-  session = null; locations = []; siteSubmission = null; files = [];
+        localStorage.removeItem('stockCountAdj'); localStorage.removeItem('stockCountPhotos'); } catch(e) {}
+  session = null; locations = []; siteSubmission = null; files = []; SITE_PHOTOS = [];
   ADJ = {}; ADJFILES = {}; V2SUB = null;
   try { stopSitePoll(); } catch(e) {}
   if (msg) showToast(msg, 'info');
@@ -861,6 +869,11 @@ function _maybeRestoreFromServer() {
   if (_serverRestoredKey === key) return;   // เติมไปแล้วสำหรับใบนี้
   if (Array.isArray(s.locations) && s.locations.length) {
     locations = s.locations.map(_normLocFromServer);
+  }
+  if (Array.isArray(s.site_photos)) {
+    SITE_PHOTOS = s.site_photos.map(function(p){
+      return { src: p.thumb || p.url || '', url: p.url || '', id: p.id || '' };
+    }).filter(function(p){ return p.src || p.url; });
   }
   if (s.adjustments && typeof s.adjustments === 'object') {
     ADJ = {};
@@ -1533,11 +1546,7 @@ function renderStep2(content) {
           '<div class="field" style="margin-bottom:10px;"><label>Location / Zone <span style="color:var(--danger);">*</span></label>'+
             '<input class="input" id="selLocation" type="text" placeholder="เช่น Zone A, ลานหน้าคลัง" autocomplete="off" autocorrect="off" autocapitalize="off" spellcheck="false">'+
           '</div>'+
-          '<div id="photoBlock" style="margin-bottom:12px;">'+
-            '<label style="display:block;margin-bottom:5px;">📷 รูปหน้างาน</label>'+
-            '<div id="photoStrip"></div>'+
-            '<input type="file" id="photoInputCamera" accept="image/*" capture="environment" onchange="handlePhoto(this);this.value=\'\';" style="display:none;">'+
-            '<input type="file" id="photoInputGallery" accept="image/*" multiple onchange="handlePhoto(this);this.value=\'\';" style="display:none;">'+
+          '<div id="photoBlockOld" style="display:none;">'+
           '</div>'+
           _renderTypeSections()+
           '<button class="btn btn-success" id="btnSaveLocation" style="width:100%;margin-top:8px;" type="button" onclick="addLocation()">💾 บันทึก Location นี้</button>'+
@@ -1581,9 +1590,17 @@ function renderStep2(content) {
     // ── Step 5: Upload ──
     '<div class="card '+(hasLoc?'active':'locked')+'" id="step4Card">'+
       '<div class="card-head"><span class="step-badge '+(hasLoc?'active':'locked')+'">ขั้นที่ 5</span>'+
-        '<span class="card-title">Upload รายงาน (พร้อมลายเซ็น)</span>'+
+        '<span class="card-title">รูปหน้างาน + Upload รายงานที่เซ็นแล้ว</span>'+
         '<span class="card-hint">รูปภาพหรือ PDF</span></div>'+
       '<div class="card-body">'+
+        // ── รูปหน้างานระดับ Site — ไม่ผูก Location จำกัดจำนวนกันอัปนาน ──
+        '<div id="photoBlock" style="margin-bottom:16px;padding-bottom:14px;border-bottom:1px solid var(--border);">'+
+          '<label style="display:block;margin-bottom:5px;">📷 รูปหน้างาน <span style="color:var(--danger);">*</span></label>'+
+          '<div id="photoStrip"></div>'+
+          '<input type="file" id="photoInputCamera" accept="image/*" capture="environment" onchange="handlePhoto(this);this.value=\'\';" style="display:none;">'+
+          '<input type="file" id="photoInputGallery" accept="image/*" multiple onchange="handlePhoto(this);this.value=\'\';" style="display:none;">'+
+        '</div>'+
+        '<label style="display:block;margin-bottom:5px;">📄 ไฟล์รายงานที่เซ็นแล้ว <span style="color:var(--danger);">*</span></label>'+
         '<div class="upload-zone" id="uploadZone"'+
           ' onclick="document.getElementById(\'fileInput\').click()"'+
           ' ondragover="event.preventDefault();this.classList.add(\'drag\')"'+
@@ -1604,7 +1621,7 @@ function renderStep2(content) {
       var _isRe = _isRevision();
       var _stale = _docStale();
       var _needPrint = !_isRe || _rejNeedsBook() || _stale;
-      var ready = hasLoc && _offDone && _hasSignedFile() && (!_needPrint || (_step3Seen && _printed && !_stale));
+      var ready = hasLoc && _offDone && _photoOk() && _hasSignedFile() && (!_needPrint || (_step3Seen && _printed && !_stale));
       return '<div class="submit-card" id="submitCard">'+
       '<div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:8px;">📋 ตรวจสอบก่อน Submit</div>'+
       '<div class="step-check" id="chk1">'+_chkIcon(true)+'ขั้นที่ 1 — เลือก Site และผู้นับ</div>'+
@@ -1613,6 +1630,7 @@ function renderStep2(content) {
       '<div class="step-check" id="chk3a"'+(_needPrint?'':' style="display:none;"')+'>'+_chkIcon(_step3Seen)+'ขั้นที่ 4 — ตรวจสอบสรุปยอดแล้ว'+(!_step3Seen?' (กด "▸ แสดง" ก่อน)':'')+'</div>'+
       '<div class="step-check" id="chk3b"'+(_needPrint?'':' style="display:none;"')+'>'+_chkIcon(_printed)+'ขั้นที่ 4 — สร้างเอกสารยืนยันแล้ว'+(!_printed?' (กด 🖨️ สร้างเอกสารยืนยัน)':'')+'</div>'+
       '<div class="step-check done" id="chkReNoPrint"'+((_isRe && !_needPrint)?'':' style="display:none;"')+'>'+_chkIcon(true)+'ฉบับแก้ไข — ไม่ต้องพิมพ์/ตรวจสอบซ้ำ</div>'+
+      '<div class="step-check" id="chkPhoto">'+_chkIcon(_photoOk())+'ขั้นที่ 5 — รูปหน้างาน ('+SITE_PHOTOS.length+' รูป)</div>'+
       '<div class="step-check" id="chk4">'+_chkIcon(files.length>0)+'ขั้นที่ 5 — Upload รายงาน '+(files.length>0?'('+files.length+' ไฟล์)':'(ยังไม่มีไฟล์)')+'</div>'+
       '<button class="btn btn-success" id="btnSubmit" onclick="submitCount()" '+(ready?'':'disabled')+' style="width:100%;margin-top:8px;">'+
         '📤 Submit ผลการนับ'+
@@ -1678,7 +1696,7 @@ function applyRejectHl(){
       var sb = document.getElementById('step3Body');
       if (sb && sb.style.display === 'none') { try { toggleStep3(); } catch(e) { sb.style.display = 'block'; } }
     } else if (k === 'photo') {
-      flag(document.getElementById('formBox'), _rejLabel(k));
+      flag(document.getElementById('step4Card'), _rejLabel(k));
     } else if (k === 'file') {
       flag(document.getElementById('step4Card'), _rejLabel(k));
     }
@@ -1742,12 +1760,13 @@ function _applyRejFocus(){
   var needAdj   = _rejNeedsAnyAdj();
   var needPrint = _rejNeedsBook() || _docStale();
   var needFile  = _rejNeeds('file') || needPrint;
+  if (needPhoto) needFile = true;           // รูปอยู่การ์ดเดียวกับใบเซ็น
 
-  _show('step2Card',   needCount || needPhoto);
-  _show('photoBlock',  needPhoto);
+  _show('step2Card',   needCount);
+  _show('photoBlock',  needPhoto);          // รูปอยู่ในขั้นที่ 5 แล้ว
   _show('stepOffCard', needAdj);
   _show('step3Card',   needPrint);
-  _show('step4Card',   needFile);
+  _show('step4Card',   needFile || needPhoto);
 
   // ในขั้นที่ 2 โชว์เฉพาะตารางชนิดที่ถูกตีกลับ
   V2TYPES().forEach(function(t){ _show('sec_'+_domId(t.type_id), _rejNeeds('count:'+t.type_id)); });
@@ -1784,7 +1803,7 @@ function updateSubmitCard() {
   var _stale     = _docStale();
   var _printOk   = _printed && !_stale;
   var _needPrint = !_isRe || _rejNeedsBook() || _stale;
-  var ready   = hasLoc && _offDone && hasFile && (!_needPrint || (_step3Seen && _printOk));
+  var ready   = hasLoc && _offDone && _photoOk() && hasFile && (!_needPrint || (_step3Seen && _printOk));
 
   // ปลดล็อกขั้น 3/4 + ปุ่มไปขั้น 3 ทันทีที่มี Location (กันต้อง refresh)
   var goBtn = document.getElementById('btnGoStep3');
@@ -1826,6 +1845,14 @@ function updateSubmitCard() {
         : (!_printed ? ' <span style="color:var(--warn);">(กด 🖨️ สร้างเอกสารยืนยัน)</span>' : ''));
     chk3b.className = 'step-check '+(_printOk?'done':'pending');
   }
+  var chkPh = document.getElementById('chkPhoto');
+  if (chkPh) {
+    var _pn = SITE_PHOTOS.length, _pok = _photoOk();
+    chkPh.innerHTML = _chkIcon(_pok)+'ขั้นที่ 5 — รูปหน้างาน '
+      + (_pok ? '('+_pn+' รูป)'
+              : '<span style="color:var(--warn);">(ต้องมีอย่างน้อย '+PHOTO_MIN()+' รูป — ตอนนี้ '+_pn+')</span>');
+    chkPh.className = 'step-check '+(_pok?'done':'pending');
+  }
   if (chk4) {
     var _keepN = _keepFileUrls.length;
     chk4.innerHTML = _chkIcon(hasFile)+'ขั้นที่ 5 — Upload รายงาน '
@@ -1842,6 +1869,7 @@ function updateSubmitCard() {
     : (!hasLoc      ? 'กรุณาเพิ่มอย่างน้อย 1 Location'
       : !_offDone   ? 'กรุณากด “จบขั้นที่ 3 — ไปสรุป” ก่อน'
       : (_stale)    ? 'ยอดเปลี่ยนจากที่พิมพ์ไว้ — กรุณากด “สร้างเอกสารยืนยัน” ใหม่แล้วเซ็นอีกครั้ง'
+      : (!_photoOk()) ? 'กรุณาแนบรูปหน้างานอย่างน้อย '+PHOTO_MIN()+' รูป'
       : (!hasFile)  ? 'กรุณา Upload รายงาน (พร้อมลายเซ็น) ก่อน Submit'
       : (_needPrint && !_step3Seen) ? 'กรุณาเปิดดูสรุปยอดในขั้นที่ 4 ก่อน'
       : (_needPrint && !_printed)   ? 'Admin แก้ยอดระบบใหม่ — กรุณากด “สร้างเอกสารยืนยัน” ใหม่ก่อน'
@@ -1957,9 +1985,7 @@ function _readFormInto(loc) {
 }
 
 function _readForm() {
-  var loc = _readFormInto(emptyLoc(document.getElementById('selLocation').value));
-  loc.photos = PHOTO_DRAFT.map(function(p){ return { src:p.src, url:p.url||'', id:p.id||'' }; });
-  return loc;
+  return _readFormInto(emptyLoc(document.getElementById('selLocation').value));
 }
 
 // รวมยอดทุก location → t.byItem[item_id][status_id] + ยอดรวมต่อ item / ต่อชนิด
@@ -2195,11 +2221,8 @@ function _renderLocRow(l, i) {
     : items.map(function(it){
         return '<span class="loc-chip" style="border-color:'+(it.color||'var(--border2)')+';">'
           + esc(it.item_name)+' '+itemTotal(l, it.item_id)+'</span>'; });
-  var np = _photoCount(l);
   return '<div class="loc-item'+(isEditing?' loc-item-editing':'')+'" id="locRow_'+i+'">'+
-    '<div class="loc-item-top"><span class="loc-name">'+(isEditing?'✏️ ':'')+esc(l.name)+'</span>'+
-      '<span style="margin-left:8px;font-size:11px;color:'+(np?'var(--muted)':'var(--warn)')+';">'+
-        (np ? '📷 '+np+' รูป' : '📷 ยังไม่มีรูป')+'</span></div>'+
+    '<div class="loc-item-top"><span class="loc-name">'+(isEditing?'✏️ ':'')+esc(l.name)+'</span></div>'+
     '<div class="loc-item-bot">'+
       chips.join('')+
       '<span class="loc-total">'+locTotal(l)+'</span>'+
@@ -2239,7 +2262,6 @@ function _clearForm() {
     inp.value = '';
     inp.classList.remove('has-val');
   });
-  PHOTO_DRAFT = []; _renderPhotoStrip();
   _rejFormHl();          // ออกจากโหมดแก้ไข → เอากรอบแดงในฟอร์มออก
   _updateLiveTotal();
 }
@@ -2275,8 +2297,6 @@ function _fillFormFromLocation(i) {
       });
     });
   });
-  PHOTO_DRAFT = (loc.photos||[]).map(function(p){ return { src:p.src, url:p.url||'', id:p.id||'' }; });
-  _renderPhotoStrip();
   _rejFormHl();          // เปิดแก้ไขแล้ว → ชี้ว่าตารางชนิดไหนต้องแก้
   _updateLiveTotal();
 }
@@ -2325,22 +2345,43 @@ function cancelEditMode() {
      src = data URL (ถ่ายใหม่) หรือ URL/thumbnail (ของเดิมจาก server)
      url = ลิงก์บน Drive ถ้าอัปแล้ว · id = file id
    ════════════════════════════════════════════════════════════ */
-var PHOTO_DRAFT = [];        // รูปของฟอร์มที่กำลังกรอก
-var PHOTO_MAX   = 12;        // กันเผลอแนบจนเกิน quota ของ localStorage/payload
+var SITE_PHOTOS = [];        // รูปหน้างานระดับ Site — อัปพร้อมใบเซ็นในขั้นที่ 5
+function PHOTO_MIN(){ var n = Number(((V2LIMITS()||{}).photo_min)); return n > 0 ? n : 3; }
+function PHOTO_MAX(){ var n = Number(((V2LIMITS()||{}).photo_max)); return n > 0 ? n : 6; }
+function V2LIMITS(){ return (V2 && V2.limits) ? V2.limits : null; }
 
-function _photoCount(loc){ return (loc && Array.isArray(loc.photos)) ? loc.photos.length : 0; }
-
-// รวมรูปทุก Location (ใช้ตอน Admin เลือกเข้าเล่ม)
-function _allPhotos(){
-  var out = [];
-  locations.forEach(function(l){
-    (l.photos||[]).forEach(function(p){ out.push({ name:l.name, src:p.src, url:p.url, id:p.id }); });
+/* ย่อรูปก่อนอัป — ต้นเหตุที่หน้างานอัปนาน คือเดิมส่ง data URL ดิบจากกล้อง (3-5 MB/รูป)
+   ย่อด้านยาวเหลือ 1600px + JPEG 0.82 → ~400 KB เล็กลงราว 90% */
+var PHOTO_EDGE = 1600, PHOTO_Q = 0.82;
+function _shrinkImage(file){
+  return new Promise(function(resolve){
+    var reader = new FileReader();
+    reader.onerror = function(){ resolve(null); };
+    reader.onload = function(e){
+      var raw = e.target.result;
+      var img = new Image();
+      img.onerror = function(){ resolve(raw); };     // ย่อไม่ได้ ใช้ของเดิมดีกว่าไม่ได้รูป
+      img.onload = function(){
+        try {
+          var w = img.naturalWidth || img.width, h = img.naturalHeight || img.height;
+          if (!w || !h) { resolve(raw); return; }
+          var sc = Math.min(1, PHOTO_EDGE / Math.max(w, h));
+          var cv = document.createElement('canvas');
+          cv.width = Math.round(w * sc); cv.height = Math.round(h * sc);
+          var cx = cv.getContext('2d');
+          cx.fillStyle = '#fff'; cx.fillRect(0, 0, cv.width, cv.height);   // กันพื้นดำตอนแปลง PNG โปร่งใส
+          cx.drawImage(img, 0, 0, cv.width, cv.height);
+          resolve(cv.toDataURL('image/jpeg', PHOTO_Q));
+        } catch (err) { resolve(raw); }
+      };
+      img.src = raw;
+    };
+    reader.readAsDataURL(file);
   });
-  return out;
 }
 
 function openPhotoChoice() {
-  if (PHOTO_DRAFT.length >= PHOTO_MAX) { showToast('แนบได้สูงสุด '+PHOTO_MAX+' รูปต่อ Location', 'warn'); return; }
+  if (SITE_PHOTOS.length >= PHOTO_MAX()) { showToast('แนบได้สูงสุด '+PHOTO_MAX()+' รูป', 'warn'); return; }
   var modal = document.getElementById('photoChoiceModal');
   if (modal) modal.classList.add('open');
 }
@@ -2349,58 +2390,68 @@ function closePhotoChoice() {
   if (modal) modal.classList.remove('open');
 }
 
-// เลือกได้ทีละหลายไฟล์ — อ่านทีละไฟล์แล้วต่อท้าย
-function handlePhoto(input) {
+// เลือกได้ทีละหลายไฟล์ — ย่อทุกรูปก่อนเก็บ
+async function handlePhoto(input) {
   if (!input.files || !input.files.length) return;
+  closePhotoChoice();
   var list = Array.prototype.slice.call(input.files);
-  var room = PHOTO_MAX - PHOTO_DRAFT.length;
+  var room = PHOTO_MAX() - SITE_PHOTOS.length;
   if (list.length > room) {
-    showToast('เพิ่มได้อีก '+room+' รูป (สูงสุด '+PHOTO_MAX+' ต่อ Location)', 'warn');
+    showToast('เพิ่มได้อีก '+room+' รูป (สูงสุด '+PHOTO_MAX()+' รูป)', 'warn');
     list = list.slice(0, Math.max(0, room));
   }
-  var left = list.length;
-  if (!left) return;
-  list.forEach(function(f){
-    var reader = new FileReader();
-    reader.onload = function(e){
-      PHOTO_DRAFT.push({ src:e.target.result, url:'', id:'' });
-      if (--left === 0) _renderPhotoStrip();
-    };
-    reader.onerror = function(){ if (--left === 0) _renderPhotoStrip(); };
-    reader.readAsDataURL(f);
-  });
+  if (!list.length) return;
+  showToast('กำลังย่อรูป '+list.length+' รูป…', 'info');
+  for (var i = 0; i < list.length; i++) {
+    var src = await _shrinkImage(list[i]);
+    if (src) SITE_PHOTOS.push({ src:src, url:'', id:'' });
+    _renderPhotoStrip();
+  }
+  updateSubmitCard();
+  try { saveProgress(); } catch(e) {}
 }
 
 function removePhotoDraft(i) {
-  PHOTO_DRAFT.splice(i, 1);
+  SITE_PHOTOS.splice(i, 1);
   _renderPhotoStrip();
+  updateSubmitCard();
+  try { saveProgress(); } catch(e) {}
 }
+
+function _photoOk(){ return SITE_PHOTOS.length >= PHOTO_MIN(); }
 
 function _renderPhotoStrip() {
   var el = document.getElementById('photoStrip');
   if (!el) return;
-  var thumbs = PHOTO_DRAFT.map(function(p, i){
-    return '<div style="position:relative;width:68px;height:68px;flex:0 0 auto;">'
+  var mn = PHOTO_MIN(), mx = PHOTO_MAX(), n = SITE_PHOTOS.length;
+  var thumbs = SITE_PHOTOS.map(function(p, i){
+    return '<div style="position:relative;width:76px;height:76px;flex:0 0 auto;">'
       + '<img src="'+esc(p.src)+'" loading="lazy" referrerpolicy="no-referrer" '
-      +   'style="width:68px;height:68px;object-fit:cover;border-radius:var(--rs);border:1px solid var(--border);background:var(--surface2);">'
+      +   'style="width:76px;height:76px;object-fit:cover;border-radius:var(--rs);border:1px solid var(--border);background:var(--surface2);">'
       + '<button type="button" onclick="removePhotoDraft('+i+')" aria-label="ลบรูป" '
       +   'style="position:absolute;top:-6px;right:-6px;width:22px;height:22px;border-radius:50%;border:none;'
       +   'background:var(--danger);color:#fff;font-size:13px;line-height:1;cursor:pointer;padding:0;'
       +   'display:flex;align-items:center;justify-content:center;touch-action:manipulation;">✕</button>'
+      + '<span style="position:absolute;bottom:3px;left:3px;background:rgba(0,0,0,.55);color:#fff;'
+      +   'font-size:10px;padding:1px 5px;border-radius:4px;">'+(i+1)+'</span>'
       + '</div>';
   }).join('');
-  var addBtn = (PHOTO_DRAFT.length < PHOTO_MAX)
-    ? '<div onclick="openPhotoChoice()" style="width:68px;height:68px;flex:0 0 auto;border:1.5px dashed var(--border2);'
+  var addBtn = (n < mx)
+    ? '<div onclick="openPhotoChoice()" style="width:76px;height:76px;flex:0 0 auto;border:1.5px dashed '
+      + (n < mn ? 'var(--danger)' : 'var(--border2)') + ';'
       + 'border-radius:var(--rs);background:var(--surface);display:flex;flex-direction:column;align-items:center;'
       + 'justify-content:center;cursor:pointer;touch-action:manipulation;gap:2px;">'
       + '<span style="font-size:20px;">📷</span>'
       + '<span style="font-size:10px;color:var(--muted);">เพิ่มรูป</span></div>'
     : '';
+  var ok = n >= mn;
   el.innerHTML = '<div style="display:flex;gap:8px;overflow-x:auto;padding:2px 0 6px;">'+thumbs+addBtn+'</div>'
-    + '<div style="font-size:11px;color:var(--muted);">'
-    + (PHOTO_DRAFT.length ? PHOTO_DRAFT.length+' รูป — ใช้เป็นภาพการลงพื้นที่ตรวจนับในเล่มรายงาน'
-                          : 'ถ่ายรูปหน้างานได้หลายรูป (Admin จะเลือกเข้าเล่มภายหลัง)')
-    + '</div>';
+    + '<div style="font-size:11.5px;font-weight:600;color:'+(ok?'var(--success)':'var(--danger)')+';">'
+    +   (ok ? ('✓ ครบแล้ว ' + n + ' รูป' + (n >= mx ? ' (เต็มแล้ว)' : ''))
+           : ('ต้องมีอย่างน้อย ' + mn + ' รูป — ตอนนี้ ' + n + ' รูป'))
+    + '</div>'
+    + '<div style="font-size:11px;color:var(--muted);margin-top:2px;">'
+    +   'อย่างน้อย '+mn+' สูงสุด '+mx+' รูป · ระบบย่อรูปให้อัตโนมัติ อัปเร็วขึ้นมาก</div>';
 }
 
 function _showFormMsg(msg, isError) {
@@ -2463,9 +2514,7 @@ function addLocation() {
 
 // อ่านค่าจากฟอร์มโดยใช้ชื่อที่ validate แล้ว (กัน race condition กับ DOM)
 function _readFormManual(name) {
-  var loc = _readFormInto(emptyLoc(name));
-  loc.photos = PHOTO_DRAFT.map(function(p){ return { src:p.src, url:p.url||'', id:p.id||'' }; });
-  return loc;
+  return _readFormInto(emptyLoc(name));
 }
 
 function removeLocation(i) {
@@ -2950,27 +2999,20 @@ async function submitCount() {
       }
     }
 
-    // upload รูปถ่ายราย Location (ขั้นที่ 2) → เก็บเป็น URL
-    var locPhotos    = [];
-    var locationsOut = [];
-    for (var li = 0; li < locations.length; li++) {
-      var L = locations[li], outPhotos = [];
-      var plist = L.photos || [];
-      for (var pi = 0; pi < plist.length; pi++) {
-        var P = plist[pi], purl = P.url || '', pid = P.id || '';
-        if (!purl && P.src && /^data:/.test(P.src)) {
-          var up = await _uploadDataUrl(P.src, _buildFileName('loc.jpg', { kind:'loc', extra:L.name+'-'+(pi+1) }));
-          purl = up.url; pid = up.id;                  // ถ่ายใหม่ → อัปขึ้น Drive
-        } else if (!purl && /^https?:/.test(String(P.src||''))) {
-          purl = P.src;                                // รูปเดิม (reopen) → ใช้ของเดิม
-        }
-        if (!purl) continue;
-        var rec = { name:L.name, url:purl, id:pid, no:pi+1 };
-        locPhotos.push(rec);
-        outPhotos.push({ url:purl, id:pid });
+    // upload รูปหน้างานระดับ Site (ขั้นที่ 5) → เก็บเป็น URL
+    var sitePhotos = [];
+    for (var pi = 0; pi < SITE_PHOTOS.length; pi++) {
+      var P = SITE_PHOTOS[pi], purl = P.url || '', pid = P.id || '';
+      if (!purl && P.src && /^data:/.test(P.src)) {
+        var up = await _uploadDataUrl(P.src, _buildFileName('site.jpg', { kind:'site', extra:'photo-'+(pi+1) }));
+        purl = up.url; pid = up.id;                    // ถ่ายใหม่ → อัปขึ้น Drive
+      } else if (!purl && /^https?:/.test(String(P.src||''))) {
+        purl = P.src;                                  // รูปเดิม (ถูกตีกลับ) → ใช้ของเดิม
       }
-      locationsOut.push({ name:L.name, photos:outPhotos, values:L.q });
+      if (!purl) continue;
+      sitePhotos.push({ url:purl, id:pid, no:pi+1 });
     }
+    var locationsOut = locations.map(function(L){ return { name:L.name, values:L.q }; });
 
     var payload = {
       action        : 'submitCountV2',
@@ -2981,7 +3023,7 @@ async function submitCount() {
       locations     : locationsOut,              // [{ name, photo, values[item_id][status_id] }]
       adjustments   : ADJ,                       // { adjust_id: { item_id: qty } }
       adjust_files  : adjUrls,                   // { adjust_id: [url,...] }
-      location_photos: locPhotos,
+      site_photos   : sitePhotos,                // รูปหน้างาน (ไม่ผูก Location แล้ว)
       doc_url       : fileUrls[0] || '',
       file_urls     : fileUrls
     };
@@ -3085,7 +3127,7 @@ function _resetSiteState() {
   siteSubmission = null;
   V2SUB = null;
   ADJ = {}; ADJFILES = {};
-  PHOTO_DRAFT = [];
+  SITE_PHOTOS = [];
   _keepFileUrls = [];
   _offDone = false; _step3Seen = false; _printed = false;
   _editingIdx = null;
