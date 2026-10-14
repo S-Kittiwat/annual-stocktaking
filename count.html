@@ -405,6 +405,8 @@ var V2      = null;
 var V2BOOK  = {};
 var V2PHASE = '';
 var V2SUB   = null;  // ใบส่งผล v2 ของ site นี้ (จาก getCountSetup)
+var V2FOLDER = '';   // URL โฟลเดอร์เอกสารของ Site (จาก getCountSetup)
+var V2FILES  = 0;    // จำนวนไฟล์ที่ Admin แนบไว้
 
 function _act(o){ return o && o.is_active !== false && String(o.is_active).toUpperCase() !== 'FALSE'; }
 function _bySort(a,b){ return (Number(a.sort)||0) - (Number(b.sort)||0); }
@@ -653,7 +655,7 @@ function _renderAdjFileList(ajId){
 
 // โหลด config ของรอบ + ยอดระบบของ site นี้ (เรียกก่อน render สถานะ)
 async function _loadCountSetup(site) {
-  V2 = null; V2BOOK = {}; V2PHASE = ''; V2SUB = null;
+  V2 = null; V2BOOK = {}; V2PHASE = ''; V2SUB = null; V2FOLDER = ''; V2FILES = 0;
   try {
     var res = await fetch(API_URL + '?action=getCountSetup&site=' + encodeURIComponent(site)
       + '&site_id=' + encodeURIComponent(_siteIdByName(site)));
@@ -663,6 +665,8 @@ async function _loadCountSetup(site) {
     V2BOOK  = d.book || {};
     V2PHASE = (d.round && d.round.phase) || '';
     V2SUB   = d.submission || null;
+    V2FOLDER = d.folder_url || '';
+    V2FILES  = Number(d.file_count || 0);
     if (V2SUB) siteSubmission = V2SUB;      // v2 เป็นแหล่งข้อมูลหลัก
     return { ok:!!d.ready, reason:d.reason||'', has_book:!!d.has_book, round:d.round||null };
   } catch (e) {
@@ -787,9 +791,12 @@ function saveProgress() {
     });
     localStorage.setItem('stockCountLocations', JSON.stringify(slim));
     // รูปหน้างาน: เก็บเฉพาะที่อัปขึ้น Drive แล้ว (base64 กินพื้นที่เกิน quota)
-    localStorage.setItem('stockCountPhotos', JSON.stringify(
-      SITE_PHOTOS.filter(function(p){ return p.url; })
-                 .map(function(p){ return { src:p.url, url:p.url, id:p.id||'' }; })));
+    // ผูกรอบ + Site เหมือน stockCountAdj ไม่ผูกจะติดไปรอบ/ไซต์ถัดไป
+    localStorage.setItem('stockCountPhotos', JSON.stringify({
+      round_id: _curRoundId(), site_id: _curSiteId(),
+      photos: SITE_PHOTOS.filter(function(p){ return p.url; })
+                         .map(function(p){ return { src:p.url, url:p.url, id:p.id||'' }; })
+    }));
     // รายการปรับปรุงขั้นที่ 3 — ผูกทั้ง round_id และ site_id
     // (ยอดเป็นของ Site นั้นๆ ถ้าผูกแค่รอบ ยอดจะติดไปไซต์ถัดไป)
     localStorage.setItem('stockCountAdj', JSON.stringify({
@@ -816,13 +823,30 @@ function _adjMatches(a){
   if (sid && !a.site_id) return false;   // ของเก่าที่ไม่ได้ผูก Site → ไม่เอามาใช้ กันยอดข้ามไซต์
   return true;
 }
-// ADJ ถูกโหลดตอน loadProgress() ซึ่งยังไม่รู้ round_id/site_id — ตรวจซ้ำเมื่อรู้แล้ว
+// รูปหน้างานที่เก็บไว้ ต้องเป็นของรอบนี้ + Site นี้เท่านั้น
+// ของเก่าที่เก็บเป็น array เปล่า ๆ (ไม่ผูกรอบ/ไซต์) → ไม่เอามาใช้
+function _photosOf(raw){
+  if (!raw || typeof raw !== 'object' || !Array.isArray(raw.photos)) return null;
+  var rid = _curRoundId(), sid = _curSiteId();
+  if (rid && raw.round_id && raw.round_id !== rid) return null;
+  if (sid && raw.site_id  && raw.site_id  !== sid) return null;
+  if (sid && !raw.site_id) return null;
+  return raw.photos;
+}
+// ADJ/รูป ถูกโหลดตอน loadProgress() ซึ่งยังไม่รู้ round_id/site_id — ตรวจซ้ำเมื่อรู้แล้ว
 function _revalidateAdj() {
   try {
     var a = JSON.parse(localStorage.getItem('stockCountAdj') || 'null');
     if (a && !_adjMatches(a)) {
       ADJ = {}; ADJFILES = {}; _offDone = false;
       localStorage.removeItem('stockCountAdj');
+    }
+  } catch(e) {}
+  try {
+    var ph = JSON.parse(localStorage.getItem('stockCountPhotos') || 'null');
+    if (ph && _photosOf(ph) === null) {
+      SITE_PHOTOS = [];
+      localStorage.removeItem('stockCountPhotos');
     }
   } catch(e) {}
 }
@@ -839,8 +863,8 @@ function loadProgress() {
   } catch(e) { ADJ = {}; }
   ADJFILES = {};   // ไฟล์แนบเก็บใน localStorage ไม่ได้ — ต้องแนบใหม่ทุกครั้งที่เปิดหน้า
   try {
-    var ph = JSON.parse(localStorage.getItem('stockCountPhotos') || '[]');
-    SITE_PHOTOS = Array.isArray(ph) ? ph : [];
+    var ph = _photosOf(JSON.parse(localStorage.getItem('stockCountPhotos') || 'null'));
+    SITE_PHOTOS = ph || [];
   } catch(e) { SITE_PHOTOS = []; }
 }
 
@@ -986,8 +1010,14 @@ function _siteLinkByName(name) {
   }
   return '';
 }
+// ลิงก์โฟลเดอร์เอกสารของ Site — โฟลเดอร์ที่ระบบสร้าง (Admin ใช้จริง) มาก่อน
+// ถ้าไม่มีจึงถอยไปใช้ drive_link ที่กรอกมือในชีต Site
+function _siteDocLink() {
+  if (V2FOLDER) return V2FOLDER;
+  return session ? _siteLinkByName(session.site) : '';
+}
 function openSiteDoc() {
-  var link = session ? _siteLinkByName(session.site) : '';
+  var link = _siteDocLink();
   if (link) window.open(link, '_blank', 'noopener');
 }
 
@@ -1310,7 +1340,9 @@ function onSiteChange() {
   V2 = null; V2BOOK = {}; V2PHASE = '';
   // ล้างงานค้างของไซต์เดิมให้หมด — ยอดรายการปรับปรุง/รูป/ไฟล์เป็นของไซต์นั้นๆ
   _resetSiteState();
-  try { localStorage.removeItem('stockCountAdj'); localStorage.removeItem('stockCountLocations'); } catch(e) {}
+  try { localStorage.removeItem('stockCountAdj'); localStorage.removeItem('stockCountLocations');
+        localStorage.removeItem('stockCountPhotos'); } catch(e) {}
+  V2FOLDER = ''; V2FILES = 0;
   stopReadyPoll();
   var sb = document.getElementById('statusBox'); if (sb) sb.style.display = 'none';
   var cs = document.getElementById('checkinSection'); if (cs) cs.style.display = 'none';
@@ -1632,9 +1664,11 @@ function renderStep2(content) {
   content.innerHTML =
     // ── ปุ่มเปิดเอกสารที่ Admin เตรียมไว้ (มองเห็นตลอดขั้น 2-5) ──
     (function(){
-      var link = _siteLinkByName(session.site);
+      var link = _siteDocLink();
+      var lbl  = link ? ('เปิดเอกสารจาก Admin' + (V2FILES ? ' ('+V2FILES+' ไฟล์)' : ''))
+                      : 'ยังไม่มีเอกสารจาก Admin';
       return '<button onclick="openSiteDoc()" '+(link?'':'disabled')+' style="width:100%;margin-bottom:14px;padding:13px;border-radius:var(--rs);border:1.5px solid var(--border2);background:var(--surface);color:'+(link?'var(--accent)':'var(--muted)')+';font-family:var(--font);font-size:14px;font-weight:600;cursor:'+(link?'pointer':'not-allowed')+';min-height:48px;touch-action:manipulation;display:flex;align-items:center;justify-content:center;gap:8px;">'
-        +'<span style="font-size:18px;">📁</span>'+(link?'เปิดเอกสารจาก Admin':'ยังไม่มีเอกสารจาก Admin')+(link?' <span style="font-size:12px;">↗</span>':'')+'</button>';
+        +'<span style="font-size:18px;">📁</span>'+lbl+(link?' <span style="font-size:12px;">↗</span>':'')+'</button>';
     })()+
     // ── ผู้ตรวจนับ + ปุ่มแก้ (แก้ได้จนกว่าจะสร้างเอกสาร) ──
     '<div id="namesBar" style="display:flex;align-items:center;gap:10px;margin-bottom:14px;padding:10px 12px;'
