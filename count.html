@@ -2786,6 +2786,22 @@ function SIGS(){
   return list.length ? list : _SIG_FALLBACK;
 }
 
+/* ชื่อผู้เซ็นของช่องนั้น — จับคู่กับชื่อที่กรอกไว้ขั้นที่ 1
+   จับที่รหัสก่อน (sg_pallet → names.pallet) ถ้า config ตั้งรหัสเอง ค่อยเทียบที่ป้ายชื่อ
+   จับไม่ได้ปล่อยว่าง ให้เขียนมือ ดีกว่าใส่ชื่อผิดคน */
+function _sigName(sig){
+  var n = (session && session.names) || {};
+  var id = String((sig && sig.sig_id) || '').replace(/^sg_/, '');
+  if (n[id]) return String(n[id]).trim();
+  var lb = String((sig && sig.sig_label) || '').trim();
+  var hit = _SIG_FALLBACK.filter(function(f){ return f.sig_label === lb; })[0];
+  if (hit) {
+    var k = hit.sig_id.replace(/^sg_/, '');
+    if (n[k]) return String(n[k]).trim();
+  }
+  return '';
+}
+
 // ชื่อไฟล์เอกสาร: {เลขที่เอกสาร}_{site}_yyyymmdd
 function _docFileName(){
   var no = _safeSeg(siteDocNo || 'ไม่มีเลขที่', 40);
@@ -2897,10 +2913,11 @@ function _buildDocData() {
   // ── เงื่อนไขซ่อนบล็อก: มี_<ชื่อรายการปรับปรุง> ──
   adjList.forEach(function(a){ d['มี_'+a.adjust_name] = adjSumOf(a.adjust_id) > 0; });
 
-  // ── ช่องลายเซ็น: เว้นว่างให้เซ็นมือ, ตำแหน่ง = ป้ายจาก config ──
+  // ── ช่องลายเซ็น: เติมชื่อที่กรอกไว้ขั้นที่ 1, ตำแหน่ง = ป้ายจาก config ──
+  // (ยังเซ็นด้วยมือเหมือนเดิม ชื่อพิมพ์ไว้ใต้เส้นให้รู้ว่าใครต้องเซ็น)
   var sigs = SIGS();
   sigs.forEach(function(x, i){
-    d['ผู้เซ็น'+(i+1)]  = '';
+    d['ผู้เซ็น'+(i+1)]  = _sigName(x);
     d['ตำแหน่ง'+(i+1)] = x.sig_label || '';
   });
   // เทมเพลตอาจมีช่องเซ็นมากกว่าที่ตั้งไว้ — เติมค่าว่างกันคำว่า undefined
