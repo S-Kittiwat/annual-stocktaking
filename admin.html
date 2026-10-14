@@ -2055,6 +2055,36 @@ function v2ReconOf(site_id, item_id){
   return null;
 }
 
+/* ชื่อรายการปรับปรุงของรอบนี้ — สร้างจาก Config ไม่ fix ชื่อ
+   ใช้เขียนเชิงอรรถ + tooltip ว่ายอด "นับจริง" รวมอะไรเข้าไปบ้าง */
+function reconAdjNames(){
+  var act = function(o){ return o && o.is_active!==false && String(o.is_active).toUpperCase()!=='FALSE'; };
+  var list = (V2CFG && V2CFG.adjustments || []).filter(act)
+               .sort(function(a,b){ return (Number(a.sort)||0)-(Number(b.sort)||0); });
+  return list.filter(function(a){
+    return curSubs().some(function(sub){
+      var t = sub.totals || {};
+      return Object.keys(t).some(function(id){
+        var g = t[id] && t[id].by_adjust;
+        return g && Number(g[a.adjust_id]) > 0;
+      });
+    });
+  });
+}
+
+/* รายละเอียดใต้ยอดนับจริงของช่องนั้น — ใช้เป็น tooltip ให้ย้อนดูได้ว่าตัวไหนเท่าไหร่ */
+function reconActualTip(site_id, item_id, r){
+  var parts = ['นับหน้างาน ' + Number(r.actual||0).toLocaleString()];
+  if(Number(r.add_back||0)) parts.push('บวกกลับ ' + Number(r.add_back).toLocaleString());
+  var sub = latestSub(site_id);
+  var g = sub && sub.totals && sub.totals[item_id] && sub.totals[item_id].by_adjust;
+  (V2CFG && V2CFG.adjustments || []).forEach(function(a){
+    var v = g ? (Number(g[a.adjust_id])||0) : 0;
+    if(v) parts.push(a.adjust_name + ' ' + v.toLocaleString());
+  });
+  return parts.join('  +  ');
+}
+
 function renderRecon(){
   var act = activeSites();
   var el = document.getElementById('reconTable');
@@ -2065,6 +2095,11 @@ function renderRecon(){
     el.innerHTML = '<div class="empty">รอบนี้ยังไม่ได้ตั้งค่ารายการที่นับ</div>'; return;
   }
   var anyData = curSubs().some(function(x){ return Array.isArray(x.recon) && x.recon.length; });
+  var adjNames = reconAdjNames();
+
+  // ตามระบบ (ยอดคงค้างรวม) กับ ยอดตั้งต้น (ตัวที่สูตรหักจริง) ต้องเท่ากัน แถวถึงจะลบลงตัว
+  // ถ้ามีสถานะติดธงคงค้างเกินแถว baseline แล้วมีคนกรอกยอด ทั้งสองจะต่างกัน → ต้องเตือน
+  var mismatch = 0;
 
   var gA={}, gS={}, gD={};
   cols.forEach(function(c){ gA[c.item_id]=0; gS[c.item_id]=0; gD[c.item_id]=0; });
@@ -2074,11 +2109,15 @@ function renderRecon(){
     cols.forEach(function(c){
       var r = v2ReconOf(s.site_id, c.item_id);
       if(r) has=true;
-      var a   = r ? Number(r.actual||0)      : 0;
+      // นับจริง = นับหน้างาน + บวกกลับ + รายการปรับปรุง (พาเลทที่ควบคุมนอกระบบ ฯลฯ)
+      // รวมมาเป็นตัวเดียว แถวจะได้ลบกันลงตัว · รายละเอียดดูได้ใน tooltip / CSV / เอกสารสรุป
+      var a   = r ? (Number(r.actual||0) + Number(r.add_back||0) + Number(r.adjust||0)) : 0;
       var sys = r ? Number(r.outstanding||0) : 0;
       var d   = r ? Number(r.net_diff||0)    : 0;
+      if(r && sys !== Number(r.baseline||0)) mismatch++;
       gA[c.item_id]+=a; gS[c.item_id]+=sys; gD[c.item_id]+=d; siteSum+=d;
-      cells += '<td class="num grp">'+(r?a.toLocaleString():'—')+'</td>'
+      var tip = r ? ' title="'+esc(reconActualTip(s.site_id, c.item_id, r))+'"' : '';
+      cells += '<td class="num grp"'+tip+'>'+(r?a.toLocaleString():'—')+'</td>'
              + '<td class="num">'+sys.toLocaleString()+'</td>'
              + (r ? diffCell(d) : '<td class="num diff-zero">—</td>');
     });
@@ -2101,11 +2140,18 @@ function renderRecon(){
   });
   var foot = '<tr class="recon-foot"><td>Grand Total</td>'+fCells+diffCell(fSum,true)+'</tr>';
 
+  var note = '<b>นับจริง = นับหน้างาน + บวกกลับ'
+    + (adjNames.length ? ' + ' + adjNames.map(function(a){ return esc(a.adjust_name); }).join(' + ') : '')
+    + '</b> (ชี้ที่ตัวเลขเพื่อดูรายละเอียด) · ตามระบบ = รวมสถานะที่ตั้ง is_outstanding · '
+    + '<b>สุทธิ = นับจริง − ยอดตั้งต้น</b> · รายละเอียดแยกรายการดูได้ในเอกสารสรุป หรือกดออก CSV';
+
   el.innerHTML = '<table class="recon"><thead>'+h1+h2+'</thead><tbody>'+body+'</tbody><tfoot>'+foot+'</tfoot></table>'
+    + (mismatch ? '<div style="padding:9px 14px;font-size:11.5px;color:#c0392b;border-top:1px solid var(--border);">'
+        + '⚠ มี '+mismatch+' ช่องที่ <b>ตามระบบ ≠ ยอดตั้งต้น</b> — เกิดจากมีสถานะติดธง “คงค้าง” มากกว่าแถวที่ติดธง “ยอดตั้งต้น” '
+        + 'ช่องเหล่านั้นจะลบกันไม่ลงตัว (สุทธิ หักด้วยยอดตั้งต้นเสมอ) · ตรวจธงได้ที่แท็บตั้งค่า'
+        + '</div>' : '')
     + '<div style="padding:9px 14px;font-size:11px;color:var(--muted);line-height:1.6;border-top:1px solid var(--border);">'
-    + 'นับจริง = รวมสถานะที่ตั้ง in_actual · ตามระบบ = รวมสถานะที่ตั้ง is_outstanding · '
-    + '<b>สุทธิ = ส่วนต่างสุทธิจากงบกระทบยอด</b> (นับจริง − ยอดตั้งต้น + บวกกลับ + รายการปรับปรุง) ไม่ใช่ นับจริง − ตามระบบ'
-    + '</div>';
+    + note + '</div>';
   if(!anyData){
     el.insertAdjacentHTML('afterbegin','<div style="padding:9px 14px;font-size:11.5px;color:var(--muted);border-bottom:1px solid var(--border);">ℹ️ ยังไม่มี Site ที่ส่งผลการนับ — ตารางจะเติมค่าเมื่อเริ่มมีข้อมูลเข้ามา</div>');
   }
@@ -2120,27 +2166,61 @@ function exportReconCSV(){
   // header 2 ชั้น → รวมเป็นชื่อคอลัมน์เดียว
   var cols = v2ReconItems();
   if(!cols.length){ toast('รอบนี้ยังไม่ได้ตั้งค่ารายการที่นับ','error'); return; }
+  // CSV ไม่มีข้อจำกัดความกว้าง → แยกรายการปรับปรุงทีละตัว ไม่ต้องรวบเหมือนบนจอ
+  var act2 = function(o){ return o && o.is_active!==false && String(o.is_active).toUpperCase()!=='FALSE'; };
+  var adjs = (V2CFG && V2CFG.adjustments || []).filter(act2)
+               .sort(function(a,b){ return (Number(a.sort)||0)-(Number(b.sort)||0); });
+  var adjOf = function(site_id, item_id, aj){
+    var sub = latestSub(site_id);
+    var g = sub && sub.totals && sub.totals[item_id] && sub.totals[item_id].by_adjust;
+    return g ? (Number(g[aj])||0) : 0;
+  };
+
   var head = ['Location Name'];
-  cols.forEach(function(c){ head.push(c.label+' นับจริง', c.label+' ตามระบบ', c.label+' สุทธิ'); });
+  cols.forEach(function(c){
+    head.push(c.label+' นับจริง');
+    adjs.forEach(function(a){ head.push(c.label+' '+a.adjust_name); });
+    head.push(c.label+' บวกกลับ', c.label+' รวมนับได้',
+              c.label+' ยอดตั้งต้น', c.label+' ยอดคงค้างรวม', c.label+' สุทธิ');
+  });
   head.push('รวมสุทธิ');
   rows.push(head.map(q).join(','));
 
-  var gA={}, gS={}, gD={}; cols.forEach(function(c){ gA[c.item_id]=0; gS[c.item_id]=0; gD[c.item_id]=0; });
+  var gA={}, gB={}, gT={}, gBase={}, gS={}, gD={}, gJ={};
+  cols.forEach(function(c){
+    gA[c.item_id]=0; gB[c.item_id]=0; gT[c.item_id]=0; gBase[c.item_id]=0; gS[c.item_id]=0; gD[c.item_id]=0;
+    gJ[c.item_id]={}; adjs.forEach(function(a){ gJ[c.item_id][a.adjust_id]=0; });
+  });
   act.forEach(function(s){
     var line=[s.site_name], siteSum=0;
     cols.forEach(function(c){
-      var r = v2ReconOf(s.site_id, c.item_id);
-      var a   = r?Number(r.actual||0):0;
-      var sys = r?Number(r.outstanding||0):0;
-      var d   = r?Number(r.net_diff||0):0;
-      gA[c.item_id]+=a; gS[c.item_id]+=sys; gD[c.item_id]+=d; siteSum+=d;
-      line.push(a, sys, d);
+      var r    = v2ReconOf(s.site_id, c.item_id);
+      var a    = r?Number(r.actual||0):0;
+      var ab   = r?Number(r.add_back||0):0;
+      var base = r?Number(r.baseline||0):0;
+      var sys  = r?Number(r.outstanding||0):0;
+      var d    = r?Number(r.net_diff||0):0;
+      var jsum = 0;
+      line.push(a);
+      adjs.forEach(function(x){
+        var v = r ? adjOf(s.site_id, c.item_id, x.adjust_id) : 0;
+        jsum += v; gJ[c.item_id][x.adjust_id] += v; line.push(v);
+      });
+      var tot = a + ab + jsum;
+      line.push(ab, tot, base, sys, d);
+      gA[c.item_id]+=a; gB[c.item_id]+=ab; gT[c.item_id]+=tot;
+      gBase[c.item_id]+=base; gS[c.item_id]+=sys; gD[c.item_id]+=d; siteSum+=d;
     });
     line.push(siteSum);
     rows.push(line.map(q).join(','));
   });
   var foot=['Grand Total'], fSum=0;
-  cols.forEach(function(c){ foot.push(gA[c.item_id], gS[c.item_id], gD[c.item_id]); fSum+=gD[c.item_id]; });
+  cols.forEach(function(c){
+    foot.push(gA[c.item_id]);
+    adjs.forEach(function(a){ foot.push(gJ[c.item_id][a.adjust_id]); });
+    foot.push(gB[c.item_id], gT[c.item_id], gBase[c.item_id], gS[c.item_id], gD[c.item_id]);
+    fSum += gD[c.item_id];
+  });
   foot.push(fSum);
   rows.push(foot.map(q).join(','));
 
