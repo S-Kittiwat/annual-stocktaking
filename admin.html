@@ -1029,6 +1029,23 @@ function renderDashboard(){
   if(badge){ badge.textContent = pending; badge.className = 'tab-count' + (pending ? '' : ' zero'); }
 }
 
+/* ยอดระบบของ Site — รอบ v2 เก็บใน v2_Book (S.booksV2) ไม่ใช่ชีต Book เดิม
+   ถ้าดูแต่ของ v1 หน้าภาพรวมจะขึ้น "ยังไม่ใส่" ทั้งที่ Admin กรอกครบแล้ว
+   คืนจำนวนรายการที่มียอด เทียบกับรายการที่ต้องกรอกทั้งหมดของรอบ */
+function siteBookState(site_id){
+  var items = v2ReconItems();
+  if(items.length){
+    var g = (S.booksV2||{})[site_id] || {};
+    var filled = items.filter(function(it){
+      var row = g[it.item_id] || {};
+      return Object.keys(row).some(function(k){ return Number(row[k]) > 0; });
+    }).length;
+    return { filled:filled, total:items.length, ok:(filled >= items.length) };
+  }
+  var has = !!(S.books||{})[site_id];          // รอบเก่าที่ยังใช้ชีต Book เดิม
+  return { filled:has?1:0, total:1, ok:has };
+}
+
 /* ── Render: Site status (control tower) ─────────────── */
 function renderSiteStatus(){
   var act = activeSites();
@@ -1042,11 +1059,13 @@ function renderSiteStatus(){
     rejected:'<span class="status-badge sb-rejected">↩ ตีกลับ</span>'
   };
   function siteRow(s, n){
-    var hasBook = !!S.books[s.site_id];
+    var bk  = siteBookState(s.site_id);
     var sub = latestSub(s.site_id);
-    var bookTag = hasBook
+    var bookTag = bk.ok
       ? '<span class="status-badge sb-approved">✓ ใส่แล้ว</span>'
-      : '<span class="status-badge sb-idle">— ยังไม่ใส่</span>';
+      : bk.filled
+        ? '<span class="status-badge sb-pending" title="ใส่ยอดยังไม่ครบทุกรายการ">⚠ '+bk.filled+'/'+bk.total+'</span>'
+        : '<span class="status-badge sb-idle">— ยังไม่ใส่</span>';
     var subTag = sub
       ? '<span class="status-badge sb-approved">✓ ส่งแล้ว</span>'
       : '<span class="status-badge sb-idle">— ยังไม่ส่ง</span>';
@@ -1665,7 +1684,7 @@ function wizCancelNew(){
   if(!confirm('ยกเลิกการเปิดรอบใหม่ — ข้อมูลที่กรอกไว้จะหายไป')) return;
   WIZ.forceNew=false; WIZ.step=1;
   WZ_ROUND={ year:'', name:'', doc:'', loaded:false };
-  V2CFG=null; WZ_SITES=null; WZ_DEL=[]; SITE_DRAFT=null; BOOK_DRAFT=null;
+  V2CFG=null; WZ_SITES=null; WZ_DEL=[]; SITE_DRAFT=null; BOOK_DRAFT=null; BOOK_BASE=null;
   wizHide(); switchTab('dashboard'); loadData(false);
 }
 function wizShow(){
@@ -2143,13 +2162,22 @@ function exportReconCSV(){
    ════════════════════════════════════════════════════════════════ */
 var SITE_DRAFT = null;   // สำเนาที่แก้ได้ [{site_id,site_name,is_active,start_time,drive_link,is_new,locked}]
 var BOOK_DRAFT = null;   // ยอดระบบ BOOK_DRAFT[site_id][item_id][status_id] = qty
+var BOOK_BASE  = null;   // ยอดตอนเริ่มแก้ — ใช้เทียบว่า "แก้ค้างอยู่จริงไหม" 
 var SITE_DEL   = [];
 var SITE_OPEN  = '';     // Site ที่กางแผงแก้ไขอยู่
 var SITE_TMP   = 0;
 var SITE_CFG_LOADING = false;
 
 function siteSync(){
-  if(SITE_DRAFT !== null) return;
+  if(SITE_DRAFT !== null){
+    // ไม่ได้แก้ยอดค้างไว้ → รับยอดใหม่จาก server เข้ามาแทน (ที่อื่นอาจเพิ่งบันทึก)
+    if(BOOK_BASE !== null && JSON.stringify(BOOK_DRAFT) === JSON.stringify(BOOK_BASE)
+       && JSON.stringify(BOOK_BASE) !== JSON.stringify(S.booksV2 || {})){
+      BOOK_DRAFT = JSON.parse(JSON.stringify(S.booksV2 || {}));
+      BOOK_BASE  = JSON.parse(JSON.stringify(S.booksV2 || {}));
+    }
+    return;
+  }
   SITE_DEL = [];
   SITE_DRAFT = (S.sites||[]).map(function(x){
     return { site_id:x.site_id, site_name:x.site_name, is_active:!!x.is_active,
@@ -2158,6 +2186,7 @@ function siteSync(){
              locked: !!x.checkin_at || (S.subs||[]).some(function(y){ return y.site_id===x.site_id; }) };
   });
   BOOK_DRAFT = JSON.parse(JSON.stringify(S.booksV2 || {}));
+  BOOK_BASE  = JSON.parse(JSON.stringify(S.booksV2 || {}));
 }
 function siteCfg(){ return V2CFG || null; }
 function siteItems(){ var c=siteCfg(); return c ? c.items.filter(function(i){return i.is_active!==false;}).sort(function(a,b){return (a.sort||0)-(b.sort||0);}) : []; }
@@ -2185,7 +2214,7 @@ function siteDirty(){
                  || ((S.docnos||{})[d.site_id]||'')!==(d.doc_no||''));
   });
   if(changed) return true;
-  return JSON.stringify(BOOK_DRAFT) !== JSON.stringify(S.booksV2||{});
+  return JSON.stringify(BOOK_DRAFT) !== JSON.stringify(BOOK_BASE||{});
 }
 function siteMark(){
   var bar=document.getElementById('siteDirtyBar'), txt=document.getElementById('siteDirtyText');
@@ -2195,7 +2224,7 @@ function siteMark(){
   var nNew=SITE_DRAFT.filter(function(x){return x.is_new;}).length;
   if(nNew) parts.push('เพิ่ม '+nNew);
   if(SITE_DEL.length) parts.push('ลบ '+SITE_DEL.length);
-  if(JSON.stringify(BOOK_DRAFT)!==JSON.stringify(S.booksV2||{})) parts.push('ยอดระบบ');
+  if(JSON.stringify(BOOK_DRAFT)!==JSON.stringify(BOOK_BASE||{})) parts.push('ยอดระบบ');
   bar.style.display='flex';
   txt.textContent='● มีการแก้ไขที่ยังไม่บันทึก'+(parts.length?' — '+parts.join(', '):'');
 }
@@ -2542,7 +2571,7 @@ function siteSaveOne(idx){
     // (ถ้าไม่ล้างก่อน ตัวโหลดจะมองว่ายังแก้ค้างอยู่ แล้วไม่รับยอดใหม่เข้ามา)
     var others=SITE_DRAFT.filter(function(x){ return x.site_id!==d.site_id && (x.is_new || siteRowDirty(x)); })
                  .map(function(x){ return JSON.parse(JSON.stringify(x)); });
-    SITE_DRAFT=null; BOOK_DRAFT=null; SITE_DEL=[];
+    SITE_DRAFT=null; BOOK_DRAFT=null; BOOK_BASE=null; SITE_DEL=[];
     return loadData(false).then(function(){
       siteSync();
       others.forEach(function(o){
@@ -2573,7 +2602,7 @@ function siteRowDirty(d){
 
 function siteCancelAll(){
   if(!confirm('ยกเลิกการแก้ไขทั้งหมดที่ยังไม่บันทึก?')) return;
-  SITE_DRAFT=null; BOOK_DRAFT=null; SITE_DEL=[]; SITE_OPEN='';
+  SITE_DRAFT=null; BOOK_DRAFT=null; BOOK_BASE=null; SITE_DEL=[]; SITE_OPEN='';
   renderSites(); toast('ยกเลิกแล้ว','info');
 }
 function siteSaveAll(){
@@ -2604,7 +2633,7 @@ function siteSaveAll(){
     return post({ action:'saveBooksBatchV2', round_id:S.round?S.round.round_id:'', books:BOOK_DRAFT });
   }).then(function(d){
     if(d && d.status==='error') throw new Error(d.message||'บันทึกยอดระบบไม่สำเร็จ');
-    SITE_DRAFT=null; BOOK_DRAFT=null; SITE_DEL=[];
+    SITE_DRAFT=null; BOOK_DRAFT=null; BOOK_BASE=null; SITE_DEL=[];
     return loadData(false);
   }).then(function(){
     btn.disabled=false; btn.textContent='💾 บันทึกทั้งหมด';
@@ -3461,7 +3490,7 @@ function openNewRound(){
   WIZ.step = 1;
   var nextYear = prev && prev.year ? String(Number(prev.year)+1) : String(new Date().getFullYear()+543);
   WZ_ROUND = { year:nextYear, name:'', doc:'', loaded:true };
-  SITE_DRAFT=null; BOOK_DRAFT=null; SITE_DEL=[]; SITE_OPEN='';
+  SITE_DRAFT=null; BOOK_DRAFT=null; BOOK_BASE=null; SITE_DEL=[]; SITE_OPEN='';
   WZ_SITES=null; WZ_DEL=[];
   V2_UNLOCK=false; V2_REASON=''; S.v2Dirty=false;
 
