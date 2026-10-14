@@ -333,6 +333,25 @@ td.brs-c   {color:#1a1612;}
 </div>
 
 <!-- Photo choice modal -->
+<div class="overlay" id="namesModal" onclick="if(event.target===this)closeNames()">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r);width:100%;max-width:420px;max-height:88vh;overflow:auto;box-shadow:0 20px 60px rgba(0,0,0,.15);">
+    <div style="padding:14px 18px;border-bottom:1px solid var(--border);background:var(--surface2);font-size:13px;font-weight:600;">👥 แก้ชื่อผู้ตรวจนับ</div>
+    <div style="padding:14px 16px;">
+      <div class="field"><label>ชื่อผู้นับสต็อก (ทีมพาเลทส่วนกลาง) <span style="color:var(--danger);">*</span></label>
+        <input class="input" id="edName" type="text" placeholder="ชื่อ-นามสกุล"></div>
+      <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;margin:10px 0 6px;">ผู้ร่วมตรวจนับ (กรอกเฉพาะที่มี)</div>
+      <div class="field"><label>โรงงาน/คลัง (ฝ่ายบริหาร/แผนกคลังสินค้า)</label><input class="input" id="edAdmin" type="text" placeholder="ชื่อ-นามสกุล (ถ้ามี)"></div>
+      <div class="field"><label>โรงงาน/คลัง (ฝ่ายผลิต)</label><input class="input" id="edProduction" type="text" placeholder="ชื่อ-นามสกุล (ถ้ามี)"></div>
+      <div class="field"><label>BRB-Fixed-asset Accounting</label><input class="input" id="edFixedasset" type="text" placeholder="ชื่อ-นามสกุล (ถ้ามี)"></div>
+      <div class="field"><label>สำนักงานตรวจสอบบัญชี</label><input class="input" id="edAudit" type="text" placeholder="ชื่อ-นามสกุล (ถ้ามี)"></div>
+      <div id="edNamesMsg" style="font-size:12px;color:var(--danger);min-height:16px;margin-bottom:6px;"></div>
+      <div style="display:flex;gap:8px;">
+        <button class="btn btn-success" style="flex:1;" onclick="saveNames()">💾 บันทึก</button>
+        <button class="btn" style="flex:0 0 auto;background:var(--surface2);" onclick="closeNames()">ยกเลิก</button>
+      </div>
+    </div>
+  </div>
+</div>
 <div class="overlay" id="photoChoiceModal" onclick="if(event.target===this)closePhotoChoice()">
   <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--r);width:100%;max-width:320px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.15);">
     <div style="padding:14px 18px;border-bottom:1px solid var(--border);background:var(--surface2);font-size:13px;font-weight:600;">📷 เพิ่มรูป Location</div>
@@ -1255,7 +1274,6 @@ function renderStep1(content) {
             +siteList.map(function(s){ return '<option value="'+esc(s)+'">'+esc(s)+'</option>'; }).join('')
           +'</select>'
         +'</div>'
-        +'<button class="btn btn-primary" id="btnCheckStatus" onclick="checkStatus()" disabled style="width:100%;">🔍 ตรวจสอบสถานะ</button>'
         +'<div id="statusBox" style="font-size:13px;margin-top:10px;display:none;padding:10px 12px;border-radius:var(--rs);line-height:1.5;"></div>'
         +'<div id="checkinSection" style="display:none;margin-top:14px;">'
         +'<div class="field"><label>📷 รูปถ่ายหน้างาน <span style="color:var(--danger);">*</span></label>'
@@ -1293,21 +1311,41 @@ function onSiteChange() {
   // ล้างงานค้างของไซต์เดิมให้หมด — ยอดรายการปรับปรุง/รูป/ไฟล์เป็นของไซต์นั้นๆ
   _resetSiteState();
   try { localStorage.removeItem('stockCountAdj'); localStorage.removeItem('stockCountLocations'); } catch(e) {}
-  var b = document.getElementById('btnCheckStatus'); if (b) b.disabled = !site;
+  stopReadyPoll();
   var sb = document.getElementById('statusBox'); if (sb) sb.style.display = 'none';
   var cs = document.getElementById('checkinSection'); if (cs) cs.style.display = 'none';
   var ac = document.getElementById('afterCheckin'); if (ac) ac.style.display = 'none';
   var pp = document.getElementById('ciPhotoPreview'); if (pp) pp.innerHTML = '<span style="font-size:32px;">📷</span><span style="font-size:12px;">แตะเพื่อถ่ายรูปหน้างาน</span>';
   var ci = document.getElementById('btnCheckin'); if (ci) ci.disabled = true;
+  if (site) checkStatus();      // เลือก Site แล้วตรวจให้เลย ไม่ต้องให้กดปุ่ม
 }
 
-async function checkStatus() {
+/* ── เช็คความพร้อมซ้ำเองระหว่างรอ Admin ใส่ยอด ──
+   ตัวแทนจะได้กรอกชื่อผู้ร่วมไปพลาง ๆ ไม่ต้องเฝ้ากดปุ่ม */
+var _readyTimer = null;
+function stopReadyPoll(){ if (_readyTimer) { clearInterval(_readyTimer); _readyTimer = null; } }
+function startReadyPoll(){
+  stopReadyPoll();
+  if (_bookReady) return;                       // พร้อมแล้วไม่ต้อง poll
+  _readyTimer = setInterval(function(){
+    var sel = document.getElementById('selSite');
+    if (!sel || !sel.value) { stopReadyPoll(); return; }
+    if (_bookReady) { stopReadyPoll(); return; }
+    checkStatus({ quiet:true });                // เงียบ ๆ ไม่เลื่อนจอ ไม่ขัดจังหวะที่กำลังพิมพ์
+  }, 15000);
+}
+
+async function checkStatus(opts) {
+  var quiet = !!(opts && opts.quiet);
   var site = document.getElementById('selSite').value;
   if (!site) return;
-  var btn = document.getElementById('btnCheckStatus');
   var box = document.getElementById('statusBox');
-  btn.disabled = true; btn.innerHTML = '<span class="spinner"></span>กำลังตรวจสอบ…';
-  box.style.display = 'none';
+  if (!box) return;
+  if (!quiet) {
+    box.style.display = 'block';
+    box.style.background = 'var(--surface)'; box.style.color = 'var(--muted)';
+    box.innerHTML = '<span class="spinner"></span> กำลังตรวจสอบสถานะ…';
+  }
 
   var d = null;
   try {
@@ -1315,12 +1353,13 @@ async function checkStatus() {
     d = await res.json();
   } catch(e) {}
   var setupRes = await _loadCountSetup(site);
-  btn.innerHTML = '🔍 ตรวจสอบสถานะอีกครั้ง'; btn.disabled = false;
 
   if (!d || d.status !== 'ok') {
+    if (quiet) return;                       // poll พลาด ปล่อยผ่าน รอบหน้าค่อยลองใหม่
     box.style.display = 'block';
     box.style.background = 'rgba(220,53,69,.1)'; box.style.color = 'var(--danger)';
-    box.innerHTML = '⚠ ตรวจสอบสถานะไม่สำเร็จ ลองใหม่อีกครั้ง';
+    box.innerHTML = '⚠ ตรวจสอบสถานะไม่สำเร็จ <button class="btn-sm" onclick="checkStatus()" '
+      + 'style="margin-left:6px;">🔄 ลองใหม่</button>';
     return;
   }
 
@@ -1334,6 +1373,7 @@ async function checkStatus() {
     box.style.background = 'rgba(220,53,69,.1)'; box.style.color = 'var(--danger)';
     box.innerHTML = '🚫 <b>Site นี้'+label+'</b><br>ไม่สามารถเช็คอิน/นับซ้ำได้';
     cs.style.display = 'none'; ac.style.display = 'none';
+    stopReadyPoll();
     return;
   }
 
@@ -1345,7 +1385,8 @@ async function checkStatus() {
     cs.style.display = 'none';
     ac.style.display = 'block';
     var bw0 = document.getElementById('bookHint'); if (bw0) bw0.style.display = 'none';
-    setTimeout(function(){ ac.scrollIntoView({behavior:'smooth',block:'nearest'}); var n=document.getElementById('inputName'); if(n) n.focus(); }, 60);
+    stopReadyPoll(); checkName();
+    if (!quiet) setTimeout(function(){ ac.scrollIntoView({behavior:'smooth',block:'nearest'}); var n=document.getElementById('inputName'); if(n) n.focus(); }, 60);
     return;
   }
 
@@ -1355,7 +1396,7 @@ async function checkStatus() {
     box.style.background = 'rgba(245,158,11,.12)'; box.style.color = '#a16207';
     box.innerHTML = '⚠ <b>ยังเริ่มนับไม่ได้</b><br>'
       + esc(_setupReasonText(setupRes ? setupRes.reason : 'no_config'))
-      + '<br><span style="font-size:11px;opacity:.8;">เช็คอินได้ แต่ยังเริ่มนับไม่ได้ (กด “ตรวจสอบสถานะ” อีกครั้งเมื่อพร้อม)</span>';
+      + _readyFoot('เช็คอินและกรอกชื่อผู้ร่วมไปก่อนได้');
   } else if (setupRes.has_book) {
     box.style.background = 'rgba(16,110,86,.1)'; box.style.color = 'var(--success,#0f6e56)';
     var _n   = function(v){ return Number(v||0); };
@@ -1400,12 +1441,75 @@ async function checkStatus() {
       +'</div>';
   } else {
     box.style.background = 'rgba(245,158,11,.12)'; box.style.color = '#a16207';
-    box.innerHTML = '⚠ <b>ไม่พร้อมตรวจนับ</b><br>Admin ยังไม่ใส่ยอดระบบของไซต์นี้ — เช็คอินได้ แต่ยัง<b>เริ่มนับไม่ได้</b> จนกว่า Admin จะใส่ยอด (กด “ตรวจสอบสถานะ” อีกครั้งเมื่อพร้อม)';
+    box.innerHTML = '⏳ <b>รอ Admin ใส่ยอดระบบ</b><br>เช็คอินและกรอกชื่อผู้ร่วมไปก่อนได้ '
+      + 'พอ Admin ใส่ยอดเสร็จ ปุ่ม “เริ่มนับสต็อก” จะเปิดให้เอง'
+      + _readyFoot('');
   }
   cs.style.display = 'block';
   var bh = document.getElementById('bookHint'); if (bh) bh.style.display = _bookReady ? 'none' : 'block';
   checkName();
-  setTimeout(function(){ cs.scrollIntoView({behavior:'smooth',block:'nearest'}); }, 60);
+  if (_bookReady) stopReadyPoll(); else if (!_readyTimer) startReadyPoll();
+  if (!quiet) setTimeout(function(){ cs.scrollIntoView({behavior:'smooth',block:'nearest'}); }, 60);
+}
+
+/* แถวล่างของกล่องสถานะ — บอกว่าระบบเช็คให้เอง + ปุ่มเช็คเองเผื่อเน็ตหลุด */
+function _readyFoot(extra){
+  return '<div style="display:flex;align-items:center;gap:8px;margin-top:8px;font-size:11px;opacity:.85;">'
+    + '<span style="flex:1;">🔄 ระบบเช็คให้เองทุก 15 วินาที'+(extra?' — '+esc(extra):'')+'</span>'
+    + '<button class="btn-sm" onclick="checkStatus()" style="flex:0 0 auto;">เช็คเดี๋ยวนี้</button>'
+    + '</div>';
+}
+
+/* ════════════════════════════════════════════════════════════
+   แก้ชื่อผู้ตรวจนับระหว่างทาง — คนมาสายหรือสลับคนได้
+   ล็อกเมื่อสร้างเอกสารแล้ว เพราะชื่อถูกพิมพ์ลงใบที่จะเซ็นไปแล้ว
+   ════════════════════════════════════════════════════════════ */
+var NAME_FIELDS = [['pallet','Name'],['admin','Admin'],['production','Production'],
+                   ['fixedasset','Fixedasset'],['audit','Audit']];
+var NAME_LABELS = { pallet:'ส่วนกลาง', admin:'คลัง', production:'ผลิต', fixedasset:'บัญชีทรัพย์สิน', audit:'ผู้ตรวจสอบ' };
+
+function _namesSummary(){
+  var n = (session && session.names) || {};
+  var parts = NAME_FIELDS.filter(function(f){ return String(n[f[0]]||'').trim(); })
+    .map(function(f){ return esc(NAME_LABELS[f[0]]) + ': ' + esc(String(n[f[0]]).trim()); });
+  return parts.length ? parts.join(' · ') : '<span style="color:var(--muted);font-weight:400;">ยังไม่ได้กรอก</span>';
+}
+function _namesLocked(){ return !!_printed; }   // พิมพ์เอกสารแล้ว = ชื่ออยู่บนใบเซ็นแล้ว
+
+function openNames(){
+  if (_namesLocked()) {
+    showToast('สร้างเอกสารแล้ว — แก้ชื่อไม่ได้ ถ้าต้องแก้ให้สร้างเอกสารใหม่หลังแก้', 'warn');
+    return;
+  }
+  var n = (session && session.names) || {};
+  NAME_FIELDS.forEach(function(f){
+    var el = document.getElementById('ed'+f[1]);
+    if (el) el.value = String(n[f[0]] || '');
+  });
+  var m = document.getElementById('edNamesMsg'); if (m) m.textContent = '';
+  var ov = document.getElementById('namesModal'); if (ov) ov.classList.add('open');
+}
+function closeNames(){
+  var ov = document.getElementById('namesModal'); if (ov) ov.classList.remove('open');
+}
+function saveNames(){
+  var v = {};
+  NAME_FIELDS.forEach(function(f){
+    var el = document.getElementById('ed'+f[1]);
+    v[f[0]] = el ? el.value.trim() : '';
+  });
+  if (!v.pallet) {
+    var m = document.getElementById('edNamesMsg');
+    if (m) m.textContent = '⚠️ ต้องมีชื่อผู้นับสต็อก (ทีมพาเลทส่วนกลาง)';
+    return;
+  }
+  session.names = v;
+  session.name  = v.pallet;                     // ชื่อหลักใช้ที่อื่นด้วย (navbar / payload)
+  try { localStorage.setItem('stockCountSession', JSON.stringify(session)); } catch(e) {}
+  var sm = document.getElementById('namesSummary'); if (sm) sm.innerHTML = _namesSummary();
+  var nv = document.getElementById('navName');   if (nv) nv.textContent = session.name;
+  closeNames();
+  showToast('✅ แก้ชื่อผู้ตรวจนับแล้ว', 'success');
 }
 
 function checkSiteSel() {
@@ -1473,8 +1577,16 @@ async function doCheckIn() {
   if (msg) msg.innerHTML = coords
     ? '🟢 เช็คอินสำเร็จ · แนบรูป+พิกัดแล้ว — กรอกชื่อผู้นับเพื่อเริ่มนับ'
     : '🟢 เช็คอินสำเร็จ · แนบรูปแล้ว (ไม่มีพิกัด GPS) — กรอกชื่อผู้นับเพื่อเริ่มนับ';
+  var pv = document.getElementById('ciPhotoPreview');
+  if (pv && pv.parentNode) pv.parentNode.style.display = 'none';   // ถ่ายเสร็จแล้ว เก็บช่องรูป
   var after = document.getElementById('afterCheckin');
-  if (after){ after.style.display = 'block'; var bh=document.getElementById('bookHint'); if(bh) bh.style.display=_bookReady?'none':'block'; checkName(); setTimeout(function(){ after.scrollIntoView({behavior:'smooth',block:'nearest'}); var n=document.getElementById('inputName'); if(n) n.focus(); }, 60); }
+  if (after){
+    after.style.display = 'block';
+    var bh=document.getElementById('bookHint'); if(bh) bh.style.display=_bookReady?'none':'block';
+    checkName();
+    if (!_bookReady && !_readyTimer) startReadyPoll();   // รอยอดระบบ → เช็คให้เองระหว่างกรอกชื่อ
+    setTimeout(function(){ after.scrollIntoView({behavior:'smooth',block:'nearest'}); var n=document.getElementById('inputName'); if(n) n.focus(); }, 60);
+  }
 }
 
 function confirmStep1() {
@@ -1496,6 +1608,7 @@ function confirmStep1() {
       audit      : (document.getElementById('inputAudit')      || {value:''}).value.trim()
     }
   };
+  stopReadyPoll();
   localStorage.setItem('stockCountSession', JSON.stringify(session));
   loadProgress();
   files = [];
@@ -1523,6 +1636,17 @@ function renderStep2(content) {
       return '<button onclick="openSiteDoc()" '+(link?'':'disabled')+' style="width:100%;margin-bottom:14px;padding:13px;border-radius:var(--rs);border:1.5px solid var(--border2);background:var(--surface);color:'+(link?'var(--accent)':'var(--muted)')+';font-family:var(--font);font-size:14px;font-weight:600;cursor:'+(link?'pointer':'not-allowed')+';min-height:48px;touch-action:manipulation;display:flex;align-items:center;justify-content:center;gap:8px;">'
         +'<span style="font-size:18px;">📁</span>'+(link?'เปิดเอกสารจาก Admin':'ยังไม่มีเอกสารจาก Admin')+(link?' <span style="font-size:12px;">↗</span>':'')+'</button>';
     })()+
+    // ── ผู้ตรวจนับ + ปุ่มแก้ (แก้ได้จนกว่าจะสร้างเอกสาร) ──
+    '<div id="namesBar" style="display:flex;align-items:center;gap:10px;margin-bottom:14px;padding:10px 12px;'
+      +'border:1px solid var(--border);border-radius:var(--rs);background:var(--surface);">'
+      +'<div style="flex:1;min-width:0;">'
+        +'<div style="font-size:11px;color:var(--muted);">ผู้ตรวจนับ</div>'
+        +'<div id="namesSummary" style="font-size:12.5px;font-weight:600;line-height:1.45;">'+_namesSummary()+'</div>'
+      +'</div>'
+      +'<button type="button" id="btnEditNames" onclick="openNames()" style="flex:0 0 auto;background:var(--surface2);'
+        +'border:1px solid var(--border2);border-radius:6px;padding:8px 12px;font-family:var(--font);font-size:12px;'
+        +'color:var(--muted);cursor:pointer;min-height:36px;touch-action:manipulation;">✏️ แก้ชื่อ</button>'
+    +'</div>'+
     // ── Step 2: ฟอร์มกรอก + รายการ — ไม่มี view switching อีกต่อไป ──
     '<div class="card active" id="step2Card">'+
       '<div class="card-head" style="cursor:pointer;" onclick="toggleStep2()" id="step2Head">'+
@@ -1875,6 +1999,12 @@ function updateSubmitCard() {
       : (_needPrint && !_printed)   ? 'Admin แก้ยอดระบบใหม่ — กรุณากด “สร้างเอกสารยืนยัน” ใหม่ก่อน'
       : '');
 
+  var bEd = document.getElementById('btnEditNames');
+  if (bEd) {
+    bEd.disabled = _namesLocked();
+    bEd.style.opacity = _namesLocked() ? '.45' : '';
+    bEd.title = _namesLocked() ? 'สร้างเอกสารแล้ว — แก้ชื่อไม่ได้' : '';
+  }
   try { _applyRejFocus(); } catch(e) {}
 
   // ── คุมตามสถานะใบส่งผล ──
