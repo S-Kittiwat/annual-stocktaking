@@ -398,10 +398,10 @@ table.grid tfoot td.gname{text-align:left !important;font-family:var(--font);fon
       style="font-size:12px;margin-bottom:12px;">
     <div style="display:flex;gap:8px;flex-wrap:wrap;">
       <button class="btn btn-success" type="button" id="dlCopy" onclick="_copyDocLink()" style="flex:1;min-width:120px;">📋 คัดลอกลิงก์</button>
-      <button class="btn btn-primary" type="button" onclick="_openDocFile()" style="flex:1;min-width:120px;">⬇️ โหลดไฟล์</button>
+      <button class="btn btn-primary" type="button" id="dlOpen" onclick="_openDocFile()" style="flex:1;min-width:120px;">⬇️ โหลดไฟล์</button>
       <button class="btn btn-outline" type="button" onclick="closeDocLink()" style="flex:1;min-width:120px;">ปิด</button>
     </div>
-    <div style="font-size:11px;color:var(--muted);line-height:1.7;margin-top:12px;text-align:center;">
+    <div id="dlFoot" style="font-size:11px;color:var(--muted);line-height:1.7;margin-top:12px;text-align:center;">
       <b>คัดลอกลิงก์</b> = ส่งต่อไปเปิดบนคอม · <b>โหลดไฟล์</b> = โหลดลงเครื่องที่ใช้อยู่<br>
       <span id="dlFile" style="font-family:var(--mono);font-size:10.5px;"></span>
     </div>
@@ -4076,33 +4076,63 @@ async function printDocGroup(opts){
   }
   visitPersist();
   render();
-  if (got.length) _showDocLinks(got, failed);
+  if (got.length || _groupDocRows().some(function(r){ return r.url; })) _showDocLinks(got, failed);
   else showToast('❌ สร้างเอกสารไม่สำเร็จ: ' + failed.join(', '), 'error');
 }
 
-// กล่องลิงก์รวมหลายไซต์
+// กล่องลิงก์รวมหลายไซต์ — แสดง "ทุกไซต์ในกลุ่ม" เสมอ
+// (ไซต์ที่ไม่ได้พิมพ์ใหม่รอบนี้ ใช้ลิงก์เดิมที่จำไว้ ไม่งั้นจะหายไปจากรายการ)
+function _groupDocRows(){
+  if (!visitOn()) return [];
+  _siteStash(activeSid());
+  return visitSites().map(function(sid){
+    return { sid:sid, name:_siteNameById(sid), url:(SITES[sid] || {}).siteDocUrl || '' };
+  });
+}
 function _showDocLinks(list, failed){
   var m = document.getElementById('docLinkModal');
-  if (!m) { showToast('สร้างเอกสารครบแล้ว — เปิดลิงก์จากโฟลเดอร์ของ Site', 'info'); return; }
-  document.getElementById('dlTitle').textContent = 'เอกสารพร้อมแล้ว ' + list.length + ' ฉบับ';
+  var rows = _groupDocRows();
+  if (!rows.length) rows = list || [];
+  // ลิงก์ที่เพิ่งสร้างรอบนี้ ทับของเดิมที่จำไว้ (กันลิงก์ค้างของใบเก่า)
+  (list || []).forEach(function(x){
+    for (var i = 0; i < rows.length; i++) {
+      if (String(rows[i].sid) === String(x.sid) && x.url) rows[i].url = x.url;
+    }
+  });
+  var have = rows.filter(function(r){ return r.url; });
+  if (!m) { showToast('สร้างเอกสารแล้ว — เปิดลิงก์จากโฟลเดอร์ของ Site', 'info'); return; }
+
+  document.getElementById('dlTitle').textContent = 'เอกสาร ' + have.length + ' ฉบับ';
   document.getElementById('dlHint').innerHTML =
-    'เปิดลิงก์ทีละไซต์ที่<b>คอม</b> → ได้ไฟล์ Word → สั่งพิมพ์ เซ็น แล้วสแกนกลับมาอัปในขั้นที่ 5'
+    '<b>แตะชื่อไซต์เพื่อโหลดไฟล์ Word ของไซต์นั้น</b> — เปิดที่คอมแล้วสั่งพิมพ์ เซ็น '
+    + 'แล้วสแกนกลับมาอัปในขั้นที่ 5'
     + '<div style="margin-top:10px;display:flex;flex-direction:column;gap:7px;">'
-    + list.map(function(x){
+    + rows.map(function(x){
+        if (!x.url) {
+          return '<div style="padding:9px 11px;border:1px dashed var(--border2);border-radius:8px;'
+            + 'background:var(--surface2);color:var(--muted);font-size:12.5px;">'
+            + '📄 '+esc(x.name)+' — ยังไม่มีลิงก์ กด “สร้างใหม่ทั้งกลุ่ม”</div>';
+        }
         return '<a href="'+esc(x.url)+'" target="_blank" rel="noopener" '
-          + 'style="display:block;padding:9px 11px;border:1px solid var(--border2);border-radius:8px;'
-          + 'background:var(--surface);color:var(--accent);font-weight:600;font-size:13px;text-decoration:none;">'
-          + '📄 '+esc(x.name)+' ↗</a>';
+          + 'style="display:flex;align-items:center;gap:8px;padding:11px;border:1.5px solid var(--border2);'
+          + 'border-radius:8px;background:var(--surface);color:var(--accent);font-weight:600;'
+          + 'font-size:13px;text-decoration:none;min-height:46px;">'
+          + '<span style="font-size:16px;">⬇️</span><span style="flex:1;">'+esc(x.name)+'</span>'
+          + '<span style="font-size:11px;opacity:.7;">โหลดไฟล์ ↗</span></a>';
       }).join('')
     + '</div>'
     + ((failed && failed.length)
         ? '<div style="margin-top:10px;color:var(--danger);font-size:12px;">สร้างไม่สำเร็จ: '
           + esc(failed.join(', ')) + ' — กดสร้างอีกครั้ง</div>' : '');
+
   document.getElementById('dlFile').textContent = '';
   var inp = document.getElementById('docLinkInput'); if (inp) { inp.style.display='none'; inp.value=''; }
-  var cp  = document.getElementById('dlCopy');      if (cp)  cp.style.display = 'none';
+  // ปุ่มล่างเป็นของ "เอกสารใบเดียว" — โหมดกลุ่มต้องซ่อน ไม่งั้นจะโหลดได้แค่ใบสุดท้าย
+  var cp = document.getElementById('dlCopy');  if (cp) cp.style.display = 'none';
+  var op = document.getElementById('dlOpen');  if (op) op.style.display = 'none';
+  var ft = document.getElementById('dlFoot');  if (ft) ft.style.display = 'none';
   m.classList.add('open');
-  showToast('✅ สร้างเอกสารครบ ' + list.length + ' ฉบับ', 'success');
+  if (have.length) showToast('✅ เอกสารพร้อม ' + have.length + ' ฉบับ', 'success');
 }
 
 function printDoc() {
@@ -4227,6 +4257,9 @@ function _showDocLink(url, view, fname) {
 function _openDocLinkModal(o) {
   var m = document.getElementById('docLinkModal');
   if (!m) { showToast('เอกสารพร้อมแล้ว — กดสร้างอีกครั้งถ้าไม่เห็นลิงก์', 'info'); return; }
+  // คืนปุ่มล่างที่โหมดกลุ่มซ่อนไว้
+  var _op = document.getElementById('dlOpen'); if (_op) _op.style.display = '';
+  var _ft = document.getElementById('dlFoot'); if (_ft) _ft.style.display = '';
   document.getElementById('dlTitle').textContent = o.title || 'เอกสารพร้อมแล้ว';
   document.getElementById('dlHint').innerHTML   = o.hint || '';
   document.getElementById('dlFile').textContent = o.fname || _lastDocName || '';
