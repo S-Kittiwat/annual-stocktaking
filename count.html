@@ -611,6 +611,7 @@ function switchSite(sid, opts){
   VISIT.active_sid = sid;
   _siteApply(sid);
   if (session) { session.site_id = sid; session.site = _siteNameById(sid); }
+  try { _maybeRestoreFromServer(); } catch(e) {}   // ไซต์ที่ถูกตีกลับ → เติมข้อมูลเดิมจาก server
   if (!(opts && opts.quiet)) { try { saveProgress(); } catch(e) {} render(); }
   return true;
 }
@@ -668,7 +669,10 @@ function visitPersist(){
     _siteStash(VISIT.active_sid);
     var out = { round_id:_curRoundId(), group_name:VISIT.group_name || '',
                 site_ids:VISIT.site_ids.slice(), active_sid:VISIT.active_sid,
-                dropped:VISIT.dropped || [], sites:{} };
+                dropped:VISIT.dropped || [], sites:{},
+                // รูปหน้างานใช้ร่วมทั้งกลุ่ม — เก็บเฉพาะที่อัปขึ้น Drive แล้ว
+                photos:(SITE_PHOTOS || []).filter(function(ph){ return ph.url; })
+                        .map(function(ph){ return { src:ph.url, url:ph.url, id:ph.id||'' }; }) };
     VISIT.site_ids.forEach(function(sid){ out.sites[sid] = _slimSite(SITES[sid]); });
     localStorage.setItem('stockCountVisit', JSON.stringify(out));
   } catch(e) {
@@ -687,6 +691,7 @@ function visitRestore(){
               active_sid:d.active_sid || d.site_ids[0], dropped:d.dropped || [] };
     SITES = {};
     VISIT.site_ids.forEach(function(sid){ SITES[sid] = _fatSite((d.sites||{})[sid]); });
+    if (Array.isArray(d.photos) && d.photos.length) SITE_PHOTOS = d.photos.slice();
     if (VISIT.site_ids.indexOf(VISIT.active_sid) < 0) VISIT.active_sid = VISIT.site_ids[0];
     _siteApply(VISIT.active_sid);
     return true;
@@ -714,6 +719,9 @@ async function refreshGroupStatus(){
     if (st === 'pending' || st === 'approved') o._submitState = 'ok';
   });
   _siteApply(cur);
+  // ไซต์ที่ถูกตีกลับ: ดึงยอด/รูป/รายการปรับปรุงเดิมจาก server กลับมา
+  // ไม่งั้นผู้นับจะถูกบังคับให้ถ่ายรูปใหม่ทั้งที่แค่ต้องแก้ไฟล์ใบเซ็น
+  try { _maybeRestoreFromServer(); } catch(e) {}
   visitPersist();
   return true;
 }
@@ -2579,6 +2587,7 @@ function updateSubmitCard() {
   if (!card) return;
 
   var hasLoc  = locations.length > 0;
+  _reclaimPhotos();          // ใบเดิมมีรูปครบแล้วและไม่ได้ถูกสั่งแก้รูป → ไม่ต้องถ่ายซ้ำ
   var hasFile = _hasSignedFile();
   var _isRe   = _isRevision();
   var _stale     = _docStale();
@@ -3653,6 +3662,24 @@ function removePhotoDraft(i) {
 }
 
 function _photoOk(){ return SITE_PHOTOS.length >= PHOTO_MIN(); }
+// รูปของใบเดิมที่อยู่บน server (ใช้ตอนถูกตีกลับ — ไม่ต้องถ่ายใหม่)
+function _subPhotos(){
+  var s = siteSubmission || V2SUB;
+  var a = (s && s.site_photos) || [];
+  return Array.isArray(a) ? a : [];
+}
+// ถูกตีกลับโดยไม่ได้สั่งแก้รูป + ใบเดิมมีรูปครบอยู่แล้ว → ยกรูปเดิมมาใช้ ไม่บังคับถ่ายใหม่
+function _reclaimPhotos(){
+  if (SITE_PHOTOS.length) return false;
+  if (!_isRevision()) return false;
+  if (_rejScoped() && _rejSteps().indexOf('photo') >= 0) return false;   // สั่งแก้รูปจริง → ต้องถ่ายใหม่
+  var old = _subPhotos();
+  if (!old.length) return false;
+  SITE_PHOTOS = old.map(function(p){
+    return { src: p.thumb || p.url || '', url: p.url || '', id: p.id || '' };
+  }).filter(function(p){ return p.src || p.url; });
+  return SITE_PHOTOS.length > 0;
+}
 
 function _renderPhotoStrip() {
   var el = document.getElementById('photoStrip');
