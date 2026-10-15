@@ -4127,8 +4127,9 @@ function _showDocLinks(list, failed){
 
   document.getElementById('dlTitle').textContent = 'เอกสาร ' + have.length + ' ฉบับ';
   document.getElementById('dlHint').innerHTML =
-    '<b>แตะชื่อไซต์เพื่อโหลดไฟล์ Word ของไซต์นั้น</b> — เปิดที่คอมแล้วสั่งพิมพ์ เซ็น '
-    + 'แล้วสแกนกลับมาอัปในขั้นที่ 5'
+    '📱 → 💻 <b>ใช้มือถือ:</b> กด 📋 คัดลอกลิงก์ แล้วส่งไปเปิดที่<b>คอม</b><br>'
+    + '<b>อยู่ที่คอมอยู่แล้ว:</b> แตะชื่อไซต์เพื่อโหลดไฟล์ Word ได้เลย — '
+    + 'สั่งพิมพ์ เซ็น แล้วสแกนกลับมาอัปในขั้นที่ 5'
     + '<div style="margin-top:10px;display:flex;flex-direction:column;gap:7px;">'
     + rows.map(function(x){
         if (!x.url) {
@@ -4136,14 +4137,24 @@ function _showDocLinks(list, failed){
             + 'background:var(--surface2);color:var(--muted);font-size:12.5px;">'
             + '📄 '+esc(x.name)+' — ยังไม่มีลิงก์ กด “สร้างใหม่ทั้งกลุ่ม”</div>';
         }
-        return '<a href="'+esc(x.url)+'" target="_blank" rel="noopener" '
-          + 'style="display:flex;align-items:center;gap:8px;padding:11px;border:1.5px solid var(--border2);'
+        return '<div style="display:flex;gap:6px;align-items:stretch;">'
+          + '<a href="'+esc(x.url)+'" target="_blank" rel="noopener" '
+          + 'style="flex:1;display:flex;align-items:center;gap:8px;padding:11px;border:1.5px solid var(--border2);'
           + 'border-radius:8px;background:var(--surface);color:var(--accent);font-weight:600;'
           + 'font-size:13px;text-decoration:none;min-height:46px;">'
           + '<span style="font-size:16px;">⬇️</span><span style="flex:1;">'+esc(x.name)+'</span>'
-          + '<span style="font-size:11px;opacity:.7;">โหลดไฟล์ ↗</span></a>';
+          + '<span style="font-size:11px;opacity:.7;">โหลดไฟล์ ↗</span></a>'
+          + '<button type="button" onclick="copyDocLinkOf(\''+esc(x.sid)+'\')" title="คัดลอกลิงก์"'
+          + ' style="flex:0 0 auto;width:46px;border:1.5px solid var(--border2);border-radius:8px;'
+          + 'background:var(--surface2);color:var(--text2);font-size:16px;cursor:pointer;'
+          + 'touch-action:manipulation;">📋</button>'
+          + '</div>';
       }).join('')
     + '</div>'
+    + (have.length > 1
+        ? '<button type="button" class="btn btn-outline" style="width:100%;margin-top:10px;" '
+          + 'onclick="copyAllDocLinks()">📋 คัดลอกลิงก์ทั้งหมด ('+have.length+' ไซต์)</button>'
+        : '')
     + ((failed && failed.length)
         ? '<div style="margin-top:10px;color:var(--danger);font-size:12px;">สร้างไม่สำเร็จ: '
           + esc(failed.join(', ')) + ' — กดสร้างอีกครั้ง</div>' : '');
@@ -4307,6 +4318,42 @@ function _openDocFile() {
 function closeDocLink() {
   var m = document.getElementById('docLinkModal');
   if (m) m.classList.remove('open');
+}
+
+// คัดลอกข้อความลงคลิปบอร์ด — มีทางสำรองเมื่อ clipboard API ใช้ไม่ได้ (http / เบราว์เซอร์เก่า)
+function _copyText(txt, okMsg){
+  txt = String(txt || '');
+  if (!txt) { showToast('ยังไม่มีลิงก์', 'warn'); return; }
+  var done = function(){ showToast(okMsg || '📋 คัดลอกแล้ว', 'success'); };
+  var fallback = function(){
+    try {
+      var ta = document.createElement('textarea');
+      ta.value = txt;
+      ta.style.cssText = 'position:fixed;left:-9999px;top:0;';
+      document.body.appendChild(ta);
+      ta.focus(); ta.select();
+      document.execCommand('copy');
+      document.body.removeChild(ta);
+      done();
+    } catch(e) { showToast('คัดลอกไม่สำเร็จ — แตะลิงก์ค้างแล้วเลือกคัดลอก', 'warn'); }
+  };
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(txt).then(done).catch(fallback);
+  } else fallback();
+}
+// คัดลอกลิงก์ของไซต์เดียวในกล่องรวม
+function copyDocLinkOf(sid){
+  _siteStash(activeSid());
+  var u = (SITES[sid] || {}).siteDocUrl || '';
+  _copyText(u, '📋 คัดลอกลิงก์ ' + _siteNameById(sid) + ' แล้ว');
+}
+// คัดลอกลิงก์ทุกไซต์เป็นข้อความเดียว — ส่งเข้าไลน์/เมลแล้วเปิดที่คอมทีเดียว
+function copyAllDocLinks(){
+  var rows = _groupDocRows().filter(function(r){ return r.url; });
+  if (!rows.length) { showToast('ยังไม่มีลิงก์', 'warn'); return; }
+  var head = 'เอกสารนับสต็อก ' + ((VISIT && VISIT.group_name) || '') + '\n';
+  _copyText(head + rows.map(function(r){ return r.name + '\n' + r.url; }).join('\n\n'),
+            '📋 คัดลอกลิงก์ครบ ' + rows.length + ' ไซต์แล้ว');
 }
 
 function _copyDocLink() {
