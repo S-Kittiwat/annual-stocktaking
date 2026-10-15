@@ -2158,13 +2158,17 @@ function groupGaps(){
   });
   return out;
 }
-// ไซต์ที่ต้องพิมพ์ (ยังไม่พิมพ์ หรือยอดเปลี่ยนหลังพิมพ์)
+// ไซต์ที่ต้องพิมพ์ (ยังไม่พิมพ์ · ยอดเปลี่ยนหลังพิมพ์ · หรือพิมพ์แล้วแต่ไม่มีไฟล์ให้โหลด)
+// เงื่อนไข "ไม่มีลิงก์" สำคัญเฉพาะโหมดกลุ่ม เพราะกล่องลิงก์คือทางเดียวที่จะได้ไฟล์
+// (เคยพลาด: ใบที่อัปโหลดไม่สำเร็จ หรือพิมพ์ไว้ตั้งแต่เวอร์ชันก่อนที่ยังไม่เก็บลิงก์
+//  จะถูกนับว่า "เสร็จแล้ว" ทั้งที่ผู้นับไม่มีไฟล์ไปพิมพ์)
 function _siteNeedsDoc(sid){
   var act = String(sid) === String(activeSid());
   if (_siteGap(sid) === null) return false;                    // ปิดงานแล้ว
-  if (act) return !_printed || _docStale();
+  if (act) return !_printed || _docStale() || (visitOn() && !siteDocUrl);
   var o = SITES[sid] || {};
   if (!o._printed) return true;
+  if (!o.siteDocUrl) return true;                              // พิมพ์แล้วแต่ไม่มีไฟล์
   return _sigOfSite(sid) !== o._printedSig;
 }
 // ลายเซ็นยอดของไซต์อื่น — คำนวณโดยสลับเข้าไปชั่วคราวแล้วสลับกลับ
