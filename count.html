@@ -644,15 +644,10 @@ function _slimSite(o){
 function _fatSite(d){
   var o = _freshSite();
   if (!d) return o;
+  // เก็บยอดมาตรงๆ ห้ามสร้างใหม่ผ่าน emptyLoc เพราะตอนบูต config ของรอบยังไม่โหลด
+  // (เคยพลาด: emptyLoc คืน q ว่าง → ยอดที่กรอกไว้หายทั้งหมดหลัง refresh)
   o.locations = (d.locations||[]).map(function(l){
-    var e = emptyLoc(l.name || '');
-    var src = l.q || {};
-    Object.keys(e.q).forEach(function(it){
-      Object.keys(e.q[it]).forEach(function(st){
-        e.q[it][st] = Number((src[it]||{})[st]) || 0;
-      });
-    });
-    return e;
+    return { name: String(l.name || ''), q: JSON.parse(JSON.stringify(l.q || {})) };
   });
   o.ADJ = d.adj || {};
   o.CMODE = (d.mode === 'grid') ? 'grid' : 'card';
@@ -720,6 +715,28 @@ async function refreshGroupStatus(){
   });
   _siteApply(cur);
   visitPersist();
+  return true;
+}
+
+// เติมโครง q ให้ครบตาม config ของรอบ — เรียกหลังโหลด config เสร็จ
+// ไม่แตะค่าที่มีอยู่ แค่เติมช่องที่ขาดเป็น 0 ให้ฟอร์ม/ตารางทำงานได้
+function normalizeLocQ(){
+  if (!V2 || !(V2.items || []).length) return false;
+  var tmpl = emptyLoc('').q;
+  var fix = function(list){
+    (list || []).forEach(function(L){
+      if (!L) return;
+      L.q = L.q || {};
+      Object.keys(tmpl).forEach(function(it){
+        L.q[it] = L.q[it] || {};
+        Object.keys(tmpl[it]).forEach(function(st){
+          L.q[it][st] = Number(L.q[it][st]) || 0;
+        });
+      });
+    });
+  };
+  fix(locations);
+  Object.keys(SITES).forEach(function(sid){ fix((SITES[sid] || {}).locations); });
   return true;
 }
 
@@ -1368,6 +1385,7 @@ async function loadConfig() {
           try { await refreshGroupStatus(); } catch(e) {}
         }
         try { await _loadCountSetup(session.site); } catch(e) {}
+        normalizeLocQ();     // config พร้อมแล้ว → เติมโครงยอดที่ restore มาให้ครบ
         _revalidateAdj();
       }
       render();
@@ -2392,7 +2410,8 @@ function renderStep2(content) {
   if (_editingIdx !== null) {
     _fillFormFromLocation(_editingIdx);
   }
-  setCountMode(_loadMode(), { quiet:true });   // คืนโหมดที่เลือกไว้ของไซต์นี้
+  // โหมดกลุ่มเก็บโหมดกรอกไว้ในที่พักของแต่ละไซต์แล้ว ห้ามให้คีย์เดิมมาทับ
+  setCountMode(visitOn() ? CMODE : _loadMode(), { quiet:true });
   updateSubmitCard();
   applyRejectHl();
 }
