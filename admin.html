@@ -2930,7 +2930,8 @@ function renderQueue(st){
 
     meBox.innerHTML=
       // ── 1) รายละเอียด: Site + ตัวแทนส่วนกลาง ──
-      '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px;">'
+      _qGroupBar(me)
+      + '<div style="display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:14px;">'
         +'<div><div style="font-size:12px;color:var(--muted,#888);">งานของฉัน · กำลังตรวจ</div>'
           +'<div style="font-size:19px;font-weight:700;color:var(--accent,#b8893d);">'+esc(c.site)+'</div>'
           +'<div style="font-size:13px;margin-top:2px;">ตัวแทนส่วนกลาง: <b>'+esc((sub&&sub.counter_name)||'—')+'</b></div>'
@@ -2972,8 +2973,25 @@ function renderQueue(st){
   var wq=document.getElementById('queueWaiting');
   if(!wait.length){ wq.innerHTML='<div class="empty">— ไม่มีคิวรอตรวจ —</div>'; }
   else{
-    wq.innerHTML='<table><thead><tr><th>คิว</th><th>Site</th><th>ชนิด</th><th>ตีกลับ</th><th>รอมา</th></tr></thead><tbody>'+
-      wait.map(function(w){ return '<tr><td class="mono">'+esc(w.ticket)+'</td><td style="font-weight:600;">'+esc(w.site)+'</td><td>'+_qTypeBadge(w.type)+'</td><td>'+(w.kicks?('↩ '+w.kicks):'—')+'</td><td class="mono q-tick" data-since="'+esc(w.enqueuedAt||'')+'">—</td></tr>'; }).join('')+
+    // นับว่าในคิวรอ มีกี่ใบที่เป็นกลุ่มเดียวกัน — บอกเจ้าหน้าที่ว่าหยิบใบนี้แล้วจะได้ทั้งชุด
+    var gcount={};
+    wait.forEach(function(w){ if(w.group) gcount[w.group]=(gcount[w.group]||0)+1; });
+    var canCall = myUserId && myUserId!=='master';
+    wq.innerHTML='<table><thead><tr><th>คิว</th><th>Site</th><th>ชนิด</th><th>ตีกลับ</th><th>รอมา</th><th></th></tr></thead><tbody>'+
+      wait.map(function(w){
+        var grp = w.group
+          ? '<div class="hint" style="margin-top:2px;">🏬 '+esc(w.group)
+            + (gcount[w.group]>1 ? (' · ตรวจทีเดียว '+gcount[w.group]+' ไซต์') : '')+'</div>'
+          : '';
+        return '<tr><td class="mono">'+esc(w.ticket)+'</td>'
+          +'<td style="font-weight:600;">'+esc(w.site)+grp+'</td>'
+          +'<td>'+_qTypeBadge(w.type)+'</td>'
+          +'<td>'+(w.kicks?('↩ '+w.kicks):'—')+'</td>'
+          +'<td class="mono q-tick" data-since="'+esc(w.enqueuedAt||'')+'">—</td>'
+          +'<td>'+(canCall
+              ? '<button class="btn btn-outline btn-sm" onclick="qCallTicket(\''+esc(w.ticket)+'\')">เรียกตั๋วนี้</button>'
+              : '')+'</td></tr>';
+      }).join('')+
       '</tbody></table>';
   }
   tickQueue();
@@ -2989,6 +3007,24 @@ function renderQueue(st){
       }).join('')+'</tbody></table>';
   }
 }
+/* แถบบอกว่าใบนี้เป็นส่วนหนึ่งของกลุ่มคลัง และเหลืออีกกี่ไซต์ที่จองไว้ให้เราแล้ว
+   ผู้นับคนเดียวส่งมาหลายใบ — เจ้าหน้าที่คนเดียวตรวจจบในครั้งเดียว ไม่ต้องเรียกซ้ำ */
+function _qGroupBar(me){
+  var c = me && me.current; if(!c) return '';
+  var held = (me.held||[]);
+  if(!c.group && !held.length) return '';
+  var total = held.length + 1;
+  return '<div style="background:rgba(184,137,61,.12);border:1px solid var(--border2,#d4c99a);'
+    + 'border-radius:8px;padding:10px 12px;margin-bottom:12px;font-size:12.5px;line-height:1.7;">'
+    + '🏬 <b>'+esc(c.group||'คลังรวม')+'</b> — ผู้นับคนเดียวส่งมา '+total+' ไซต์ ตรวจต่อเนื่องได้เลย'
+    + (held.length
+        ? '<div style="margin-top:4px;color:var(--muted,#777);">เหลืออีก '+held.length+' ไซต์ที่จองไว้ให้คุณ: '
+          + held.map(function(h){ return esc(h.site); }).join(' · ')
+          + '<br>กด “ปล่อยตัว” หรือ “ตีกลับ” แล้วระบบจะเปิดไซต์ถัดไปให้อัตโนมัติ</div>'
+        : '<div style="margin-top:4px;color:var(--muted,#777);">ไซต์สุดท้ายของกลุ่มนี้แล้ว</div>')
+    + '</div>';
+}
+
 function _qNumChip(label,val){
   var v=(val===undefined||val===null||val==='')?'—':val;
   return '<span style="display:inline-flex;gap:4px;padding:4px 10px;border-radius:8px;background:rgba(0,0,0,.06);font-size:12px;">'+label+': <b>'+v+'</b></span>';
@@ -3464,6 +3500,8 @@ function qAction(action, extra){
   }).catch(function(){ toast('ทำรายการไม่สำเร็จ','error'); });
 }
 function qCallNext(){ qAction('callNext'); }
+// เลือกตรวจตั๋วไหนก็ได้จากรายการรอ (ไม่ต้องไล่ตามลำดับ)
+function qCallTicket(ticket){ qAction('callNext', { ticket: ticket }); }
 function qRelease(){ if(!confirm('ยืนยัน “ปล่อยตัว” = อนุมัติ Site นี้?')) return; qAction('release'); }
 function qKickback(){
   _renderKbSteps();
