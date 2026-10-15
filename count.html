@@ -492,6 +492,7 @@ var V2FILES  = 0;    // จำนวนไฟล์ที่ Admin แนบไ�
 var CMODE = 'card';
 var GRID  = { rows:null };
 var _submitState = 'none';   // 'none' | 'ok' | 'error' — ใช้ตอนส่งเป็นชุด (โหมดคลังรวม)
+var siteDocUrl   = '';       // ลิงก์เอกสารล่าสุดของไซต์นี้ (เปิดดูซ้ำได้)
 
 // ══ โหมดคลังรวม (Multi-Site Visit) — state รายไซต์ ═══════════════
 // แนวคิด: ตัวแปร global เดิมทั้งหมด = "ไซต์ที่กำลังเปิดอยู่"
@@ -506,7 +507,8 @@ var SITES = {};
 var SITE_KEYS = ['locations','files','ADJ','ADJFILES','bookBalance','_editingIdx',
   '_step3Seen','_printed','_offDone','_bookReady','V2BOOK','V2SUB','V2FOLDER','V2FILES',
   'siteSubmission','siteDocNo','_keepFileUrls','_printedSig','_serverRestoredKey',
-  'CMODE','GRID','_rejShowAll','_rejHlSeen','_lastDocBlob','_lastDocName','_submitState'];
+  'CMODE','GRID','_rejShowAll','_rejHlSeen','_lastDocBlob','_lastDocName','_submitState',
+  'siteDocUrl'];
 
 function _GG(){ return (typeof window !== 'undefined') ? window : this; }
 
@@ -518,7 +520,7 @@ function _freshSite(){
            siteSubmission:null, siteDocNo:'', _keepFileUrls:[], _printedSig:null,
            _serverRestoredKey:null, CMODE:'card', GRID:{ rows:null },
            _rejShowAll:false, _rejHlSeen:null, _lastDocBlob:null, _lastDocName:'',
-           _submitState:'none' };
+           _submitState:'none', siteDocUrl:'' };
 }
 
 // เก็บ state ของไซต์ที่กำลังเปิด ลงที่พักของไซต์นั้น
@@ -627,6 +629,7 @@ function _slimSite(o){
     offDone: !!o._offDone, step3Seen: !!o._step3Seen,
     bookReady: o._bookReady !== false,
     docNo: o.siteDocNo || '',
+    docUrl: o.siteDocUrl || '',
     keepFileUrls: o._keepFileUrls || [],
     submitted: o._submitState || 'none',
     sub: o.siteSubmission ? {
@@ -657,6 +660,7 @@ function _fatSite(d){
   o._offDone = !!d.offDone; o._step3Seen = !!d.step3Seen;
   o._bookReady = d.bookReady !== false;
   o.siteDocNo = d.docNo || '';
+  o.siteDocUrl = d.docUrl || '';
   o._keepFileUrls = d.keepFileUrls || [];
   o._submitState = d.submitted || 'none';
   o.siteSubmission = d.sub || null;
@@ -2880,13 +2884,21 @@ function _printBtnHtml(){
       + gaps.map(function(g){ return '• <b>'+esc(_siteNameById(g.sid))+'</b> — '+esc(g.reason); }).join('<br>')
       + '</div>' + _dropBtnHtml(gaps);
   }
+  if (!need.length) {
+    // เอกสารครบแล้ว → เปิดดูลิงก์ซ้ำได้ และยังสั่งสร้างใหม่ทั้งกลุ่มได้ถ้าต้องการ
+    return '<button class="btn-print" onclick="showGroupDocLinks()">📄 ดูลิงก์เอกสารทั้งกลุ่ม ('
+      + visitSites().length + ' ฉบับ)</button>'
+      + '<div style="font-size:11px;color:var(--muted);text-align:center;margin-top:6px;line-height:1.6;">'
+      + 'เอกสารครบทุกไซต์แล้ว · '
+      + '<button type="button" class="btn-clear" onclick="printDocGroup({force:true})">สร้างใหม่ทั้งกลุ่ม</button>'
+      + '</div>';
+  }
   var lbl = (need.length === visitSites().length)
     ? ('🖨️ สร้างเอกสารทั้งกลุ่ม ('+need.length+' ฉบับ)')
-    : (need.length ? ('🖨️ สร้างเอกสารใหม่ (เฉพาะ '+need.map(_siteNameById).join(', ')+')')
-                   : '✅ เอกสารครบทุกไซต์แล้ว');
-  return '<button class="btn-print" onclick="printDocGroup()"'+(need.length?'':' disabled')+'>'+lbl+'</button>'
+    : ('🖨️ สร้างเอกสารใหม่ (เฉพาะ '+need.map(_siteNameById).join(', ')+')');
+  return '<button class="btn-print" onclick="printDocGroup()">'+lbl+'</button>'
     + '<div style="font-size:11px;color:var(--muted);text-align:center;margin-top:6px;line-height:1.6;">'
-    + (need.length < visitSites().length && need.length
+    + (need.length < visitSites().length
         ? 'ยอดของไซต์อื่นไม่เปลี่ยน ใบเดิมยังใช้ได้ — พิมพ์ใหม่เฉพาะใบที่ยอดขยับ'
         : note)
     + '</div>';
@@ -4022,14 +4034,27 @@ function _nowBangkok() {
 
 // ── พิมพ์เอกสารทั้งกลุ่ม (ทีละไซต์ ใช้ตรรกะเดิมทั้งหมด) ──
 // วิธี: สลับไซต์เข้าไปชั่วคราว เรียก printDoc ของเดิม แล้วสลับกลับ
-async function printDocGroup(){
+// เปิดกล่องลิงก์เอกสารของทั้งกลุ่มอีกครั้ง (ไม่ต้องสร้างใหม่)
+function showGroupDocLinks(){
+  if (!visitOn()) return;
+  _siteStash(activeSid());
+  var list = visitSites().map(function(sid){
+      return { sid:sid, name:_siteNameById(sid), url:(SITES[sid] || {}).siteDocUrl || '' };
+    }).filter(function(x){ return x.url; });
+  if (!list.length) { showToast('ยังไม่มีลิงก์เอกสาร — กดสร้างเอกสารก่อน', 'warn'); return; }
+  _showDocLinks(list, []);
+}
+
+async function printDocGroup(opts){
+  var force = !!(opts && opts.force);
   var gaps = groupGaps();
   if (gaps.length) {
     showToast('⚠ ยังพิมพ์ไม่ได้ — ' + gaps.map(function(g){
       return _siteNameById(g.sid) + ': ' + g.reason; }).join(' · '), 'error');
     return;
   }
-  var need = groupNeedDocs();
+  var need = force ? visitSites().filter(function(sid){ return _siteGap(sid) !== null; })
+                   : groupNeedDocs();
   if (!need.length) { showToast('เอกสารทุกไซต์เป็นฉบับล่าสุดแล้ว', 'info'); return; }
 
   var back = activeSid(), got = [], failed = [];
@@ -4042,6 +4067,7 @@ async function printDocGroup(){
       var r = null;
       try { r = await printDoc(); } catch(e) { r = null; }
       if (r && r.url) got.push({ sid:sid, name:_siteNameById(sid), url:r.url, fname:_lastDocName });
+      else if (siteDocUrl) got.push({ sid:sid, name:_siteNameById(sid), url:siteDocUrl, fname:_lastDocName });
       else failed.push(_siteNameById(sid));
     }
   } finally {
@@ -4087,6 +4113,7 @@ function printDoc() {
   }
   var btns = document.querySelectorAll('.btn-print');
   for (var i=0;i<btns.length;i++) { btns[i].disabled = true; }
+  _docResult = null;
   showToast('⏳ กำลังสร้างเอกสาร...', 'info');
 
   var fname = _docFileName();
@@ -4113,6 +4140,11 @@ function printDoc() {
       showToast('✅ สร้างเอกสารแล้ว — กำลังทำลิงก์สำหรับโหลดบนคอม...', 'info');
       return _uploadDocForLink(blob, fname);
     })
+    .then(function(up){
+      _docResult = up || null;
+      if (up && up.url) siteDocUrl = up.url;   // จำลิงก์ของไซต์นี้ไว้ เปิดดูซ้ำได้
+      return up;
+    })
     .catch(function(err){
       var m = String(err && err.message || err);
       // docxtemplater แจ้งรายละเอียดแท็กที่พังไว้ใน properties.errors
@@ -4126,6 +4158,7 @@ function printDoc() {
     .then(function(){
       var bs = document.querySelectorAll('.btn-print');
       for (var j=0;j<bs.length;j++) { bs[j].disabled = false; }
+      return _docResult;        // ส่งผลการอัปโหลดออกไปให้ printDocGroup ใช้
     });
 }
 
@@ -4231,6 +4264,7 @@ function _copyDocLink() {
 
 var _lastDocBlob = null, _lastDocName = '';
 var _docQuiet = false;   // true = พิมพ์เป็นชุด ยังไม่เปิดกล่องลิงก์ทีละใบ
+var _docResult = null;   // ผลการอัปโหลดเอกสารครั้งล่าสุด (printDoc ส่งคืนให้ printDocGroup)
 
 // โหลดไฟล์ที่สร้างไว้ลงเครื่องนี้ (กดเอง ไม่ใช่อัตโนมัติ)
 function _saveDocHere() {
