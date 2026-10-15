@@ -267,6 +267,23 @@ td.brs-c   {color:#1a1612;}
   .card{box-shadow:none;border:1px solid #ccc;}
 }
 
+/* ══ โหมดคลังรวม — แท็บไซต์ + กล่องเลือกกลุ่ม ══ */
+.siteTabs{display:flex;gap:6px;overflow-x:auto;padding:4px;margin-bottom:12px;
+  background:var(--surface2);border:1px solid var(--border);border-radius:var(--rs);
+  -webkit-overflow-scrolling:touch;}
+.siteTab{flex:0 0 auto;background:none;border:none;border-radius:6px;padding:8px 13px;
+  font-family:var(--font);font-size:12.5px;font-weight:600;color:var(--muted);
+  cursor:pointer;min-height:44px;touch-action:manipulation;text-align:left;line-height:1.25;}
+.siteTab.on{background:var(--surface);color:var(--text);box-shadow:var(--shadow-sm);}
+.siteTab:disabled{opacity:.45;cursor:not-allowed;}
+.siteTab .stSub{display:block;font-size:10.5px;font-weight:500;opacity:.8;margin-top:1px;}
+.grpBox{margin-top:12px;border:1.5px solid var(--border2);border-radius:var(--rs);
+  background:var(--accent-bg);padding:14px;}
+.grpBox h4{font-size:13.5px;margin-bottom:4px;}
+.grpList{margin:10px 0;font-size:12px;line-height:1.75;color:var(--text2);}
+.grpBtns{display:flex;gap:8px;flex-wrap:wrap;}
+.grpBtns .btn{flex:1;min-width:150px;}
+
 /* ══ ขั้นที่ 2 — โหมดตาราง (กรอกหลาย Location รวดเดียว) ══ */
 .modeBar{display:flex;gap:0;background:var(--surface2);border:1px solid var(--border);
   border-radius:var(--rs);padding:3px;margin-bottom:14px;}
@@ -474,6 +491,238 @@ var V2FILES  = 0;    // จำนวนไฟล์ที่ Admin แนบไ�
 // แถวที่ยังไม่ตั้งชื่อ = แถวร่าง ไม่อยู่ใน locations[] (locations[] มีแต่แถวที่มีชื่อเสมอ)
 var CMODE = 'card';
 var GRID  = { rows:null };
+var _submitState = 'none';   // 'none' | 'ok' | 'error' — ใช้ตอนส่งเป็นชุด (โหมดคลังรวม)
+
+// ══ โหมดคลังรวม (Multi-Site Visit) — state รายไซต์ ═══════════════
+// แนวคิด: ตัวแปร global เดิมทั้งหมด = "ไซต์ที่กำลังเปิดอยู่"
+//   สลับไซต์ = เก็บของไซต์เดิมลง SITES[sid] แล้วยกของไซต์ใหม่ขึ้นมาแทน
+//   ทำให้โค้ดเดิมทุกบรรทัดใช้งานต่อได้ ไม่ต้องรื้อ
+// VISIT = ข้อมูลระดับการเดินทาง (เช็คอิน/ชื่อผู้ร่วมนับ/รูป ใช้ร่วมทุกไซต์)
+// VISIT = null → ไซต์เดี่ยวแบบเดิม 100%
+var VISIT = null;
+var SITES = {};
+
+// ตัวแปรที่เป็น "ของไซต์" ต้องสลับตามแท็บ — ที่ไม่อยู่ในลิสต์นี้คือของกลุ่ม
+var SITE_KEYS = ['locations','files','ADJ','ADJFILES','bookBalance','_editingIdx',
+  '_step3Seen','_printed','_offDone','_bookReady','V2BOOK','V2SUB','V2FOLDER','V2FILES',
+  'siteSubmission','siteDocNo','_keepFileUrls','_printedSig','_serverRestoredKey',
+  'CMODE','GRID','_rejShowAll','_rejHlSeen','_lastDocBlob','_lastDocName','_submitState'];
+
+function _GG(){ return (typeof window !== 'undefined') ? window : this; }
+
+function _freshSite(){
+  return { locations:[], files:[], ADJ:{}, ADJFILES:{},
+           bookBalance:{ loscam:_emptyPCS(), chep:_emptyPCS(), brs:_emptyPCS(), swwi:_emptyPCS() },
+           _editingIdx:null, _step3Seen:false, _printed:false, _offDone:false, _bookReady:true,
+           V2BOOK:{}, V2SUB:null, V2FOLDER:'', V2FILES:0,
+           siteSubmission:null, siteDocNo:'', _keepFileUrls:[], _printedSig:null,
+           _serverRestoredKey:null, CMODE:'card', GRID:{ rows:null },
+           _rejShowAll:false, _rejHlSeen:null, _lastDocBlob:null, _lastDocName:'',
+           _submitState:'none' };
+}
+
+// เก็บ state ของไซต์ที่กำลังเปิด ลงที่พักของไซต์นั้น
+function _siteStash(sid){
+  if (!sid) return;
+  var g = _GG(), o = SITES[sid] || (SITES[sid] = _freshSite());
+  for (var i = 0; i < SITE_KEYS.length; i++) o[SITE_KEYS[i]] = g[SITE_KEYS[i]];
+}
+// ยก state ของไซต์ขึ้นมาเป็นตัวแปร global ที่โค้ดเดิมใช้
+function _siteApply(sid){
+  var g = _GG(), o = SITES[sid];
+  if (!o) o = SITES[sid] = _freshSite();
+  for (var i = 0; i < SITE_KEYS.length; i++) g[SITE_KEYS[i]] = o[SITE_KEYS[i]];
+}
+
+function visitOn(){ return !!(VISIT && VISIT.site_ids && VISIT.site_ids.length > 1); }
+
+// ── ขั้นที่ 1: ตัวเลือก "นับทั้งกลุ่ม" ──
+// GPICK = ตัวเลือกที่ยังไม่ตัดสิน · GSETUP = ข้อมูลรายไซต์จาก backend
+var GPICK  = { group:'', ids:[], chosen:null };
+var GSETUP = null;
+
+// ขอข้อมูลหลายไซต์ในคราวเดียว — ใช้บอกว่าไซต์ไหนพร้อม/ปิดแล้ว
+async function _loadGroupSetup(ids) {
+  GSETUP = null;
+  if (!ids || !ids.length) return null;
+  try {
+    var res = await fetch(API_URL + '?action=getCountSetup&site_ids=' + encodeURIComponent(ids.join(',')));
+    var d = await res.json();
+    if (d && d.status === 'ok' && d.sites) { GSETUP = d.sites; return GSETUP; }
+  } catch(e) {}
+  return null;
+}
+function _gsite(sid){ return (GSETUP && GSETUP[sid]) || null; }
+// ไซต์นี้ปิดงานไปแล้วหรือยัง (ส่งแล้ว/อนุมัติแล้ว = เอาเข้ากลุ่มไม่ได้)
+function _sidClosed(sid){
+  var g = _gsite(sid), st = String((g && g.submission && g.submission.status) || '');
+  return st === 'pending' || st === 'approved';
+}
+function _sidReady(sid){ var g = _gsite(sid); return !!(g && g.has_book); }
+function _sidState(sid){
+  if (_sidClosed(sid)) return 'closed';
+  return _sidReady(sid) ? 'ready' : 'wait';
+}
+// ไซต์ในกลุ่มที่ยังนับได้ (ตัดไซต์ที่ปิดงานแล้วออก)
+function _groupEligible(){
+  return GPICK.ids.filter(function(sid){ return !_sidClosed(sid); });
+}
+function visitSites(){ return (VISIT && VISIT.site_ids) ? VISIT.site_ids.slice() : []; }
+function activeSid(){ return (VISIT && VISIT.active_sid) || _curSiteId(); }
+function _siteNameById(sid){
+  for (var i = 0; i < siteObjs.length; i++) {
+    if (String(siteObjs[i].site_id) === String(sid)) return siteObjs[i].site_name || String(sid);
+  }
+  return String(sid || '');
+}
+function _siteGroupOf(name){
+  for (var i = 0; i < siteObjs.length; i++) {
+    if (String(siteObjs[i].site_name).trim() === String(name||'').trim())
+      return String(siteObjs[i].group_name || '').trim();
+  }
+  return '';
+}
+// ไซต์ทั้งหมดในกลุ่มเดียวกัน (เรียงตามลำดับใน config)
+function _sitesInGroup(group){
+  group = String(group||'').trim();
+  if (!group) return [];
+  return siteObjs.filter(function(o){
+    return String(o.group_name||'').trim() === group;
+  }).map(function(o){ return o.site_id; });
+}
+
+// เริ่มการเดินทาง — siteIds ตัวแรกคือไซต์ที่เปิดอยู่
+function visitStart(siteIds, group){
+  SITES = {};
+  VISIT = { round_id:_curRoundId(), group_name:String(group||''),
+            site_ids:(siteIds||[]).slice(), active_sid:(siteIds||[])[0] || '',
+            dropped:[] };
+  VISIT.site_ids.forEach(function(sid){ SITES[sid] = _freshSite(); });
+  _siteApply(VISIT.active_sid);
+}
+
+// สลับแท็บไซต์ — เก็บของเดิมก่อนทุกครั้ง
+function switchSite(sid, opts){
+  if (!VISIT || !sid || String(sid) === String(VISIT.active_sid)) return false;
+  if (VISIT.site_ids.indexOf(sid) < 0) return false;
+  _siteStash(VISIT.active_sid);
+  VISIT.active_sid = sid;
+  _siteApply(sid);
+  if (session) { session.site_id = sid; session.site = _siteNameById(sid); }
+  if (!(opts && opts.quiet)) { try { saveProgress(); } catch(e) {} render(); }
+  return true;
+}
+
+// ── บันทึกสำรองของไซต์ที่ "ไม่ได้เปิดอยู่" + ข้อมูลระดับกลุ่ม ──
+// ไซต์ที่เปิดอยู่ยังใช้คีย์เดิม (stockCountLocations / Adj / Photos / Mode) เหมือนเดิมทุกอย่าง
+function _slimSite(o){
+  if (!o) return null;
+  return {
+    locations: (o.locations||[]).map(function(l){
+      return { name:l.name, q:JSON.parse(JSON.stringify(l.q||{})) };
+    }),
+    adj: o.ADJ || {},
+    mode: o.CMODE || 'card',
+    printed: !!o._printed, printedSig: o._printedSig || null,
+    offDone: !!o._offDone, step3Seen: !!o._step3Seen,
+    bookReady: o._bookReady !== false,
+    docNo: o.siteDocNo || '',
+    keepFileUrls: o._keepFileUrls || [],
+    submitted: o._submitState || 'none',
+    sub: o.siteSubmission ? {
+      count_id      : o.siteSubmission.count_id || '',
+      status        : o.siteSubmission.status || '',
+      revision      : o.siteSubmission.revision || 1,
+      review_comment: o.siteSubmission.review_comment || '',
+      reject_steps  : o.siteSubmission.reject_steps || []
+    } : null
+  };
+}
+function _fatSite(d){
+  var o = _freshSite();
+  if (!d) return o;
+  o.locations = (d.locations||[]).map(function(l){
+    var e = emptyLoc(l.name || '');
+    var src = l.q || {};
+    Object.keys(e.q).forEach(function(it){
+      Object.keys(e.q[it]).forEach(function(st){
+        e.q[it][st] = Number((src[it]||{})[st]) || 0;
+      });
+    });
+    return e;
+  });
+  o.ADJ = d.adj || {};
+  o.CMODE = (d.mode === 'grid') ? 'grid' : 'card';
+  o._printed = !!d.printed; o._printedSig = d.printedSig || null;
+  o._offDone = !!d.offDone; o._step3Seen = !!d.step3Seen;
+  o._bookReady = d.bookReady !== false;
+  o.siteDocNo = d.docNo || '';
+  o._keepFileUrls = d.keepFileUrls || [];
+  o._submitState = d.submitted || 'none';
+  o.siteSubmission = d.sub || null;
+  o.V2SUB = d.sub || null;
+  return o;
+}
+function visitPersist(){
+  try {
+    if (!VISIT) { localStorage.removeItem('stockCountVisit'); return; }
+    _siteStash(VISIT.active_sid);
+    var out = { round_id:_curRoundId(), group_name:VISIT.group_name || '',
+                site_ids:VISIT.site_ids.slice(), active_sid:VISIT.active_sid,
+                dropped:VISIT.dropped || [], sites:{} };
+    VISIT.site_ids.forEach(function(sid){ out.sites[sid] = _slimSite(SITES[sid]); });
+    localStorage.setItem('stockCountVisit', JSON.stringify(out));
+  } catch(e) {
+    console.warn('visitPersist failed:', e.message);
+  }
+}
+// คืนการเดินทางที่ค้างไว้ — ต้องตรงรอบเท่านั้น (กฎเหล็กข้อ 2)
+function visitRestore(){
+  try {
+    var d = JSON.parse(localStorage.getItem('stockCountVisit') || 'null');
+    if (!d || !d.site_ids || !d.site_ids.length) return false;
+    var rid = _curRoundId();
+    if (rid && d.round_id && d.round_id !== rid) { localStorage.removeItem('stockCountVisit'); return false; }
+    VISIT = { round_id:d.round_id || rid, group_name:d.group_name || '',
+              site_ids:d.site_ids.slice(),
+              active_sid:d.active_sid || d.site_ids[0], dropped:d.dropped || [] };
+    SITES = {};
+    VISIT.site_ids.forEach(function(sid){ SITES[sid] = _fatSite((d.sites||{})[sid]); });
+    if (VISIT.site_ids.indexOf(VISIT.active_sid) < 0) VISIT.active_sid = VISIT.site_ids[0];
+    _siteApply(VISIT.active_sid);
+    return true;
+  } catch(e) { return false; }
+}
+// ดึงสถานะล่าสุดรายไซต์จาก server — ใช้หลังรีเฟรชหน้า/หลังถูกตีกลับ
+// server เป็นแหล่งข้อมูลหลักของสถานะใบ ยอดที่กรอกยังใช้ของในเครื่อง
+async function refreshGroupStatus(){
+  if (!visitOn()) return false;
+  var ids = visitSites();
+  var g = await _loadGroupSetup(ids);
+  if (!g) return false;
+  var cur = activeSid();
+  _siteStash(cur);
+  ids.forEach(function(sid){
+    var x = g[sid]; if (!x) return;
+    var o = SITES[sid]; if (!o) return;
+    o.V2BOOK        = x.book || {};
+    o._bookReady    = !!x.has_book;
+    o.V2SUB         = x.submission || null;
+    o.siteSubmission= x.submission || null;
+    o.V2FOLDER      = x.folder_url || '';
+    o.V2FILES       = Number(x.file_count || 0);
+    var st = String((x.submission || {}).status || '');
+    if (st === 'pending' || st === 'approved') o._submitState = 'ok';
+  });
+  _siteApply(cur);
+  visitPersist();
+  return true;
+}
+
+function visitClear(){
+  VISIT = null; SITES = {};
+  try { localStorage.removeItem('stockCountVisit'); } catch(e) {}
+}
 
 function _act(o){ return o && o.is_active !== false && String(o.is_active).toUpperCase() !== 'FALSE'; }
 function _bySort(a,b){ return (Number(a.sort)||0) - (Number(b.sort)||0); }
@@ -741,6 +990,68 @@ async function _loadCountSetup(site) {
   }
 }
 
+// ── กล่องถาม "นับทั้งกลุ่มไหม" + แถบสถานะรายไซต์ ──
+function _sidRowHtml(sid){
+  var st = _sidState(sid);
+  var ic = st === 'closed' ? '🚫' : (st === 'ready' ? '✅' : '⏳');
+  var tx = st === 'closed' ? 'ส่งผลแล้ว — นับรอบนี้ไม่ได้'
+         : (st === 'ready' ? 'พร้อมนับ' : 'รอ Admin ใส่ยอดระบบ');
+  return '<div>'+ic+' <b>'+esc(_siteNameById(sid))+'</b> — '+tx+'</div>';
+}
+function renderGroupBox(){
+  var box = document.getElementById('groupBox');
+  if (!box) return;
+  var cs = document.getElementById('checkinSection');
+  var elig = _groupEligible();
+
+  // ไม่มีกลุ่ม หรือเหลือไซต์ที่นับได้ตัวเดียว → ไม่ต้องถาม ทำงานแบบเดิม
+  if (!GPICK.group || elig.length < 2) {
+    box.style.display = 'none'; box.innerHTML = '';
+    if (GPICK.chosen !== 'single') GPICK.chosen = 'single';
+    return;
+  }
+
+  box.style.display = 'block';
+  var closed = GPICK.ids.filter(_sidClosed);
+  var chosen = GPICK.chosen;
+
+  box.innerHTML = '<div class="grpBox">'
+    + '<h4>🏬 '+esc(GPICK.group)+' มี '+GPICK.ids.length+' ไซต์</h4>'
+    + '<div style="font-size:11.5px;color:var(--muted);">นับทั้งกลุ่มในครั้งเดียวได้ '
+    +   'เช็คอิน/ชื่อผู้ร่วมนับ/รูปหน้างาน ใช้ร่วมกัน แต่ยังออกใบสรุปแยกรายไซต์</div>'
+    + '<div class="grpList">'+GPICK.ids.map(_sidRowHtml).join('')+'</div>'
+    + (closed.length ? '<div style="font-size:11.5px;color:var(--warn);margin-bottom:10px;">'
+        + 'ไซต์ที่ส่งผลแล้วถูกตัดออกจากกลุ่ม — รอบนี้จะนับ '+elig.length+' ไซต์</div>' : '')
+    + (chosen
+        ? '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">'
+          + '<div style="font-size:12.5px;font-weight:700;">'
+          + (chosen === 'group' ? '✓ นับทั้งกลุ่ม ' + elig.length + ' ไซต์' : '✓ นับแค่ไซต์นี้')
+          + '</div>'
+          + '<button type="button" class="btn-clear" onclick="pickGroup(null)">เปลี่ยน</button>'
+          + '</div>'
+        : '<div class="grpBtns">'
+          + '<button type="button" class="btn btn-primary" onclick="pickGroup(\'group\')">'
+          +   'นับทั้งกลุ่ม — '+elig.length+' ไซต์</button>'
+          + '<button type="button" class="btn btn-outline" onclick="pickGroup(\'single\')">'
+          +   'นับแค่ '+esc(_siteNameById(GPICK.ids.filter(function(x){ return !_sidClosed(x); })[0] || ''))+'</button>'
+          + '</div>')
+    + '</div>';
+
+  // ยังไม่เลือก → ยังไม่ให้เช็คอิน กันเช็คอินผิดขอบเขต
+  if (cs && !chosen) cs.style.display = 'none';
+}
+function pickGroup(mode){
+  GPICK.chosen = mode;
+  renderGroupBox();
+  var cs = document.getElementById('checkinSection');
+  var ac = document.getElementById('afterCheckin');
+  if (mode && cs && !(ac && ac.style.display === 'block')) cs.style.display = 'block';
+  if (mode) {
+    var box = document.getElementById('groupBox');
+    if (box) setTimeout(function(){ box.scrollIntoView({ behavior:'smooth', block:'nearest' }); }, 50);
+  }
+}
+
 // ข้อความอธิบายสาเหตุที่ยังนับไม่ได้
 function _setupReasonText(reason) {
   if (reason === 'no_round')        return 'ยังไม่มีรอบนับสต็อกที่เปิดอยู่';
@@ -869,6 +1180,7 @@ function saveProgress() {
     localStorage.setItem('stockCountAdj', JSON.stringify({
       round_id: _curRoundId(), site_id: _curSiteId(), adj: ADJ
     }));
+    if (VISIT) visitPersist();   // โหมดคลังรวม — เก็บไซต์อื่นในกลุ่มด้วย
   } catch(e) {
     console.warn('saveProgress failed (quota exceeded?):', e.message);
     // ไม่ throw ต่อ — ให้ flow หลักทำงานต่อได้แม้ save ไม่สำเร็จ
@@ -941,6 +1253,7 @@ function _clearStaleSession(msg) {
         localStorage.removeItem('stockCountAdj'); localStorage.removeItem('stockCountPhotos'); } catch(e) {}
   session = null; locations = []; siteSubmission = null; files = []; SITE_PHOTOS = [];
   ADJ = {}; ADJFILES = {}; V2SUB = null;
+  visitClear();
   try { stopSitePoll(); } catch(e) {}
   if (msg) showToast(msg, 'info');
 }
@@ -1044,6 +1357,12 @@ async function loadConfig() {
       // จำเป็นตอนเปิดหน้าใหม่ทั้งที่เช็คอินไว้แล้ว (ไม่ได้ผ่าน checkStatus)
       // ไม่โหลดก่อน ขั้นที่ 2 จะขึ้น "ยังไม่ได้ตั้งค่าชนิดที่นับ"
       if (session && session.site) {
+        // คืนการเดินทางแบบกลุ่มที่ค้างไว้ (ต้องตรงรอบ) ก่อนโหลด config
+        if (visitRestore() && VISIT.active_sid) {
+          session.site_id = VISIT.active_sid;
+          session.site    = _siteNameById(VISIT.active_sid);
+          try { await refreshGroupStatus(); } catch(e) {}
+        }
         try { await _loadCountSetup(session.site); } catch(e) {}
         _revalidateAdj();
       }
@@ -1372,6 +1691,7 @@ function renderStep1(content) {
           +'</select>'
         +'</div>'
         +'<div id="statusBox" style="font-size:13px;margin-top:10px;display:none;padding:10px 12px;border-radius:var(--rs);line-height:1.5;"></div>'
+        +'<div id="groupBox" style="display:none;"></div>'
         +'<div id="checkinSection" style="display:none;margin-top:14px;">'
         +'<div class="field"><label>📷 รูปถ่ายหน้างาน <span style="color:var(--danger);">*</span></label>'
           +'<div id="ciPhotoPreview" onclick="openCheckinPhoto()" style="width:100%;height:160px;border:1.5px dashed var(--border2);border-radius:var(--rs);background:var(--surface);display:flex;flex-direction:column;align-items:center;justify-content:center;cursor:pointer;overflow:hidden;color:var(--muted);gap:6px;"><span style="font-size:32px;">📷</span><span style="font-size:12px;">แตะเพื่อถ่ายรูปหน้างาน</span></div>'
@@ -1410,6 +1730,7 @@ function onSiteChange() {
   try { localStorage.removeItem('stockCountAdj'); localStorage.removeItem('stockCountLocations');
         localStorage.removeItem('stockCountPhotos'); } catch(e) {}
   V2FOLDER = ''; V2FILES = 0;
+  visitClear();
   stopReadyPoll();
   var sb = document.getElementById('statusBox'); if (sb) sb.style.display = 'none';
   var cs = document.getElementById('checkinSection'); if (cs) cs.style.display = 'none';
@@ -1452,6 +1773,12 @@ async function checkStatus(opts) {
     d = await res.json();
   } catch(e) {}
   var setupRes = await _loadCountSetup(site);
+
+  // เตรียมข้อมูลกลุ่มคลัง (ถ้าไซต์นี้อยู่ในกลุ่ม)
+  var grp = _siteGroupOf(site);
+  if (grp !== GPICK.group) { GPICK = { group:grp, ids:_sitesInGroup(grp), chosen:null }; GSETUP = null; }
+  else { GPICK.ids = _sitesInGroup(grp); }
+  if (GPICK.group && GPICK.ids.length > 1) { await _loadGroupSetup(GPICK.ids); }
 
   if (!d || d.status !== 'ok') {
     if (quiet) return;                       // poll พลาด ปล่อยผ่าน รอบหน้าค่อยลองใหม่
@@ -1545,6 +1872,8 @@ async function checkStatus(opts) {
       + _readyFoot('');
   }
   cs.style.display = 'block';
+  // กล่องเลือกกลุ่มต้อง render ทีหลัง เพราะมันคุมว่าจะให้เช็คอินได้หรือยัง
+  renderGroupBox();
   var bh = document.getElementById('bookHint'); if (bh) bh.style.display = _bookReady ? 'none' : 'block';
   checkName();
   if (_bookReady) stopReadyPoll(); else if (!_readyTimer) startReadyPoll();
@@ -1667,6 +1996,8 @@ async function doCheckIn() {
     await fetch(API_URL, {
       method:'POST', redirect:'follow', headers:{'Content-Type':'text/plain'},
       body: JSON.stringify({ action:'checkIn', site:site, site_id:_siteIdByName(site),
+        // โหมดคลังรวม — เช็คอินครั้งเดียวให้ครบทุกไซต์ในกลุ่ม
+        site_ids: (GPICK.chosen === 'group') ? _groupEligible() : null,
         photo: photoUrl, lat: coords?coords.lat:null, lng: coords?coords.lng:null })
     });
   } catch(e) {}
@@ -1692,7 +2023,24 @@ function confirmStep1() {
   var site = document.getElementById('selSite').value;
   var name = document.getElementById('inputName').value.trim();
   if (!site || !name) return;
-  if (!_bookReady) { showToast('ยังไม่พร้อม — Admin ยังไม่ใส่ยอดระบบ กด “ตรวจสอบยอดระบบอีกครั้ง”', 'warn'); return; }
+
+  // ── โหมดคลังรวม: เริ่มได้ถ้ามีไซต์พร้อมอย่างน้อย 1 ไซต์ (ที่เหลือรอ Admin ได้) ──
+  var grpIds = (GPICK.chosen === 'group') ? _groupEligible() : null;
+  if (grpIds && grpIds.length > 1) {
+    var ready = grpIds.filter(_sidReady);
+    if (!ready.length) {
+      showToast('ยังไม่พร้อม — Admin ยังไม่ใส่ยอดระบบให้ไซต์ใดในกลุ่มนี้', 'warn');
+      return;
+    }
+    // ไซต์ที่เปิดอยู่ตัวแรก = ไซต์ที่เลือกไว้ถ้าพร้อม ไม่พร้อมก็ใช้ตัวแรกที่พร้อม
+    var sid0 = _siteIdByName(site);
+    var first = (ready.indexOf(sid0) >= 0) ? sid0 : ready[0];
+    grpIds = [first].concat(grpIds.filter(function(x){ return x !== first; }));
+    site = _siteNameById(first);
+  } else if (!_bookReady) {
+    showToast('ยังไม่พร้อม — Admin ยังไม่ใส่ยอดระบบ กด “ตรวจสอบยอดระบบอีกครั้ง”', 'warn'); return;
+  }
+
   session = {
     site    : site,
     site_id : _siteIdByName(site),
@@ -1709,6 +2057,31 @@ function confirmStep1() {
   };
   stopReadyPoll();
   localStorage.setItem('stockCountSession', JSON.stringify(session));
+
+  if (grpIds && grpIds.length > 1) {
+    // เริ่มการเดินทางแบบกลุ่ม — เติมข้อมูลรายไซต์ที่ได้มาแล้วจาก backend
+    // ไม่เรียก loadProgress เพราะคีย์เดิมไม่ผูกไซต์ อาจลากยอดข้ามไซต์
+    try { localStorage.removeItem('stockCountLocations');
+          localStorage.removeItem('stockCountAdj');
+          localStorage.removeItem('stockCountMode'); } catch(e) {}
+    visitStart(grpIds, GPICK.group);
+    grpIds.forEach(function(sid){
+      var g = _gsite(sid) || {}, o = SITES[sid];
+      o.V2BOOK        = g.book || {};
+      o._bookReady    = !!g.has_book;
+      o.V2SUB         = g.submission || null;
+      o.siteSubmission= g.submission || null;
+      o.V2FOLDER      = g.folder_url || '';
+      o.V2FILES       = Number(g.file_count || 0);
+    });
+    _siteApply(VISIT.active_sid);
+    files = [];
+    visitPersist();
+    render();
+    if (typeof pollHelp === 'function') pollHelp();
+    return;
+  }
+
   loadProgress();
   files = [];
   siteSubmission = null;     // จะถูกเซ็ตใหม่จาก fetchBookBalance
@@ -1716,6 +2089,113 @@ function confirmStep1() {
   fetchBookBalance(site);
   render();
   if (typeof pollHelp === 'function') pollHelp();   // อัปเดตแถบเรียกเจ้าหน้าที่ทันที
+}
+
+// ── แท็บไซต์ในโหมดคลังรวม ──
+// สถานะรายไซต์: จำนวน Location ที่กรอกแล้ว / ยังไม่พร้อม / ปิดงานแล้ว
+function _siteTabInfo(sid){
+  var o = (String(sid) === String(activeSid()))
+          ? { locations:locations, _bookReady:_bookReady, siteSubmission:siteSubmission, _printed:_printed }
+          : (SITES[sid] || {});
+  var st = String((o.siteSubmission || {}).status || '');
+  var n  = (o.locations || []).length;
+  if (st === 'approved') return { icon:'✅', sub:'อนุมัติแล้ว', lock:true };
+  if (st === 'pending')  return { icon:'⏳', sub:'รอตรวจ', lock:true };
+  if (st === 'rejected' || st === 'reopened') return { icon:'↩', sub:'ต้องแก้ไข', lock:false };
+  if (o._bookReady === false) return { icon:'⏳', sub:'รอยอดระบบ', lock:true };
+  return { icon:(n ? '📝' : '○'), sub:(n ? (n + ' Location') : 'ยังไม่กรอก'), lock:false };
+}
+function _siteTabsHtml(){
+  if (!visitOn()) return '';
+  _siteStash(activeSid());
+  var cur = activeSid();
+  // สถานะผสม (บางไซต์ปิดงาน บางไซต์ยังแก้ได้) → ขึ้นแถบสรุปให้เห็นภาพรวม
+  var lock = visitSites().filter(function(sd){ var i = _siteTabInfo(sd); return i.lock; }).length;
+  var head = (lock > 0 && lock < visitSites().length)
+    ? '<div style="font-size:11.5px;color:var(--muted);margin-bottom:6px;line-height:1.6;">'
+      + '🏬 <b>'+esc((VISIT&&VISIT.group_name)||'คลังรวม')+'</b> — '
+      + visitSites().map(function(sd){ var i=_siteTabInfo(sd);
+          return esc(_siteNameById(sd))+' '+i.icon; }).join(' · ')
+      + '<br>แก้ไขได้เฉพาะไซต์ที่ยังไม่ปิดงาน</div>'
+    : '';
+  return head + '<div class="siteTabs" id="siteTabs">'
+    + visitSites().map(function(sid){
+        var i = _siteTabInfo(sid), on = String(sid) === String(cur);
+        return '<button type="button" class="siteTab'+(on?' on':'')+'"'
+          + (i.lock && !on ? ' disabled' : '')
+          + ' onclick="onSiteTab(\''+esc(sid)+'\')">'
+          + i.icon+' '+esc(_siteNameById(sid))
+          + '<span class="stSub">'+esc(i.sub)+'</span></button>';
+      }).join('')
+    + '</div>';
+}
+// ── ด่านพิมพ์: ทุกไซต์ในกลุ่มต้องครบก่อน (คนเซ็นชุดเดียว รับรองทีเดียว) ──
+// คืนค่า: null = ไซต์ปิดงานแล้ว ไม่นับรวม · '' = ครบ · ข้อความ = ยังขาดอะไร
+function _siteGap(sid){
+  var act = String(sid) === String(activeSid());
+  var o = act ? { locations:locations, _bookReady:_bookReady, _offDone:_offDone,
+                  siteSubmission:siteSubmission }
+             : (SITES[sid] || {});
+  var st = String((o.siteSubmission || {}).status || '');
+  if (st === 'approved' || st === 'pending') return null;      // ปิดงานแล้ว
+  if (o._bookReady === false)                return 'รอ Admin ใส่ยอดระบบ';
+  if (!(o.locations || []).length)           return 'ยังไม่กรอกยอดนับ';
+  if (!o._offDone)                           return 'ยังไม่จบขั้นที่ 3';
+  return '';
+}
+// ไซต์ที่ยังต้องทำอะไรอยู่ (ขัดขวางการพิมพ์ทั้งกลุ่ม)
+function groupGaps(){
+  if (!visitOn()) return [];
+  _siteStash(activeSid());
+  var out = [];
+  visitSites().forEach(function(sid){
+    var g = _siteGap(sid);
+    if (g) out.push({ sid:sid, reason:g });
+  });
+  return out;
+}
+// ไซต์ที่ต้องพิมพ์ (ยังไม่พิมพ์ หรือยอดเปลี่ยนหลังพิมพ์)
+function _siteNeedsDoc(sid){
+  var act = String(sid) === String(activeSid());
+  if (_siteGap(sid) === null) return false;                    // ปิดงานแล้ว
+  if (act) return !_printed || _docStale();
+  var o = SITES[sid] || {};
+  if (!o._printed) return true;
+  return _sigOfSite(sid) !== o._printedSig;
+}
+// ลายเซ็นยอดของไซต์อื่น — คำนวณโดยสลับเข้าไปชั่วคราวแล้วสลับกลับ
+// (ใช้สูตรเดิมทั้งหมด ไม่ copy logic มาเขียนใหม่)
+function _sigOfSite(sid){
+  if (!VISIT || String(sid) === String(activeSid())) return _totalsSig();
+  var back = VISIT.active_sid;
+  _siteStash(back); VISIT.active_sid = sid; _siteApply(sid);
+  var sig = null;
+  try { sig = _totalsSig(); } catch(e) { sig = null; }
+  _siteStash(sid); VISIT.active_sid = back; _siteApply(back);
+  return sig;
+}
+function groupNeedDocs(){
+  if (!visitOn()) return [];
+  return visitSites().filter(_siteNeedsDoc);
+}
+// ไซต์ที่ยังต้องส่งในรอบนี้ — ส่งแล้ว (รอตรวจ/อนุมัติ) ไม่นับ
+// ใช้เป็นขอบเขตของทุกด่าน ไม่งั้นรอบตีกลับจะติดเพราะไซต์ที่ปิดงานไปแล้ว
+function groupTodo(){
+  if (!visitOn()) return [];
+  _siteStash(activeSid());
+  return visitSites().filter(function(sid){
+    var st = String(((SITES[sid] || {}).siteSubmission || {}).status || '');
+    return st !== 'pending' && st !== 'approved';
+  });
+}
+function groupMissingSigned(){
+  return groupTodo().filter(function(sid){ return !_siteHasSigned(sid); });
+}
+
+function onSiteTab(sid){
+  if (String(sid) === String(activeSid())) return;
+  if (_editingIdx !== null) { try { cancelEditMode(); } catch(e) {} }
+  switchSite(sid);
 }
 
 // ── Step 2: กรอกยอดนับ ────────────────────────────────────
@@ -1729,6 +2209,8 @@ function renderStep2(content) {
   var tot = _calcTotals();
 
   content.innerHTML =
+    // ── แท็บไซต์ (โหมดคลังรวม) — สลับไซต์ที่กำลังกรอก ──
+    _siteTabsHtml()+
     // ── ปุ่มเปิดเอกสารที่ Admin เตรียมไว้ (มองเห็นตลอดขั้น 2-5) ──
     (function(){
       var link = _siteDocLink();
@@ -1890,8 +2372,8 @@ function renderStep2(content) {
       '<div class="step-check done" id="chkReNoPrint"'+((_isRe && !_needPrint)?'':' style="display:none;"')+'>'+_chkIcon(true)+'ฉบับแก้ไข — ไม่ต้องพิมพ์/ตรวจสอบซ้ำ</div>'+
       '<div class="step-check" id="chkPhoto">'+_chkIcon(_photoOk())+'ขั้นที่ 5 — รูปหน้างาน ('+SITE_PHOTOS.length+' รูป)</div>'+
       '<div class="step-check" id="chk4">'+_chkIcon(files.length>0)+'ขั้นที่ 5 — Upload รายงาน '+(files.length>0?'('+files.length+' ไฟล์)':'(ยังไม่มีไฟล์)')+'</div>'+
-      '<button class="btn btn-success" id="btnSubmit" onclick="submitCount()" '+(ready?'':'disabled')+' style="width:100%;margin-top:8px;">'+
-        '📤 Submit ผลการนับ'+
+      '<button class="btn btn-success" id="btnSubmit" onclick="'+(visitOn()?'submitGroup()':'submitCount()')+'" '+(ready?'':'disabled')+' style="width:100%;margin-top:8px;">'+
+        (visitOn() ? ('📤 ส่งผลทั้งกลุ่ม ('+visitSites().length+' ไซต์)') : '📤 Submit ผลการนับ')+
       '</button>'+
       '<div id="submitNote" style="font-size:11px;color:var(--muted);text-align:center;margin-top:4px;"></div>'+
     '</div>';
@@ -2068,6 +2550,14 @@ function updateSubmitCard() {
   var _printOk   = _printed && !_stale;
   var _needPrint = !_isRe || _rejNeedsBook() || _stale;
   var ready   = hasLoc && _offDone && _photoOk() && hasFile && (!_needPrint || (_step3Seen && _printOk));
+  // โหมดคลังรวม — ส่งได้เมื่อครบทุกไซต์ (คนเซ็นรับรองทีเดียว)
+  var _gGaps = [], _gDocs = [], _gFiles = [];
+  if (visitOn()) {
+    _gGaps  = groupGaps();
+    _gDocs  = groupNeedDocs();
+    _gFiles = groupMissingSigned();
+    ready = ready && !_gGaps.length && !_gDocs.length && !_gFiles.length;
+  }
 
   // ปลดล็อกขั้น 3/4 + ปุ่มไปขั้น 3 ทันทีที่มี Location (กันต้อง refresh)
   var goBtn = document.getElementById('btnGoStep3');
@@ -2372,8 +2862,84 @@ function _buildStep3Body() {
     _s3title('① ยอดนับจริง แยกตามสถานะ') + _renderStatusTable(tot) +
     _s3title('② งบกระทบยอด — เทียบกับยอดระบบ') + _renderComparison(tot) +
     _offBlock() +
-    '<button class="btn-print" onclick="printDoc()">🖨️ สร้างเอกสารยืนยัน (Word)</button>'+
-    '<div style="font-size:11px;color:var(--muted);text-align:center;margin-top:6px;line-height:1.6;">ได้ไฟล์ .docx จากแม่แบบของรอบ — เปิดใน Word สั่งพิมพ์ เซ็น แล้วสแกนกลับมาอัปในขั้นที่ 5</div>';
+    _printBtnHtml();
+}
+
+// ปุ่มสร้างเอกสาร — โหมดคลังรวมบล็อกจนครบทั้งกลุ่ม แล้วพิมพ์ทีเดียว
+function _printBtnHtml(){
+  var note = 'ได้ไฟล์ .docx จากแม่แบบของรอบ — เปิดใน Word สั่งพิมพ์ เซ็น แล้วสแกนกลับมาอัปในขั้นที่ 5';
+  if (!visitOn()) {
+    return '<button class="btn-print" onclick="printDoc()">🖨️ สร้างเอกสารยืนยัน (Word)</button>'
+      + '<div style="font-size:11px;color:var(--muted);text-align:center;margin-top:6px;line-height:1.6;">'+note+'</div>';
+  }
+  var gaps = groupGaps(), need = groupNeedDocs();
+  if (gaps.length) {
+    return '<button class="btn-print" disabled>🖨️ ยังพิมพ์ไม่ได้ — รออีก '+gaps.length+' ไซต์</button>'
+      + '<div style="font-size:11.5px;color:var(--warn);text-align:center;margin-top:7px;line-height:1.7;">'
+      + 'คนเซ็นรับรองผลทีเดียวทั้งกลุ่ม จึงต้องกรอกครบทุกไซต์ก่อน<br>'
+      + gaps.map(function(g){ return '• <b>'+esc(_siteNameById(g.sid))+'</b> — '+esc(g.reason); }).join('<br>')
+      + '</div>' + _dropBtnHtml(gaps);
+  }
+  var lbl = (need.length === visitSites().length)
+    ? ('🖨️ สร้างเอกสารทั้งกลุ่ม ('+need.length+' ฉบับ)')
+    : (need.length ? ('🖨️ สร้างเอกสารใหม่ (เฉพาะ '+need.map(_siteNameById).join(', ')+')')
+                   : '✅ เอกสารครบทุกไซต์แล้ว');
+  return '<button class="btn-print" onclick="printDocGroup()"'+(need.length?'':' disabled')+'>'+lbl+'</button>'
+    + '<div style="font-size:11px;color:var(--muted);text-align:center;margin-top:6px;line-height:1.6;">'
+    + (need.length < visitSites().length && need.length
+        ? 'ยอดของไซต์อื่นไม่เปลี่ยน ใบเดิมยังใช้ได้ — พิมพ์ใหม่เฉพาะใบที่ยอดขยับ'
+        : note)
+    + '</div>';
+}
+// ปุ่มถอดไซต์ออกจากกลุ่ม — ทางหนีเมื่อติดทั้งกลุ่มเพราะไซต์เดียว (ก่อนพิมพ์เท่านั้น)
+function _dropBtnHtml(gaps){
+  if (!visitOn() || visitSites().length < 2) return '';
+  if (_groupPrintedAny()) {
+    return '<div style="font-size:11px;color:var(--muted);text-align:center;margin-top:8px;">'
+      + 'พิมพ์เอกสารไปแล้ว — ถอดไซต์ออกจากกลุ่มไม่ได้ (เอกสารที่เซ็นต้องตรงกับชุดที่ส่ง)</div>';
+  }
+  return '<div style="margin-top:10px;display:flex;flex-direction:column;gap:6px;">'
+    + gaps.map(function(g){
+        return '<button type="button" class="btn-clear" style="font-size:11.5px;text-align:center;"'
+          + ' onclick="dropSite(\''+esc(g.sid)+'\')">ถอด '+esc(_siteNameById(g.sid))
+          + ' ออกจากกลุ่มรอบนี้ (ไปนับวันหลัง)</button>';
+      }).join('')
+    + '</div>';
+}
+function _groupPrintedAny(){
+  if (!visitOn()) return false;
+  _siteStash(activeSid());
+  return visitSites().some(function(sid){ return !!(SITES[sid] || {})._printed; });
+}
+// ถอดไซต์ออกจากการเดินทางนี้ — ไซต์ยังว่างในระบบ ไปนับเป็นไซต์เดี่ยววันหลังได้
+function dropSite(sid){
+  if (!visitOn()) return false;
+  if (_groupPrintedAny()) { showToast('พิมพ์เอกสารไปแล้ว — ถอดไซต์ออกจากกลุ่มไม่ได้', 'error'); return false; }
+  if (visitSites().length < 3 && visitSites().length - 1 < 2) {
+    // เหลือไซต์เดียว = ออกจากโหมดกลุ่ม ยังทำได้ แต่ต้องยืนยัน
+  }
+  var nm = _siteNameById(sid);
+  var why = (typeof prompt === 'function')
+    ? prompt('ถอด "'+nm+'" ออกจากกลุ่มรอบนี้\nระบุเหตุผล (บันทึกไว้เป็นหลักฐาน):', '')
+    : '';
+  if (why === null) return false;
+  why = String(why || '').trim();
+  if (!why) { showToast('ต้องระบุเหตุผลก่อนถอดไซต์', 'warn'); return false; }
+
+  _siteStash(activeSid());
+  VISIT.dropped = VISIT.dropped || [];
+  VISIT.dropped.push({ site_id:sid, site_name:nm, reason:why, at:new Date().toISOString() });
+  VISIT.site_ids = visitSites().filter(function(x){ return String(x) !== String(sid); });
+  delete SITES[sid];
+  if (String(VISIT.active_sid) === String(sid)) {
+    VISIT.active_sid = VISIT.site_ids[0] || '';
+    _siteApply(VISIT.active_sid);
+    if (session) { session.site_id = VISIT.active_sid; session.site = _siteNameById(VISIT.active_sid); }
+  }
+  visitPersist();
+  render();
+  showToast('ถอด '+nm+' ออกจากกลุ่มแล้ว — ไปนับเป็นไซต์เดี่ยววันหลังได้', 'success');
+  return true;
 }
 
 // สรุปรายการปรับปรุงที่กรอกในขั้นที่ 3
@@ -2557,12 +3123,23 @@ function _gridDup(){
 // - แถวร่าง (ไม่มีชื่อ) → เก็บไว้ท้ายสุด · แถวมีชื่อที่หลุดจาก locations แล้ว = ของเก่า ทิ้ง
 function gridSync(){
   var prev = GRID.rows || [];
+  var pool = locations.slice();        // locations ที่ยังไม่ได้วางลงแถวไหน
+  var rows = [];
   // คงลำดับเดิมไว้ทุกแถว — ห้ามสลับที่ เพราะ index ถูกฝังไว้ใน handler ของแต่ละช่อง
   // ถ้าสลับที่โดยไม่วาดตารางใหม่ ยอดที่พิมพ์จะไปลงแถวอื่น
-  var rows = prev.filter(function(r){
-    return locations.indexOf(r) >= 0 || !_gName(r);   // อยู่ใน locations หรือเป็นแถวร่าง
+  prev.forEach(function(r){
+    var at = pool.indexOf(r);
+    if (at >= 0) { rows.push(r); pool.splice(at, 1); return; }   // object เดิม — คงไว้
+    var nm = _gName(r);
+    if (!nm) { rows.push(r); return; }                           // แถวร่าง — คงไว้
+    // object ถูกแทนด้วยตัวใหม่ (แก้ผ่านโหมดฟอร์ม / restore จาก server)
+    // → วางตัวใหม่ที่ "ตำแหน่งเดิม" ไม่ใช่ต่อท้าย เพื่อให้ลำดับในตารางไม่สลับ
+    for (var i = 0; i < pool.length; i++) {
+      if (_gName(pool[i]) === nm) { rows.push(pool[i]); pool.splice(i, 1); return; }
+    }
+    // ไม่มีตัวแทน = Location นี้ถูกลบไปแล้ว → ทิ้งแถว
   });
-  locations.forEach(function(l){ if (rows.indexOf(l) < 0) rows.push(l); });
+  pool.forEach(function(l){ rows.push(l); });   // Location ใหม่ที่ยังไม่มีแถว → ต่อท้าย
   GRID.rows = rows;
   if (!GRID.rows.length) GRID.rows.push(emptyLoc(''));
 }
@@ -3099,6 +3676,10 @@ function addLocation() {
   var loc = _readFormManual(locName);
 
   if (_editingIdx !== null) {
+    // แก้ค่าใน object เดิม ไม่สร้างตัวใหม่ทับ — โหมดตารางอ้างอิง object เดียวกันอยู่
+    // ถ้าแทนด้วยตัวใหม่ แถวในตารางจะเสียการอ้างอิงแล้วเด้งไปท้ายตาราง
+    var cur = locations[_editingIdx];
+    if (cur) { cur.name = loc.name; cur.q = loc.q; loc = cur; }
     locations[_editingIdx] = loc;
     saveProgress();
     refreshLocList();
@@ -3149,6 +3730,22 @@ function updateSubmitBar() { updateSubmitCard(); }
 
 function handleFiles(fileList) {
   Array.from(fileList).forEach(function(f){ files.push(f); });
+  // โหมดคลังรวม: สแกนใบเซ็นรวมไฟล์เดียวแล้วใช้กับทุกไซต์ได้
+  // ใส่ File object ตัวเดียวกันให้ทุกไซต์ → ตอนส่งอัปขึ้น Drive ครั้งเดียวแล้วใช้ URL ร่วม
+  if (visitOn()) {
+    var cur = activeSid();
+    _siteStash(cur);
+    visitSites().forEach(function(sid){
+      if (String(sid) === String(cur)) return;
+      var o = SITES[sid]; if (!o) return;
+      var st = String((o.siteSubmission || {}).status || '');
+      if (st === 'approved' || st === 'pending') return;     // ปิดงานแล้ว ไม่ต้องแนบ
+      o.files = (o.files || []);
+      Array.from(fileList).forEach(function(f){
+        if (o.files.indexOf(f) < 0) o.files.push(f);
+      });
+    });
+  }
   var el = document.getElementById('fileList');
   if (el) el.innerHTML = _renderFileList();
   updateSubmitCard();
@@ -3423,6 +4020,65 @@ function _nowBangkok() {
   } catch (e) { return new Date().toISOString(); }
 }
 
+// ── พิมพ์เอกสารทั้งกลุ่ม (ทีละไซต์ ใช้ตรรกะเดิมทั้งหมด) ──
+// วิธี: สลับไซต์เข้าไปชั่วคราว เรียก printDoc ของเดิม แล้วสลับกลับ
+async function printDocGroup(){
+  var gaps = groupGaps();
+  if (gaps.length) {
+    showToast('⚠ ยังพิมพ์ไม่ได้ — ' + gaps.map(function(g){
+      return _siteNameById(g.sid) + ': ' + g.reason; }).join(' · '), 'error');
+    return;
+  }
+  var need = groupNeedDocs();
+  if (!need.length) { showToast('เอกสารทุกไซต์เป็นฉบับล่าสุดแล้ว', 'info'); return; }
+
+  var back = activeSid(), got = [], failed = [];
+  _docQuiet = true;
+  try {
+    for (var i = 0; i < need.length; i++) {
+      var sid = need[i];
+      showToast('⏳ กำลังสร้างเอกสาร ' + _siteNameById(sid) + ' (' + (i+1) + '/' + need.length + ')', 'info');
+      if (String(sid) !== String(activeSid())) switchSite(sid, { quiet:true });
+      var r = null;
+      try { r = await printDoc(); } catch(e) { r = null; }
+      if (r && r.url) got.push({ sid:sid, name:_siteNameById(sid), url:r.url, fname:_lastDocName });
+      else failed.push(_siteNameById(sid));
+    }
+  } finally {
+    _docQuiet = false;
+    if (String(activeSid()) !== String(back)) switchSite(back, { quiet:true });
+  }
+  visitPersist();
+  render();
+  if (got.length) _showDocLinks(got, failed);
+  else showToast('❌ สร้างเอกสารไม่สำเร็จ: ' + failed.join(', '), 'error');
+}
+
+// กล่องลิงก์รวมหลายไซต์
+function _showDocLinks(list, failed){
+  var m = document.getElementById('docLinkModal');
+  if (!m) { showToast('สร้างเอกสารครบแล้ว — เปิดลิงก์จากโฟลเดอร์ของ Site', 'info'); return; }
+  document.getElementById('dlTitle').textContent = 'เอกสารพร้อมแล้ว ' + list.length + ' ฉบับ';
+  document.getElementById('dlHint').innerHTML =
+    'เปิดลิงก์ทีละไซต์ที่<b>คอม</b> → ได้ไฟล์ Word → สั่งพิมพ์ เซ็น แล้วสแกนกลับมาอัปในขั้นที่ 5'
+    + '<div style="margin-top:10px;display:flex;flex-direction:column;gap:7px;">'
+    + list.map(function(x){
+        return '<a href="'+esc(x.url)+'" target="_blank" rel="noopener" '
+          + 'style="display:block;padding:9px 11px;border:1px solid var(--border2);border-radius:8px;'
+          + 'background:var(--surface);color:var(--accent);font-weight:600;font-size:13px;text-decoration:none;">'
+          + '📄 '+esc(x.name)+' ↗</a>';
+      }).join('')
+    + '</div>'
+    + ((failed && failed.length)
+        ? '<div style="margin-top:10px;color:var(--danger);font-size:12px;">สร้างไม่สำเร็จ: '
+          + esc(failed.join(', ')) + ' — กดสร้างอีกครั้ง</div>' : '');
+  document.getElementById('dlFile').textContent = '';
+  var inp = document.getElementById('docLinkInput'); if (inp) { inp.style.display='none'; inp.value=''; }
+  var cp  = document.getElementById('dlCopy');      if (cp)  cp.style.display = 'none';
+  m.classList.add('open');
+  showToast('✅ สร้างเอกสารครบ ' + list.length + ' ฉบับ', 'success');
+}
+
 function printDoc() {
   if (!V2_OK())          { showToast('ยังไม่มี config ของรอบ — กดตรวจสอบสถานะอีกครั้ง', 'warn'); return; }
   if (!locations.length) { showToast('ยังไม่มีข้อมูลนับ', 'warn'); return; }
@@ -3491,7 +4147,7 @@ function _uploadDocForLink(blob, fname) {
       .then(function(r){ return r.json(); })
       .then(function(d){
         if (d.status !== 'ok' || !d.url) throw new Error(d.message || 'อัปไฟล์ไม่สำเร็จ');
-        _showDocLink(d.url, d.view || '', fname);
+        if (!_docQuiet) _showDocLink(d.url, d.view || '', fname);
         resolve(d);
       })
       .catch(function(err){
@@ -3574,6 +4230,7 @@ function _copyDocLink() {
 }
 
 var _lastDocBlob = null, _lastDocName = '';
+var _docQuiet = false;   // true = พิมพ์เป็นชุด ยังไม่เปิดกล่องลิงก์ทีละใบ
 
 // โหลดไฟล์ที่สร้างไว้ลงเครื่องนี้ (กดเอง ไม่ใช่อัตโนมัติ)
 function _saveDocHere() {
@@ -3605,18 +4262,22 @@ function _fmtSize(b){if(b<1024)return b+'B';if(b<1048576)return Math.round(b/102
 
 
 // ── Submit ────────────────────────────────────────────────
-async function submitCount() {
-  if (!locations.length) return;
+async function submitCount(opts) {
+  if (!locations.length) return false;
+  var quiet = !!(opts && opts.quiet);
   var btn = document.getElementById('btnSubmit');
-  btn.disabled = true;
-  btn.innerHTML = '<span class="spinner"></span>กำลังส่ง...';
+  if (btn && !quiet) {
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>กำลังส่ง...';
+  }
 
   try {
     // upload ไฟล์ก่อน — ไฟล์แรก = รายงานที่เซ็นแล้ว
     var fileUrls = _keepFileUrls.slice();   // ไฟล์ใบเซ็นเดิม (ส่วนที่ไม่ถูกตีกลับ)
     for (var i = 0; i < files.length; i++) {
-      var url = await uploadFile(files[i], { kind:'report', extra:(fileUrls.length+1) });
-      if (url) fileUrls.push(url);
+      // ไฟล์เดียวกันที่แนบหลายไซต์ (โหมดคลังรวม) → อัปครั้งเดียวแล้วใช้ URL ร่วม
+      var url = files[i].__url || await uploadFile(files[i], { kind:'report', extra:(fileUrls.length+1) });
+      if (url) { try { files[i].__url = url; } catch(e) {} fileUrls.push(url); }
     }
     // upload ไฟล์หลักฐานของแต่ละรายการปรับปรุง (แยกตาม adjust_id)
     var adjUrls = {};
@@ -3641,6 +4302,8 @@ async function submitCount() {
         purl = P.src;                                  // รูปเดิม (ถูกตีกลับ) → ใช้ของเดิม
       }
       if (!purl) continue;
+      // จำ URL ไว้ใน SITE_PHOTOS — ไซต์ถัดไปในกลุ่มใช้รูปเดิม ไม่อัปซ้ำ
+      P.url = purl; if (pid) P.id = pid;
       sitePhotos.push({ url:purl, id:pid, no:pi+1 });
     }
     var locationsOut = locations.map(function(L){ return { name:L.name, values:L.q }; });
@@ -3673,13 +4336,73 @@ async function submitCount() {
     siteSubmission = { count_id: newId, revision: data.revision || 1, status: 'pending', review_comment: '', reject_steps: [] };
     _keepFileUrls = []; files.length = 0; _rejHlSeen = null;
     _printed = false; // ถ้าถูกตีกลับแล้วส่งใหม่ ต้องพิมพ์ใหม่
-    showToast('📤 ส่งแล้ว ('+newId+revTxt+') — รอ Admin ตรวจสอบ', 'success');
-    render(); // siteSubmission = pending → หน้าจอล็อกรออนุมัติ
+    _submitState = 'ok';
+    if (!quiet) {
+      showToast('📤 ส่งแล้ว ('+newId+revTxt+') — รอ Admin ตรวจสอบ', 'success');
+      render(); // siteSubmission = pending → หน้าจอล็อกรออนุมัติ
+    }
+    return true;
   } catch(err) {
-    showToast('ส่งไม่สำเร็จ: '+err.message, 'error');
-    btn.disabled = false;
-    btn.innerHTML = '📤 Submit ผลการนับ';
+    _submitState = 'error';
+    if (!quiet) {
+      showToast('ส่งไม่สำเร็จ: '+err.message, 'error');
+      if (btn) { btn.disabled = false; btn.innerHTML = '📤 Submit ผลการนับ'; }
+    }
+    return false;
   }
+}
+
+// ── ส่งผลทั้งกลุ่ม — ทีละไซต์ ไซต์ที่ส่งผ่านแล้วไม่ส่งซ้ำ ──
+async function submitGroup(){
+  var todo = groupTodo();
+  if (!todo.length) { showToast('ส่งครบทุกไซต์แล้ว — รอ Admin ตรวจสอบ', 'info'); return; }
+  var gaps = groupGaps();
+  if (gaps.length) {
+    showToast('⚠ ยังส่งไม่ได้ — ' + gaps.map(function(g){
+      return _siteNameById(g.sid)+': '+g.reason; }).join(' · '), 'error');
+    return;
+  }
+  var need = groupNeedDocs();
+  if (need.length) {
+    showToast('⚠ ต้องพิมพ์เอกสารใหม่แล้วเซ็นก่อน: ' + need.map(_siteNameById).join(', '), 'error');
+    return;
+  }
+  var noFile = groupMissingSigned();
+  if (noFile.length) {
+    showToast('⚠ ยังไม่ได้แนบไฟล์ใบเซ็นของ: ' + noFile.map(_siteNameById).join(', '), 'error');
+    return;
+  }
+
+  var btn = document.getElementById('btnSubmit');
+  if (btn) { btn.disabled = true; }
+  var back = activeSid(), ok = [], bad = [];
+  _siteStash(back);
+
+  for (var i = 0; i < todo.length; i++) {
+    var sid = todo[i];
+    if (btn) btn.innerHTML = '<span class="spinner"></span>กำลังส่ง '
+      + esc(_siteNameById(sid)) + ' ('+(i+1)+'/'+todo.length+')…';
+    if (String(sid) !== String(activeSid())) switchSite(sid, { quiet:true });
+    var done = false;
+    try { done = await submitCount({ quiet:true }); } catch(e) { done = false; }
+    (done ? ok : bad).push(_siteNameById(sid));
+  }
+  if (String(activeSid()) !== String(back)) switchSite(back, { quiet:true });
+  visitPersist();
+  render();
+  if (bad.length) {
+    showToast('ส่งสำเร็จ '+ok.length+' ไซต์ · ไม่สำเร็จ: '+bad.join(', ')+' — กดส่งอีกครั้งจะส่งเฉพาะที่ค้าง', 'error');
+  } else {
+    showToast('📤 ส่งครบ '+ok.length+' ไซต์ — รอ Admin ตรวจสอบ', 'success');
+  }
+}
+// ไซต์นี้มีไฟล์ใบเซ็นพร้อมส่งแล้วหรือยัง
+function _siteHasSigned(sid){
+  if (String(sid) === String(activeSid())) return _hasSignedFile();
+  var o = SITES[sid] || {};
+  if ((o.files || []).length) return true;
+  if (!(o._keepFileUrls || []).length) return false;
+  return !_siteNeedsDoc(sid);
 }
 
 // ── ตั้งชื่อไฟล์ให้บอกได้ว่าเป็นของ site ไหน + ปลอดภัยข้ามระบบ ──
