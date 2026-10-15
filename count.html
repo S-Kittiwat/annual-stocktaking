@@ -1579,6 +1579,14 @@ async function pollSiteQueue(){
   if(d.sub_status==='approved' || d.sub_status==='rejected' || d.sub_status==='reopened'){
     stopSitePoll(); if(session&&session.site) fetchBookBalance(session.site); return;
   }
+  if(d.queue_state==='held'){
+    // เจ้าหน้าที่คนเดียวกันจองคิวนี้ไว้แล้ว กำลังตรวจไซต์อื่นของเราอยู่ — ไม่ต้องรอคิวใหม่
+    box.style.background='rgba(184,137,61,.12)'; box.style.borderColor='var(--border2)'; box.style.color='#8a6526';
+    box.innerHTML = '🏬 <b>เจ้าหน้าที่ '+esc(d.agent_name||'')+' จองคิวนี้ไว้แล้ว</b><br>'
+      + '<span style="font-size:12px;">กำลังตรวจไซต์อื่นของคุณอยู่ — ตรวจเสร็จจะมาต่อไซต์นี้เลย ไม่ต้องรอคิวใหม่</span>'
+      + ((d.room_link) ? '<br><button class="btn btn-success" onclick="window.open(\''+esc(d.room_link)+'\',\'_blank\',\'noopener\')" style="width:100%;margin-top:10px;">🎥 เข้าห้อง Teams'+(d.room?(' — '+esc(d.room)):'')+'</button>' : '');
+    return;
+  }
   if(d.queue_state==='checking'){
     var link = d.room_link || '';
     box.style.background='rgba(16,110,86,.1)'; box.style.borderColor='var(--success,#0f6e56)'; box.style.color='var(--success,#0f6e56)';
