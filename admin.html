@@ -2262,6 +2262,7 @@ function siteSync(){
   SITE_DRAFT = (S.sites||[]).map(function(x){
     return { site_id:x.site_id, site_name:x.site_name, is_active:!!x.is_active,
              start_time:x.start_time||'', drive_link:x.drive_link||'',
+             group_name:x.group_name||'',
              doc_no:(S.docnos||{})[x.site_id]||'', is_new:false,
              locked: !!x.checkin_at || (S.subs||[]).some(function(y){ return y.site_id===x.site_id; }) };
   });
@@ -2291,6 +2292,7 @@ function siteDirty(){
     var o=(S.sites||[]).filter(function(x){ return x.site_id===d.site_id; })[0];
     return o && (o.site_name!==d.site_name || !!o.is_active!==!!d.is_active
                  || (o.start_time||'')!==d.start_time || (o.drive_link||'')!==d.drive_link
+                 || (o.group_name||'')!==(d.group_name||'')
                  || ((S.docnos||{})[d.site_id]||'')!==(d.doc_no||''));
   });
   if(changed) return true;
@@ -2355,7 +2357,9 @@ function renderSites(){
                       : '<span class="status-badge sb-pending">'+filled+'/'+items.length+'</span>');
     var st = d.is_new ? '<span class="hint">ใหม่</span>' : (stMap[siteState(d.site_id)]||stMap.idle);
     html += '<tr class="site-row'+(SITE_OPEN===d.site_id?' open':'')+'" onclick="siteToggleRow(\''+esc(d.site_id)+'\')">'
-      + '<td><b>'+esc(d.site_name)+'</b>'+(d.is_new?' <span class="chip-new">ใหม่</span>':'')+'</td>'
+      + '<td><b>'+esc(d.site_name)+'</b>'+(d.is_new?' <span class="chip-new">ใหม่</span>':'')
+      +   (d.group_name ? '<div class="hint" style="margin-top:2px;">🏬 '+esc(d.group_name)
+            +(siteGroupCount(d.group_name)>1?(' · '+siteGroupCount(d.group_name)+' ไซต์'):'')+'</div>' : '')+'</td>'
       + '<td class="mono" style="font-size:12px;">'+(d.doc_no?esc(d.doc_no):'<span class="hint">—</span>')
       +   (d.is_active?'':' <span class="status-badge sb-idle">ปิด</span>')+'</td>'
       + '<td class="num">'+bookCell+'</td>'
@@ -2375,6 +2379,28 @@ function renderSites(){
   siteMark();
 }
 
+// กลุ่มที่มีอยู่แล้วในรอบนี้ — ใช้เป็นตัวเลือกให้พิมพ์ไม่ผิด
+function siteGroups(){
+  var seen={}, out=[];
+  (SITE_DRAFT||[]).forEach(function(d){
+    var g=String(d.group_name||'').trim();
+    if(g && !seen[g]){ seen[g]=1; out.push(g); }
+  });
+  return out.sort();
+}
+function _siteGroupListHtml(){
+  return '<datalist id="siteGroupList">'
+    + siteGroups().map(function(g){ return '<option value="'+esc(g)+'">'; }).join('')
+    + '</datalist>';
+}
+// จำนวนไซต์ในกลุ่มเดียวกัน — ใช้บอกว่ากลุ่มนี้มีกี่ไซต์
+function siteGroupCount(g){
+  g=String(g||'').trim(); if(!g) return 0;
+  return (SITE_DRAFT||[]).filter(function(d){
+    return String(d.group_name||'').trim()===g && (d.is_active||d.is_new);
+  }).length;
+}
+
 /* ── ชั้นแก้ไข ── */
 function siteEditorHtml(d,idx){
   var items=siteItems(), bsts=siteBookStatuses();
@@ -2386,6 +2412,11 @@ function siteEditorHtml(d,idx){
     +     '<input class="input mono" id="se_time_'+idx+'" inputmode="numeric" maxlength="5" placeholder="--:--" '
     +       'style="max-width:110px;text-align:center;letter-spacing:1px;" value="'+esc(d.start_time)+'" '
     +       'oninput="siteTimeInput(this,'+idx+')" onblur="siteTimeBlur(this,'+idx+')"></div>'
+    +   '<div class="field"><label>กลุ่มคลัง <span style="color:var(--muted);font-weight:400;">(ว่าง = ไซต์เดี่ยว)</span></label>'
+    +     '<input class="input" id="se_group_'+idx+'" list="siteGroupList" placeholder="เช่น คลัง A" '
+    +       'value="'+esc(d.group_name||'')+'" oninput="siteSet('+idx+',\'group_name\',this.value)">'
+    +     '<div class="hint">ไซต์ที่อยู่กลุ่มเดียวกัน ผู้นับจะนับรวมในครั้งเดียวได้ แต่ยังออกใบสรุปแยกรายไซต์</div></div>'
+    +   _siteGroupListHtml()
     +   '<div class="field"><label>ใช้ในรอบนี้</label>'
     +     '<button class="btn btn-outline btn-sm" style="align-self:flex-start;" onclick="siteToggleActive('+idx+')">'
     +     'เอาออกจากรอบนี้</button>'
@@ -2597,7 +2628,7 @@ function siteAdd(){
   if(SITE_DRAFT.some(function(x){ return x.site_name===name; })){ toast('มี Site ชื่อนี้อยู่แล้ว','error'); return; }
   inp.value='';
   var tmp='tmp_'+(++SITE_TMP);
-  SITE_DRAFT.push({ site_id:tmp, site_name:name, is_active:true, start_time:'', drive_link:'',
+  SITE_DRAFT.push({ site_id:tmp, site_name:name, is_active:true, start_time:'', drive_link:'', group_name:'',
                     doc_no:'', is_new:true, locked:false });
   SITE_OPEN=tmp; renderSites(); drawSiteAdd();
 }
@@ -2632,7 +2663,8 @@ function siteSaveOne(idx){
 
   post({ action:'saveSitesBatch',
          sites:[{ site_id: d.is_new ? '' : d.site_id, site_name:d.site_name, is_active:d.is_active,
-                  start_time:d.start_time||'', doc_no:d.doc_no||'' }],
+                  start_time:d.start_time||'', doc_no:d.doc_no||'',
+                  group_name:d.group_name||'' }],
          delete_ids:[] })
   .then(function(r){
     if(r && r.status==='error') throw new Error(r.message||'บันทึกข้อมูล Site ไม่สำเร็จ');
