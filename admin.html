@@ -342,44 +342,42 @@ table.recon .grp{border-left:1px solid var(--border);}
 .ckSync.err{background:rgba(220,70,60,.12);border-color:rgba(220,70,60,.42);color:#c0392b;}
 .ckSync.send .dot{animation:ckp 1s infinite;}
 @keyframes ckp{0%,100%{opacity:1}50%{opacity:.25}}
-.ckTbl{width:100%;border-collapse:collapse;font-size:13px;}
-.ckTbl col.cDoc{width:96px;} .ckTbl col.cTime{width:52px;}
-.ckTbl col.cSite{width:30%;} .ckTbl col.cPic{width:118px;}
-.ckTbl col.cTick{width:38px;}
-.ckTbl th.vert{height:104px;padding:6px 2px;vertical-align:bottom;text-align:center;}
-.ckTbl th.vert>span{writing-mode:vertical-rl;transform:rotate(180deg);display:inline-block;
-  white-space:nowrap;max-height:92px;overflow:hidden;text-overflow:ellipsis;font-weight:700;font-size:11px;}
-.ckTbl th.vert.autoCol>span{color:#1e8a4d;}
-.ckTbl td.tick{text-align:center;padding:7px 2px;}
-.ckTbl tr.hasNote>td{border-bottom:0;}
-.ckTbl tr.noteRow>td{padding:0 9px 9px 9px;}
-.ckTbl tr.noteRow .lbl{font-size:11px;color:var(--muted,#999);margin-bottom:3px;}
+.ckSite{border:1px solid var(--border,#e4e4e4);border-radius:11px;padding:12px 14px;margin-bottom:10px;
+  background:var(--surface,#fff);}
+.ckSiteHd{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px;}
+.ckSiteHd .doc{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11.5px;color:var(--muted,#999);
+  background:rgba(0,0,0,.04);border-radius:6px;padding:2px 7px;white-space:nowrap;}
+.ckSiteHd .tm{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;color:var(--muted,#999);white-space:nowrap;}
+.ckSiteHd .nm{font-weight:700;font-size:14.5px;}
+.ckSiteHd .grp{font-size:11px;color:var(--muted,#999);font-weight:400;margin-left:6px;}
+.ckSiteHd .sp{flex:1;min-width:8px;}
+.ckSiteHd .cnt{font-size:11.5px;color:var(--muted,#999);white-space:nowrap;}
+.ckSiteHd .cnt.full{color:#1e8a4d;font-weight:700;}
+.ckChk{display:flex;gap:7px;flex-wrap:wrap;}
+.ckChk button,.ckChk span.au{display:inline-flex;align-items:center;gap:6px;padding:5px 11px 5px 8px;
+  border-radius:8px;border:1.5px solid var(--border,#dcdcdc);background:var(--surface,#fff);
+  color:inherit;font:inherit;font-size:12.5px;line-height:1.3;cursor:pointer;text-align:left;}
+.ckChk button:hover{border-color:var(--accent,#b8893d);}
+.ckChk .mk{display:inline-flex;align-items:center;justify-content:center;width:17px;height:17px;flex:none;
+  border-radius:5px;border:1.5px solid var(--border,#cfcfcf);font-size:11px;line-height:1;color:transparent;}
+.ckChk button.on{background:rgba(34,160,90,.12);border-color:rgba(34,160,90,.5);color:#1e8a4d;font-weight:600;}
+.ckChk button.on .mk{background:#1e8a4d;border-color:#1e8a4d;color:#fff;}
+.ckChk span.au{cursor:default;border-style:dashed;opacity:.9;}
+.ckChk span.au.on{background:rgba(34,160,90,.09);border-color:rgba(34,160,90,.45);color:#1e8a4d;}
+.ckChk span.au.on .mk{background:#1e8a4d;border-color:#1e8a4d;color:#fff;}
+.ckNoteWrap{margin-top:10px;}
+.ckNoteWrap .lbl{font-size:11px;color:var(--muted,#999);margin-bottom:3px;}
 .ckColMgr{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:11px;
   padding:9px 11px;border:1px dashed var(--border,#d8d8d8);border-radius:9px;}
 .ckColMgr .cTag{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:999px;
   font-size:12px;background:rgba(0,0,0,.04);border:1px solid var(--border,#e0e0e0);}
 .ckColMgr .cTag.auto{opacity:.65;}
 .ckColMgr .cTag button{border:0;background:none;cursor:pointer;color:inherit;font-size:12px;padding:0;line-height:1;}
-.ckTbl th,.ckTbl td{padding:8px 9px;border-bottom:1px solid var(--border,#e8e8e8);vertical-align:top;text-align:left;}
-.ckTbl thead th{position:sticky;top:0;background:var(--surface,#fff);font-size:11.5px;font-weight:700;
-  letter-spacing:.02em;white-space:nowrap;z-index:1;}
-.ckTbl th.lockCol{color:var(--muted,#888);}
-.ckTbl tbody tr:hover{background:rgba(0,0,0,.02);}
-.ckTbl .mono{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11.5px;
-  overflow:hidden;text-overflow:ellipsis;}
-.ckTbl .siteCell{font-weight:600;line-height:1.45;word-break:break-word;}
-.ckGrp{font-size:11px;color:var(--muted,#888);font-weight:400;margin-top:2px;}
-.ckBox{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:7px;
-  border:1.5px solid var(--border,#d6d6d6);background:var(--surface,#fff);cursor:pointer;font-size:14px;
-  line-height:1;color:var(--muted,#aaa);padding:0;}
-.ckBox.on{background:rgba(34,160,90,.15);border-color:rgba(34,160,90,.5);color:#1e8a4d;font-weight:700;}
-.ckBox.auto{cursor:default;border-style:dashed;}
-.ckBox.auto.on{background:rgba(34,160,90,.1);}
-.ckNote{width:100%;min-height:34px;resize:vertical;font:inherit;font-size:12.5px;
+.ckNote{width:100%;min-height:36px;resize:vertical;font:inherit;font-size:12.5px;
   padding:6px 8px;border-radius:7px;border:1px solid var(--border,#ddd);background:var(--surface,#fff);color:inherit;}
 .ckNoteRo{font-size:12.5px;color:var(--muted,#777);line-height:1.55;}
-.ckPicSel{font:inherit;font-size:12px;padding:4px 6px;border-radius:7px;
-  border:1px solid var(--border,#ddd);background:var(--surface,#fff);color:inherit;max-width:100%;width:100%;}
+.ckPicSel{font:inherit;font-size:12.5px;padding:4px 8px;border-radius:7px;
+  border:1px solid var(--border,#ddd);background:var(--surface,#fff);color:inherit;max-width:170px;}
 .ckSec{border:1px solid var(--border,#e4e4e4);border-radius:11px;padding:13px 15px;margin-bottom:11px;
   background:var(--surface,#fff);}
 .ckSec h4{margin:0 0 3px;font-size:14.5px;}
@@ -722,7 +720,7 @@ table.recon .grp{border-left:1px solid var(--border);}
     <div class="panel" id="panel-checklist">
       <div class="ckHead">
         <div style="flex:1;min-width:240px;">
-          <div class="eyebrow" style="margin:0;">📋 คู่มือ Control Tower <span class="ehint">— ก่อนนับ = ตารางเตรียมความพร้อมรายไซต์ · ระหว่าง/หลังนับ = คู่มืออ่านอย่างเดียว</span></div>
+          <div class="eyebrow" style="margin:0;">📋 คู่มือ Control Tower <span class="ehint">— ก่อนนับ = เช็คลิสต์เตรียมความพร้อมรายไซต์ · ระหว่าง/หลังนับ = คู่มืออ่านอย่างเดียว</span></div>
         </div>
         <div id="ckSyncBox"></div>
       </div>
@@ -4199,7 +4197,7 @@ var CK_DEFAULT_MANUAL = {
     { h:'2. ตรวจใบส่งผล', when:'ทุกครั้งที่เรียกคิว', items:[
       { t:'ลายเซ็นครบทุกช่อง', d:'เทียบกับไฟล์ใบเซ็นที่ผู้นับอัปมา', pic:[] },
       { t:'มีลายเซ็นฝ่ายผลิต หากไซต์นั้นมีการผลิต', d:'', pic:[] },
-      { t:'ไซต์ที่มี Audit / Acc เข้าหน้างาน ต้องมีลายเซ็นฝั่งนั้นด้วย', d:'ดูข้อควรรู้รายไซต์ในตารางเตรียมความพร้อม', pic:[] },
+      { t:'ไซต์ที่มี Audit / Acc เข้าหน้างาน ต้องมีลายเซ็นฝั่งนั้นด้วย', d:'ดูข้อควรรู้รายไซต์ในเช็คลิสต์เตรียมความพร้อม', pic:[] },
       { t:'พาเลทควบคุมนอกระบบ PCS ต้องมีเอกสารบันทึกรายการแนบ', d:'ไม่มีเอกสาร = ตีกลับ', pic:[] },
       { t:'จำนวนในเอกสารบันทึก ต้องตรงกับยอดที่ผู้นับกรอก', d:'ไม่ตรง = ตีกลับ พร้อมระบุจุดที่ต้องแก้', pic:[] }
     ]},
@@ -4223,7 +4221,7 @@ var CK_DEFAULT_MANUAL = {
   ]
 };
 var CK_PHASES = [
-  { id:'before', icon:'📝', name:'ก่อนการนับ',   sub:'ตารางเตรียมความพร้อมรายไซต์' },
+  { id:'before', icon:'📝', name:'ก่อนการนับ',   sub:'เช็คลิสต์เตรียมความพร้อมรายไซต์' },
   { id:'during', icon:'🔔', name:'ระหว่างการนับ', sub:'คู่มือเวรรับคิวตรวจ' },
   { id:'after',  icon:'📦', name:'หลังการนับ',    sub:'คู่มือปิดงาน/สรุปผล' }
 ];
@@ -4386,69 +4384,62 @@ function ckSetNote(sid,v){ ckMark('r.'+sid+'.note', v); }   /* ไม่ re-rend
 function ckRenderPrep(){
   var rows = ckRows();
   if(!rows.length) return '<div class="empty">ยังไม่มีไซต์ที่ใช้งานในรอบนี้ — เพิ่มที่แท็บการตั้งค่า → Site</div>';
-  var cols = ckCols(), nCol = 4 + cols.length;
+  var cols = ckCols();
 
-  // หัวคอลัมน์ติ๊กวางแนวตั้ง → กว้างแค่ 38px ต่อช่อง ใส่ได้หลายคอลัมน์โดยไม่ต้องเลื่อนซ้ายขวา
-  var colgroup = '<colgroup><col class="cDoc"><col class="cTime"><col class="cSite"><col class="cPic">'
-    + cols.map(function(){ return '<col class="cTick">'; }).join('') + '</colgroup>';
-
-  var head = '<tr><th class="lockCol">🔒 Doc No.</th><th class="lockCol">🔒 เวลา</th>'
-    + '<th class="lockCol">🔒 Site</th><th>👤 PIC</th>'
-    + cols.map(function(c){
-        return '<th class="vert'+(c.auto?' autoCol':'')+'" title="'+esc(c.name)+'">'
-          + '<span>'+(c.auto?'🟢 ':'')+esc(c.name)+'</span></th>';
-      }).join('')
-    + '</tr>';
-
+  // การ์ดต่อไซต์ + ชิปติ๊กที่ตัดบรรทัดเอง — ชื่อคอลัมน์อ่านแนวนอนเต็ม ๆ และไม่ต้องเลื่อนซ้ายขวา
   var body = rows.map(function(r){
-    var cells = cols.map(function(c){
+    var done = 0, tot = 0;
+    var chips = cols.map(function(c){
       if(c.auto){
         var on = !!r[c.k];
-        return '<td class="tick"><span class="ckBox auto'+(on?' on':'')+'" title="ระบบเช็คให้เอง">'
-          + (on?'✓':'…')+'</span></td>';
+        if(on) done++; tot++;
+        return '<span class="au'+(on?' on':'')+'" title="ระบบเช็คให้เอง ติ๊กเองไม่ได้">'
+          + '<span class="mk">✓</span>🟢 '+esc(c.name)+'</span>';
       }
       var v = CK.v['r.'+r.id+'.'+c.k] ? 1 : 0;
-      return '<td class="tick"><button class="ckBox'+(v?' on':'')+'" title="'+esc(c.name)+'" '
-        + 'onclick="ckTick(&quot;'+esc(r.id)+'&quot;,&quot;'+esc(c.k)+'&quot;)">'+(v?'✓':'')+'</button></td>';
+      if(v) done++; tot++;
+      return '<button class="'+(v?'on':'')+'" onclick="ckTick(&quot;'+esc(r.id)+'&quot;,&quot;'+esc(c.k)+'&quot;)">'
+        + '<span class="mk">✓</span>'+esc(c.name)+'</button>';
     }).join('');
 
     var note = CK.v['r.'+r.id+'.note'] || '';
-    // โน้ตย้ายมาเป็นแถวของตัวเองใต้ไซต์ — ไม่กินความกว้างของตาราง
-    var showNote = CK.edit || !!note;
-    var noteRow = showNote
-      ? '<tr class="noteRow"><td colspan="'+nCol+'">'
-        + '<div class="lbl">ข้อควรรู้ของไซต์นี้</div>'
+    var noteBlock = (CK.edit || note)
+      ? '<div class="ckNoteWrap"><div class="lbl">ข้อควรรู้ของไซต์นี้</div>'
         + (CK.edit
             ? '<textarea class="ckNote" placeholder="เช่น ไม่มีไฟฟ้า ปริ้นเอกสารจากคลังที่ 1 · มี Audit เข้าหน้างาน" '
               + 'oninput="ckSetNote(&quot;'+esc(r.id)+'&quot;,this.value)">'+esc(note)+'</textarea>'
             : '<div class="ckNoteRo">'+esc(note)+'</div>')
-        + '</td></tr>'
+        + '</div>'
       : '';
 
-    return '<tr'+(showNote?' class="hasNote"':'')+'>'
-      + '<td class="mono" title="'+esc(r.doc)+'">'+esc(r.doc||'—')+'</td>'
-      + '<td class="mono">'+esc(r.time||'—')+'</td>'
-      + '<td class="siteCell">'+esc(r.site)+(r.group?'<div class="ckGrp">🏬 '+esc(r.group)+'</div>':'')+'</td>'
-      + '<td>'+ckPicSel(CK.v['r.'+r.id+'.pic']||'', 'ckSetPic(&quot;'+esc(r.id)+'&quot;,this.value)')+'</td>'
-      + cells + '</tr>' + noteRow;
+    return '<div class="ckSite">'
+      + '<div class="ckSiteHd">'
+      +   '<span class="doc" title="Doc No. — มาจากระบบ">🔒 '+esc(r.doc||'ยังไม่มีเลขที่')+'</span>'
+      +   '<span class="tm" title="เวลาถึงหน้างาน — มาจากระบบ">🕘 '+esc(r.time||'—')+'</span>'
+      +   '<span class="nm">'+esc(r.site)+(r.group?'<span class="grp">🏬 '+esc(r.group)+'</span>':'')+'</span>'
+      +   '<span class="sp"></span>'
+      +   '<span class="cnt'+(done>=tot?' full':'')+'">'+done+'/'+tot+'</span>'
+      +   '<span>👤 '+ckPicSel(CK.v['r.'+r.id+'.pic']||'', 'ckSetPic(&quot;'+esc(r.id)+'&quot;,this.value)')+'</span>'
+      + '</div>'
+      + '<div class="ckChk">'+chips+'</div>'
+      + noteBlock
+      + '</div>';
   }).join('');
 
-  return '<div class="table-wrap"><table class="ckTbl">'+colgroup
-    + '<thead>'+head+'</thead><tbody>'+body+'</tbody></table></div>'
-    + (CK.edit ? ckColMgr() : '');
+  return body + (CK.edit ? ckColMgr() : '');
 }
 
-/* แถบจัดการคอลัมน์ — อยู่ใต้ตาราง ไม่เบียดความกว้างของหัวตาราง */
+/* แถบจัดการรายการที่ต้องเช็ค — อยู่ใต้การ์ดทั้งหมด */
 function ckColMgr(){
   var cols = ckCols();
-  return '<div class="ckColMgr"><span class="hint" style="margin:0;">คอลัมน์:</span>'
+  return '<div class="ckColMgr"><span class="hint" style="margin:0;">รายการที่ต้องเช็ค:</span>'
     + cols.map(function(c,ci){
         if(c.auto) return '<span class="cTag auto" title="ระบบเช็คให้เอง แก้ไม่ได้">🟢 '+esc(c.name)+'</span>';
         return '<span class="cTag">'+esc(c.name)
           + '<button title="แก้ชื่อ" onclick="ckRenameCol('+ci+')">✏️</button>'
-          + '<button title="ลบคอลัมน์" onclick="ckDelCol('+ci+')">✕</button></span>';
+          + '<button title="ลบรายการนี้ออกจากทุกไซต์" onclick="ckDelCol('+ci+')">✕</button></span>';
       }).join('')
-    + '<button class="ckAdd" style="margin:0;" onclick="ckAddCol()">+ เพิ่มคอลัมน์</button></div>';
+    + '<button class="ckAdd" style="margin:0;" onclick="ckAddCol()">+ เพิ่มรายการ</button></div>';
 }
 
 /* ── วาดคู่มือ (ระหว่าง/หลังนับ) ────────────────────── */
@@ -4508,7 +4499,7 @@ function ckAddSec(ph){ ckManualEdit(ph,function(m){ m.push({h:'หัวข้�
 /* ── แก้คอลัมน์ (master) ───────────────────────────── */
 function ckAddCol(){
   if(!ckMaster()) return;
-  var n = prompt('ชื่อคอลัมน์ใหม่:',''); if(!n || !n.trim()) return;
+  var n = prompt('ชื่อรายการที่ต้องเช็ค:',''); if(!n || !n.trim()) return;
   var cols = ckColsPlain();
   cols.push({ k:'c'+Date.now(), name:n.trim(), auto:false });
   CK.v.cols = cols; ckRenderBody(); ckMark('cols', cols);
@@ -4516,14 +4507,14 @@ function ckAddCol(){
 function ckRenameCol(ci){
   if(!ckMaster()) return;
   var cols = ckColsPlain(); if(!cols[ci] || cols[ci].auto) return;
-  var n = prompt('เปลี่ยนชื่อคอลัมน์:', cols[ci].name); if(!n || !n.trim()) return;
+  var n = prompt('เปลี่ยนชื่อรายการ:', cols[ci].name); if(!n || !n.trim()) return;
   cols[ci].name = n.trim();
   CK.v.cols = cols; ckRenderBody(); ckMark('cols', cols);
 }
 function ckDelCol(ci){
   if(!ckMaster()) return;
   var cols = ckColsPlain(); if(!cols[ci] || cols[ci].auto) return;
-  if(!confirm('ลบคอลัมน์ "'+cols[ci].name+'" ? (ที่ติ๊กไว้ในคอลัมน์นี้จะหายไปด้วย)')) return;
+  if(!confirm('ลบรายการ "'+cols[ci].name+'" ออกจากทุกไซต์? (ที่ติ๊กไว้จะหายไปด้วย)')) return;
   cols.splice(ci,1);
   CK.v.cols = cols; ckRenderBody(); ckMark('cols', cols);
 }
@@ -4531,7 +4522,7 @@ function ckDelCol(ci){
 /* ── คัดลอกจากรอบก่อน / ล้าง (master) ─────────────── */
 function ckCopyPrev(){
   if(!ckMaster()) return;
-  if(!confirm('คัดลอกคอลัมน์ · คู่มือ · PIC รายไซต์ จากรอบก่อนหน้ามาทับของรอบนี้?\n(ที่ติ๊กไว้และโน้ตของรอบก่อนจะไม่ถูกคัดลอกมา)')) return;
+  if(!confirm('คัดลอกรายการที่ต้องเช็ค · คู่มือ · PIC รายไซต์ จากรอบก่อนหน้ามาทับของรอบนี้?\n(ที่ติ๊กไว้และโน้ตของรอบก่อนจะไม่ถูกคัดลอกมา)')) return;
   post({ action:'copyChecklist', round_id:ckRound() }).then(function(d){
     if(!d || d.status !== 'ok') throw new Error((d && d.message) || 'คัดลอกไม่สำเร็จ');
     CK.dirty = {};                               // ของ server เป็นตัวตั้ง
@@ -4563,12 +4554,13 @@ function ckRenderBar(){
 
   var hint = (CK.phase === 'before')
     ? '🔒 <b>Doc No. · เวลาถึงหน้างาน · Site</b> มาจากระบบ แก้ที่แท็บการตั้งค่า → Site &nbsp;·&nbsp; '
-      + '🟢 <b>ยอดระบบ</b> ระบบเช็คให้เอง &nbsp;·&nbsp; 👤 <b>PIC</b> เลือกจากรายชื่อผู้ใช้ กดเปลี่ยนได้ตลอด'
+      + '🟢 <b>ยอดระบบ</b> ระบบเช็คให้เอง &nbsp;·&nbsp; 👤 <b>PIC</b> เลือกจากรายชื่อผู้ใช้ กดเปลี่ยนได้ตลอด '
+      + '&nbsp;·&nbsp; ตัวเลขมุมขวาของแต่ละไซต์ = ติ๊กไปแล้วกี่ข้อ'
     : 'คู่มืออ่านอย่างเดียว ไม่มีช่องติ๊ก — แต่ละข้อระบุผู้รับผิดชอบได้มากกว่า 1 คน';
   hint += '<br>💾 ติ๊ก/โน้ต/PIC บันทึกให้เองทันที ไม่ต้องกดบันทึก · รีเฟรชหรือเน็ตหลุดไม่หาย · admin คนอื่นเห็นภายใน '
         + Math.round(POLL_MS/1000) + ' วินาที';
   hint += (CK.phase === 'before')
-    ? '<br>✏️ กด <b>แก้ไขเนื้อหา</b> เพื่อเพิ่ม/ลบ/เปลี่ยนชื่อคอลัมน์ และใส่ข้อควรรู้รายไซต์ — สิ่งที่ต้องทำเปลี่ยนได้ทุกรอบ'
+    ? '<br>✏️ กด <b>แก้ไขเนื้อหา</b> เพื่อเพิ่ม/ลบ/เปลี่ยนชื่อรายการที่ต้องเช็ค และใส่ข้อควรรู้รายไซต์ — สิ่งที่ต้องทำเปลี่ยนได้ทุกรอบ'
     : '<br>✏️ กด <b>แก้ไขเนื้อหา</b> เพื่อแก้ข้อความ เพิ่ม/ลบรายการและหัวข้อ';
   document.getElementById('ckHint').innerHTML = hint;
 
@@ -4580,7 +4572,7 @@ function ckRenderBar(){
     tools.innerHTML = ckMaster()
       ? '<button class="btn btn-outline btn-sm" onclick="ckCopyPrev()">📑 คัดลอกจากรอบก่อน</button>'
         + '<button class="btn btn-outline btn-sm" onclick="ckReset()">🗑 ล้างเช็คลิสต์รอบนี้</button>'
-        + '<span class="hint">คัดลอก = เอาคอลัมน์ · คู่มือ · PIC มา ไม่เอาที่ติ๊กไว้</span>'
+        + '<span class="hint">คัดลอก = เอารายการที่ต้องเช็ค · คู่มือ · PIC มา ไม่เอาที่ติ๊กไว้</span>'
       : '';
   }
 }
