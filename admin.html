@@ -322,6 +322,70 @@ table.recon .grp{border-left:1px solid var(--border);}
   .qRail{position:static;max-height:none;overflow:visible;border-left:0;padding-left:0;order:-1;}
   .railHead{display:none;}
 }
+
+/* ═══ แท็บคู่มือ/เช็คลิสต์ Control Tower ═══ */
+.ckHead{display:flex;gap:12px;align-items:flex-start;flex-wrap:wrap;margin-bottom:12px;}
+.ckPhase{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;}
+.ckPhase button{flex:1;min-width:150px;display:flex;flex-direction:column;gap:2px;align-items:flex-start;
+  padding:10px 13px;border-radius:10px;border:1.5px solid var(--border,#e2e2e2);background:var(--surface,#fff);
+  color:inherit;font:inherit;cursor:pointer;text-align:left;}
+.ckPhase button.on{border-color:var(--accent,#b8893d);background:rgba(184,137,61,.09);font-weight:700;}
+.ckPhase .pSub{font-size:11.5px;color:var(--muted,#888);font-weight:400;}
+.ckBar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:12px;}
+.ckHint{flex:1;min-width:240px;font-size:12.5px;color:var(--muted,#888);line-height:1.6;}
+.ckSync{display:inline-flex;align-items:center;gap:6px;padding:5px 11px;border-radius:999px;
+  font-size:12.5px;font-weight:600;white-space:nowrap;border:1px solid transparent;}
+.ckSync .dot{width:7px;height:7px;border-radius:50%;background:currentColor;flex:none;}
+.ckSync.ok{background:rgba(34,160,90,.12);border-color:rgba(34,160,90,.4);color:#1e8a4d;}
+.ckSync.wait{background:rgba(251,191,36,.14);border-color:rgba(251,191,36,.45);color:#9a7310;}
+.ckSync.send{background:rgba(59,130,246,.12);border-color:rgba(59,130,246,.4);color:#2563eb;}
+.ckSync.err{background:rgba(220,70,60,.12);border-color:rgba(220,70,60,.42);color:#c0392b;}
+.ckSync.send .dot{animation:ckp 1s infinite;}
+@keyframes ckp{0%,100%{opacity:1}50%{opacity:.25}}
+.ckTbl{width:100%;border-collapse:collapse;font-size:13px;}
+.ckTbl th,.ckTbl td{padding:8px 9px;border-bottom:1px solid var(--border,#e8e8e8);vertical-align:top;text-align:left;}
+.ckTbl thead th{position:sticky;top:0;background:var(--surface,#fff);font-size:11.5px;font-weight:700;
+  letter-spacing:.02em;white-space:nowrap;z-index:1;}
+.ckTbl th.lockCol{color:var(--muted,#888);}
+.ckTbl tbody tr:hover{background:rgba(0,0,0,.02);}
+.ckTbl .mono{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;white-space:nowrap;}
+.ckTbl .siteCell{font-weight:600;min-width:150px;}
+.ckGrp{font-size:11px;color:var(--muted,#888);font-weight:400;margin-top:2px;}
+.ckBox{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:7px;
+  border:1.5px solid var(--border,#d6d6d6);background:var(--surface,#fff);cursor:pointer;font-size:14px;
+  line-height:1;color:var(--muted,#aaa);padding:0;}
+.ckBox.on{background:rgba(34,160,90,.15);border-color:rgba(34,160,90,.5);color:#1e8a4d;font-weight:700;}
+.ckBox.auto{cursor:default;border-style:dashed;}
+.ckBox.auto.on{background:rgba(34,160,90,.1);}
+.ckNote{width:100%;min-width:170px;min-height:34px;resize:vertical;font:inherit;font-size:12.5px;
+  padding:6px 8px;border-radius:7px;border:1px solid var(--border,#ddd);background:var(--surface,#fff);color:inherit;}
+.ckNoteRo{font-size:12.5px;color:var(--muted,#777);line-height:1.55;min-width:170px;}
+.ckPicSel{font:inherit;font-size:12.5px;padding:4px 7px;border-radius:7px;
+  border:1px solid var(--border,#ddd);background:var(--surface,#fff);color:inherit;max-width:130px;}
+.ckSec{border:1px solid var(--border,#e4e4e4);border-radius:11px;padding:13px 15px;margin-bottom:11px;
+  background:var(--surface,#fff);}
+.ckSec h4{margin:0 0 3px;font-size:14.5px;}
+.ckWhen{font-size:11.5px;color:var(--muted,#888);margin-bottom:9px;}
+.ckList{list-style:none;margin:0;padding:0;}
+.ckList li{padding:8px 0 8px 22px;border-top:1px solid var(--border,#efefef);position:relative;font-size:13.5px;line-height:1.6;}
+.ckList li:first-child{border-top:0;}
+.ckList li:before{content:'·';position:absolute;left:7px;top:7px;font-weight:700;color:var(--accent,#b8893d);}
+.ckList li.ed{padding-left:0;}
+.ckList li.ed:before{content:none;}
+.ckDetail{display:block;font-size:12px;color:var(--muted,#888);margin-top:2px;}
+.ckPicRow{display:flex;gap:5px;flex-wrap:wrap;align-items:center;margin-top:5px;}
+.ckChip{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:999px;font-size:11.5px;
+  background:rgba(184,137,61,.13);border:1px solid rgba(184,137,61,.3);}
+.ckChip .x{border:0;background:none;cursor:pointer;color:inherit;font-size:12px;padding:0 0 0 2px;line-height:1;}
+.ckNone{font-size:11.5px;color:var(--muted,#aaa);font-style:italic;}
+.ckIn{width:100%;font:inherit;font-size:13.5px;padding:5px 8px;border-radius:7px;
+  border:1px solid var(--border,#ddd);background:var(--surface,#fff);color:inherit;}
+.ckIn.sm{font-size:12px;}
+.ckAdd{margin-top:9px;font:inherit;font-size:12.5px;padding:5px 11px;border-radius:7px;
+  border:1px dashed var(--border,#cbcbcb);background:none;color:var(--muted,#888);cursor:pointer;}
+.ckAdd:hover{color:inherit;border-color:var(--accent,#b8893d);}
+.ckTools{display:flex;gap:7px;align-items:center;flex-wrap:wrap;margin-top:16px;padding-top:13px;
+  border-top:1px solid var(--border,#eee);}
 </style>
 </head>
 <body>
@@ -431,6 +495,7 @@ table.recon .grp{border-left:1px solid var(--border);}
   <div class="tabbar">
     <button class="tab active" data-tab="dashboard" onclick="switchTab('dashboard')">📊 ภาพรวม</button>
     <button class="tab" data-tab="queue" onclick="switchTab('queue')">🔔 คิว recheck</button>
+    <button class="tab" data-tab="checklist" onclick="switchTab('checklist')">📋 คู่มือ/เช็คลิสต์</button>
     <button class="tab" data-tab="settings" onclick="switchTab('settings')">⚙️ การตั้งค่า</button>
   </div>
 
@@ -633,6 +698,23 @@ table.recon .grp{border-left:1px solid var(--border);}
       <div class="table-wrap" id="queueAll"><div class="empty">—</div></div>
       <div class="eyebrow" style="margin-top:14px;">ผลการนับทั้งหมด (ประวัติ)</div>
       <div class="table-wrap" id="allTableQ"><div class="empty">—</div></div>
+    </div>
+
+    <!-- ─── คู่มือ/เช็คลิสต์ Control Tower ─── -->
+    <div class="panel" id="panel-checklist">
+      <div class="ckHead">
+        <div style="flex:1;min-width:240px;">
+          <div class="eyebrow" style="margin:0;">📋 คู่มือ Control Tower <span class="ehint">— ก่อนนับ = ตารางเตรียมความพร้อมรายไซต์ · ระหว่าง/หลังนับ = คู่มืออ่านอย่างเดียว</span></div>
+        </div>
+        <div id="ckSyncBox"></div>
+      </div>
+      <div class="ckPhase" id="ckPhaseBar"></div>
+      <div class="ckBar">
+        <button class="btn btn-outline btn-sm" id="ckEditBtn" onclick="ckToggleEdit()">✏️ แก้ไขเนื้อหา</button>
+        <div class="ckHint" id="ckHint"></div>
+      </div>
+      <div id="ckBody"><div class="empty"><span class="spinner"></span></div></div>
+      <div class="ckTools" id="ckTools"></div>
     </div>
 
     <!-- ─── ผู้ใช้ (Users) ─── -->
@@ -920,7 +1002,8 @@ function enterApp(){
 
 /* ── Data load + polling ─────────────────────────────── */
 function loadData(showSpin){
-  return post({action:'getAdminData'}).then(function(d){
+  // เช็คลิสต์แปะมากับ poll เดิม — ขอเฉพาะตอนเปิดแท็บนั้นอยู่ ไม่ถ่วง payload ของแท็บอื่น
+  return post({action:'getAdminData', want_checklist:(S.tab==='checklist')||undefined}).then(function(d){
     if(d){
       S.round = d.round || S.round;
       S.sites = d.sites || [];
@@ -938,6 +1021,7 @@ function loadData(showSpin){
         V2CFG = d.config_v2;
         if(d.config_v2.limits) V2LIM = d.config_v2.limits;
       }
+      if(d.checklist) ckApplyServer(d.checklist);
     }
     if(wizNeeded()){ if(!WIZ.saving){ wizShow(); wizRenderSteps(); } }
     else { if(document.getElementById('wizard').style.display==='block') wizHide(); renderAll(); }
@@ -953,6 +1037,7 @@ function startPolling(){
       if(SETTINGS_SUB==='types' && S.typesDirty) return;  // config เดิมที่แก้ค้างไว้
       if(SETTINGS_SUB==='setup') return;                  // ตั้งค่ารอบ v2: ไม่ทับเลย
     }
+    if(S.tab==='checklist' && typeof ckTyping==='function' && ckTyping()) return;  // กำลังพิมพ์ในเช็คลิสต์
     if(document.getElementById('wizard').style.display==='block') return;  // อยู่ในตัวช่วยตั้งรอบ
     if(S.tab==='stats') loadStats();           // หน้าหอเกียรติยศ: รีเฟรชสถิติตามรอบ poll
     loadData(false);
@@ -964,7 +1049,8 @@ function markSynced(){
 }
 
 /* ── Render: everything ──────────────────────────────── */
-function renderAll(){ renderDashboard(); renderSiteStatus(); renderRecon(); renderSites(); renderAgents(); renderQueueHistory(); }
+function renderAll(){ renderDashboard(); renderSiteStatus(); renderRecon(); renderSites(); renderAgents(); renderQueueHistory();
+  if(CK.on && !ckTyping()) ckRenderAll(); }
 function renderQueueHistory(){
   var el=document.getElementById('allTableQ'); if(!el) return;
   var subs=curSubs().slice().sort(function(a,b){return (b.submitted_at||'').localeCompare(a.submitted_at||'');});
@@ -4058,9 +4144,416 @@ function switchTab(name){
   document.querySelectorAll('.tab').forEach(function(t){ t.classList.toggle('active', t.dataset.tab===name); });
   document.querySelectorAll('.panel').forEach(function(p){ p.classList.toggle('active', p.id==='panel-'+name); });
   if(name==='queue') startQueuePoll(); else stopQueuePoll();
+  if(name==='checklist') ckEnter(); else ckLeave();
   if(name==='settings') settingsGo(SETTINGS_SUB);
   if(name==='stats') loadStats();
 }
+/* ══════════════════════════════════════════════════════════════════
+   คู่มือ/เช็คลิสต์ Control Tower
+   เก็บที่ Config คีย์เดียวต่อรอบ แต่ "ไม่มีจุดไหนที่ UI รอ server":
+     ติ๊ก → เปลี่ยนหน้าจอ + เขียน localStorage ทันที
+          → debounce 2 วิ รวบเฉพาะคีย์ที่เปลี่ยน ยิงแบบไม่รอคำตอบ
+          → ส่งไม่ผ่านก็ค้างในเครื่อง แล้วลองใหม่เอง (backoff)
+     อ่านของคนอื่น → แปะมากับ poll 12 วิเดิม (want_checklist) ไม่เพิ่ม request
+   โครง (คอลัมน์/คู่มือ) แก้ได้เฉพาะ master · ติ๊ก/โน้ต/PIC ทุกคนแก้ได้
+   ══════════════════════════════════════════════════════════════════ */
+var CK = { phase:'before', edit:false, v:{}, dirty:{}, state:'ok', at:null,
+           timer:null, on:false, fails:0, bound:'' };
+var CK_DEBOUNCE = 2000;
+var CK_LS       = 'stockCountChecklist';
+var CK_LOCKED   = ['doc','time','site'];     // มาจากระบบ — แก้ที่หน้าจัดการ Site
+var CK_AUTO     = ['book'];                  // ระบบเช็คให้เอง ติ๊กไม่ได้
+
+var CK_DEFAULT_COLS = [
+  { k:'book',   name:'ยอดระบบ', auto:true },
+  { k:'pull',   name:'ดึงเอกสารเสร็จก่อน' },
+  { k:'shot',   name:'ภาพหน้าระบบ PCS' },
+  { k:'inv',    name:'เอกสารแนบใบแจ้งหนี้' },
+  { k:'ecd',    name:'สรุป ECD' },
+  { k:'acc',    name:'ตรวจหน้าบัญชี' }
+];
+var CK_DEFAULT_MANUAL = {
+  during:[
+    { h:'1. เตรียมตัวรับคิว', when:'ก่อนเวลาเริ่มนับของไซต์แรก', items:[
+      { t:'เข้าห้อง MS Teams ห้องของตัวเอง', d:'ลิงก์ห้องตั้งไว้ในแท็บผู้ใช้ — ผู้นับจะกดเข้าห้องนี้ตอนถึงคิว', pic:[] },
+      { t:'กดปุ่ม On call ให้ระบบและเพื่อนรู้ว่าประจำที่แล้ว', d:'', pic:[] }
+    ]},
+    { h:'2. ตรวจใบส่งผล', when:'ทุกครั้งที่เรียกคิว', items:[
+      { t:'ลายเซ็นครบทุกช่อง', d:'เทียบกับไฟล์ใบเซ็นที่ผู้นับอัปมา', pic:[] },
+      { t:'มีลายเซ็นฝ่ายผลิต หากไซต์นั้นมีการผลิต', d:'', pic:[] },
+      { t:'ไซต์ที่มี Audit / Acc เข้าหน้างาน ต้องมีลายเซ็นฝั่งนั้นด้วย', d:'ดูข้อควรรู้รายไซต์ในตารางเตรียมความพร้อม', pic:[] },
+      { t:'พาเลทควบคุมนอกระบบ PCS ต้องมีเอกสารบันทึกรายการแนบ', d:'ไม่มีเอกสาร = ตีกลับ', pic:[] },
+      { t:'จำนวนในเอกสารบันทึก ต้องตรงกับยอดที่ผู้นับกรอก', d:'ไม่ตรง = ตีกลับ พร้อมระบุจุดที่ต้องแก้', pic:[] }
+    ]},
+    { h:'3. ตัดสินผล', when:'หลังตรวจครบทุกข้อ', items:[
+      { t:'ถูกต้องครบถ้วน → ปล่อยตัว (อนุมัติ)', d:'', pic:[] },
+      { t:'ไม่ถูกต้อง → ตีกลับ พร้อมระบุจุดที่ต้องแก้ + เหตุผล', d:'ติ๊กเฉพาะขั้นที่ต้องแก้ ผู้นับจะเห็นเฉพาะส่วนนั้น ไม่ต้องทำใหม่ทั้งหมด', pic:[] },
+      { t:'ไซต์ที่อยู่กลุ่มเดียวกัน ตรวจต่อเนื่องจนครบ', d:'ระบบจองตั๋วพี่น้องไว้ให้แล้ว กดอนุมัติ/ตีกลับแล้วใบถัดไปขึ้นมาเอง', pic:[] }
+    ]}
+  ],
+  after:[
+    { h:'1. ปิดงานให้ครบทุกไซต์', when:'เมื่อทุกไซต์ส่งผลแล้ว', items:[
+      { t:'ทุกไซต์มีสถานะอนุมัติแล้ว', d:'ไซต์ที่ยังค้างดูได้จากแท็บภาพรวม', pic:[] },
+      { t:'รวบรวมไฟล์ใบเซ็นที่สแกนแล้วครบทุกไซต์', d:'', pic:[] },
+      { t:'ตรวจไซต์ที่มีส่วนต่างผิดปกติก่อนสรุป', d:'ไซต์ที่ยอดคงค้างไม่ตรงยอดตั้งต้นจะขึ้นแถบเตือนในแท็บภาพรวม', pic:[] }
+    ]},
+    { h:'2. สรุปผลรวมทั้งโครงการให้ Audit', when:'หลังปิดครบทุกไซต์', items:[
+      { t:'Export ข้อมูลสรุปจากระบบ', d:'', pic:[] },
+      { t:'จัดทำเล่มสรุปแนบเอกสารหลักฐาน', d:'', pic:[] },
+      { t:'ส่งให้ Audit พร้อมเอกสารประกอบ', d:'', pic:[] }
+    ]}
+  ]
+};
+var CK_PHASES = [
+  { id:'before', icon:'📝', name:'ก่อนการนับ',   sub:'ตารางเตรียมความพร้อมรายไซต์' },
+  { id:'during', icon:'🔔', name:'ระหว่างการนับ', sub:'คู่มือเวรรับคิวตรวจ' },
+  { id:'after',  icon:'📦', name:'หลังการนับ',    sub:'คู่มือปิดงาน/สรุปผล' }
+];
+
+function ckRound(){ return S.round ? S.round.round_id : ''; }
+function ckMaster(){ return myUserId === 'master'; }
+function ckCols(){ return CK.v.cols || CK_DEFAULT_COLS; }
+function ckManual(ph){ return CK.v['manual.'+ph] || CK_DEFAULT_MANUAL[ph] || []; }
+function ckUsers(){ return (S.agents||[]).map(function(a){ return a.name; }).filter(Boolean); }
+function ckColsPlain(){ return ckCols().map(function(c){ return { k:c.k, name:c.name, auto:!!c.auto }; }); }
+
+/* แถวในตาราง = ไซต์ที่ใช้งานในรอบนี้ · Doc No./เวลา/Site/ยอดระบบ มาจากระบบ ไม่ใช่จากเช็คลิสต์ */
+function ckRows(){
+  return activeSites().map(function(s){
+    return { id:String(s.site_id), site:s.site_name, group:s.group_name||'',
+             doc:(S.docnos||{})[s.site_id] || '', time:s.start_time || '',
+             book:(typeof siteBookState==='function' ? !!siteBookState(s.site_id).ok : false) };
+  });
+}
+
+/* ── ชั้นซิงค์ ─────────────────────────────────────── */
+function ckMark(key, val){
+  CK.v[key] = val;
+  CK.dirty[key] = val;
+  ckLsSave();
+  if(CK.timer) clearTimeout(CK.timer);
+  CK.timer = setTimeout(ckFlush, CK_DEBOUNCE);
+  ckPaintSync();
+}
+function ckFlush(){
+  CK.timer = null;
+  var keys = Object.keys(CK.dirty);
+  if(!keys.length) return;
+  var rid = ckRound();
+  if(!rid) return;                               // ยังไม่มีรอบ — เก็บไว้ในเครื่องก่อน
+  var patch = CK.dirty; CK.dirty = {};
+  CK.state = 'send'; ckPaintSync();
+  post({ action:'saveChecklist', round_id:rid, patch:patch }).then(function(d){
+    if(!d || d.status !== 'ok') throw new Error((d && d.message) || 'บันทึกไม่สำเร็จ');
+    CK.state='ok'; CK.fails=0; CK.at=new Date(); ckLsSave(); ckPaintSync();
+  }).catch(function(err){
+    // ส่งไม่ผ่าน → เอาคืนเข้าคิว แต่ห้ามทับค่าที่แก้ใหม่ทีหลัง
+    Object.keys(patch).forEach(function(k){ if(!(k in CK.dirty)) CK.dirty[k] = patch[k]; });
+    CK.fails++; CK.state='err'; CK.lastErr = String(err && err.message || err); ckPaintSync();
+    if(CK.timer) clearTimeout(CK.timer);
+    CK.timer = setTimeout(ckFlush, Math.min(30000, 3000 * CK.fails));
+  });
+}
+/* localStorage ผูก round_id — ขึ้นรอบใหม่ล้างให้เอง (บทเรียนข้อ 2) */
+function ckLsSave(){
+  try{
+    localStorage.setItem(CK_LS, JSON.stringify({
+      round_id: ckRound(), at:new Date().toISOString(), data:CK.v, dirty:CK.dirty }));
+  }catch(e){}
+}
+function ckLsLoad(){
+  var rid = ckRound(); if(!rid) return false;
+  try{
+    var raw = localStorage.getItem(CK_LS); if(!raw) return false;
+    var o = JSON.parse(raw);
+    if(!o || String(o.round_id) !== String(rid)){ localStorage.removeItem(CK_LS); return false; }
+    CK.v = o.data || {};
+    CK.dirty = o.dirty || {};
+    if(Object.keys(CK.dirty).length){
+      CK.state='wait';
+      if(CK.timer) clearTimeout(CK.timer);
+      CK.timer = setTimeout(ckFlush, 800);       // ยังค้างจากรอบก่อนปิดหน้า → ส่งต่อให้จบ
+    }
+    return true;
+  }catch(e){ return false; }
+}
+/* ของจาก server (แปะมากับ poll) — ไม่ทับคีย์ที่เรายังไม่ได้ส่ง */
+function ckApplyServer(blob){
+  if(!blob || typeof blob !== 'object') return;
+  var changed = false;
+  Object.keys(blob).forEach(function(k){
+    if(k === 'meta') return;
+    if(k in CK.dirty) return;
+    if(JSON.stringify(CK.v[k]) === JSON.stringify(blob[k])) return;
+    CK.v[k] = blob[k]; changed = true;
+  });
+  CK.loaded = true;
+  if(changed){ ckLsSave(); if(CK.on && !ckTyping()) ckRenderBody(); }
+}
+function ckTyping(){
+  var a = document.activeElement;
+  if(!a || !/^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) return false;
+  var p = document.getElementById('panel-checklist');
+  return !!(p && p.contains(a));
+}
+function ckPaintSync(){
+  var box = document.getElementById('ckSyncBox'); if(!box) return;
+  var n = Object.keys(CK.dirty).length, cls, txt;
+  if(CK.state === 'send'){ cls='send'; txt='กำลังบันทึก…'; }
+  else if(CK.state === 'err'){ cls='err'; txt='บันทึกไม่ผ่าน · เก็บไว้ในเครื่องแล้ว ('+n+') กำลังลองใหม่'; }
+  else if(n){ cls='wait'; txt='รอบันทึก '+n+' รายการ'; }
+  else { cls='ok'; txt='บันทึกแล้ว'+(CK.at ? ' '+ckHM(CK.at) : ''); }
+  box.innerHTML = '<span class="ckSync '+cls+'"><span class="dot"></span>'+esc(txt)+'</span>';
+}
+function ckHM(d){
+  try{ return new Intl.DateTimeFormat('th-TH',{hour:'2-digit',minute:'2-digit',timeZone:'Asia/Bangkok'}).format(d); }
+  catch(e){ return ''; }
+}
+
+/* ── ผู้รับผิดชอบ ───────────────────────────────────── */
+function ckPicSel(cur, handler){
+  var us = ckUsers();
+  return '<select class="ckPicSel" onchange="'+handler+'">'
+    + '<option value=""'+(cur?'':' selected')+'>— ยังไม่ระบุ —</option>'
+    + us.map(function(u){ return '<option value="'+esc(u)+'"'+(String(cur)===u?' selected':'')+'>'+esc(u)+'</option>'; }).join('')
+    + (cur && us.indexOf(String(cur))<0 ? '<option value="'+esc(cur)+'" selected>'+esc(cur)+' (ไม่อยู่ในรายชื่อแล้ว)</option>' : '')
+    + '</select>';
+}
+function ckChips(list, editable, ctx){
+  list = list || [];
+  var h = '<div class="ckPicRow">';
+  if(!list.length && !editable) h += '<span class="ckNone">— ยังไม่ระบุผู้รับผิดชอบ —</span>';
+  h += list.map(function(u){
+    return '<span class="ckChip">'+esc(u)
+      + (editable ? '<button class="x" title="เอาออก" onclick="ckPicDel('+ctx+',&quot;'+esc(u)+'&quot;)">✕</button>' : '')
+      + '</span>';
+  }).join('');
+  if(editable){
+    var left = ckUsers().filter(function(u){ return list.indexOf(u) < 0; });
+    if(left.length){
+      h += '<select class="ckPicSel" onchange="ckPicAdd('+ctx+',this.value)">'
+        + '<option value="">+ เพิ่มผู้รับผิดชอบ</option>'
+        + left.map(function(u){ return '<option value="'+esc(u)+'">'+esc(u)+'</option>'; }).join('')
+        + '</select>';
+    }
+  }
+  return h + '</div>';
+}
+function ckItem(ph,si,ii){ var s=ckManual(ph)[si]; return s && s.items ? s.items[ii] : null; }
+function ckPicAdd(ph,si,ii,u){
+  if(!u) return;
+  var it = ckItem(ph,si,ii); if(!it) return;
+  it.pic = it.pic || [];
+  if(it.pic.indexOf(u) < 0) it.pic.push(u);
+  ckRenderBody(); ckMark('manual.'+ph, ckManual(ph));
+}
+function ckPicDel(ph,si,ii,u){
+  var it = ckItem(ph,si,ii); if(!it || !it.pic) return;
+  var at = it.pic.indexOf(u); if(at >= 0) it.pic.splice(at,1);
+  ckRenderBody(); ckMark('manual.'+ph, ckManual(ph));
+}
+function ckSetPic(sid,v){ ckMark('r.'+sid+'.pic', v); ckRenderBody(); }
+
+/* ── ติ๊ก/โน้ต ──────────────────────────────────────── */
+function ckTick(sid,k){
+  if(CK_AUTO.indexOf(k)>=0 || CK_LOCKED.indexOf(k)>=0) return;
+  var cur = CK.v['r.'+sid+'.'+k] ? 1 : 0;
+  ckMark('r.'+sid+'.'+k, cur ? 0 : 1);
+  ckRenderBody();
+}
+function ckSetNote(sid,v){ ckMark('r.'+sid+'.note', v); }   /* ไม่ re-render ระหว่างพิมพ์ */
+
+/* ── วาดตารางก่อนนับ ───────────────────────────────── */
+function ckRenderPrep(){
+  var rows = ckRows();
+  if(!rows.length) return '<div class="empty">ยังไม่มีไซต์ที่ใช้งานในรอบนี้ — เพิ่มที่แท็บการตั้งค่า → Site</div>';
+  var cols = ckCols(), ed = CK.edit && ckMaster();
+
+  var head = '<tr><th class="lockCol">🔒 Doc No.</th><th class="lockCol">🔒 เวลาถึงหน้างาน</th>'
+    + '<th class="lockCol">🔒 Site</th><th>👤 PIC</th>'
+    + cols.map(function(c,ci){
+        return '<th>'+(c.auto?'🟢 ':'')+esc(c.name)
+          + (ed && !c.auto ? '<div class="ckGrp"><a href="#" onclick="ckRenameCol('+ci+');return false;">แก้ชื่อ</a> · '
+              + '<a href="#" onclick="ckDelCol('+ci+');return false;">ลบ</a></div>' : '')
+          + '</th>';
+      }).join('')
+    + '<th>ข้อควรรู้ของไซต์</th></tr>';
+
+  var body = rows.map(function(r){
+    var cells = cols.map(function(c){
+      if(c.auto){
+        var on = !!r[c.k];
+        return '<td><span class="ckBox auto'+(on?' on':'')+'" title="ระบบเช็คให้เอง">'+(on?'✓':'…')+'</span></td>';
+      }
+      var v = CK.v['r.'+r.id+'.'+c.k] ? 1 : 0;
+      return '<td><button class="ckBox'+(v?' on':'')+'" onclick="ckTick(&quot;'+esc(r.id)+'&quot;,&quot;'+esc(c.k)+'&quot;)">'
+        + (v?'✓':'')+'</button></td>';
+    }).join('');
+    var note = CK.v['r.'+r.id+'.note'] || '';
+    var noteCell = CK.edit
+      ? '<td><textarea class="ckNote" oninput="ckSetNote(&quot;'+esc(r.id)+'&quot;,this.value)">'+esc(note)+'</textarea></td>'
+      : '<td><div class="ckNoteRo">'+(note?esc(note):'<span class="ckNone">—</span>')+'</div></td>';
+    return '<tr>'
+      + '<td class="mono">'+esc(r.doc||'—')+'</td>'
+      + '<td class="mono">'+esc(r.time||'—')+'</td>'
+      + '<td class="siteCell">'+esc(r.site)+(r.group?'<div class="ckGrp">🏬 '+esc(r.group)+'</div>':'')+'</td>'
+      + '<td>'+ckPicSel(CK.v['r.'+r.id+'.pic']||'', 'ckSetPic(&quot;'+esc(r.id)+'&quot;,this.value)')+'</td>'
+      + cells + noteCell + '</tr>';
+  }).join('');
+
+  return '<div class="table-wrap"><table class="ckTbl"><thead>'+head+'</thead><tbody>'+body+'</tbody></table></div>'
+    + (ed ? '<button class="ckAdd" onclick="ckAddCol()">+ เพิ่มคอลัมน์</button>' : '');
+}
+
+/* ── วาดคู่มือ (ระหว่าง/หลังนับ) ────────────────────── */
+function ckRenderManual(ph){
+  var secs = ckManual(ph), ed = CK.edit && ckMaster(), q = '&quot;'+ph+'&quot;';
+  if(!secs.length) return '<div class="empty">ยังไม่มีเนื้อหา</div>';
+  var h = secs.map(function(sec,si){
+    var head = ed
+      ? '<h4><input class="ckIn" value="'+esc(sec.h)+'" oninput="ckSetSec('+q+','+si+',&quot;h&quot;,this.value)"></h4>'
+        + '<div class="ckWhen"><input class="ckIn sm" placeholder="ช่วงเวลา/เงื่อนไข" value="'+esc(sec.when||'')+'" '
+        + 'oninput="ckSetSec('+q+','+si+',&quot;when&quot;,this.value)"></div>'
+      : '<h4>'+esc(sec.h)+'</h4>' + (sec.when ? '<div class="ckWhen">⏱ '+esc(sec.when)+'</div>' : '');
+    var items = (sec.items||[]).map(function(it,ii){
+      var ctx = q+','+si+','+ii;
+      if(ed){
+        return '<li class="ed">'
+          + '<div style="display:flex;gap:6px;align-items:center;">'
+          +   '<input class="ckIn" value="'+esc(it.t)+'" oninput="ckSetItem('+ctx+',&quot;t&quot;,this.value)">'
+          +   '<button class="ckBox" title="ลบรายการ" onclick="ckDelItem('+ctx+')">✕</button>'
+          + '</div>'
+          + '<input class="ckIn sm" style="margin-top:5px;" placeholder="คำอธิบายย่อย (ไม่ใส่ก็ได้)" '
+          +   'value="'+esc(it.d||'')+'" oninput="ckSetItem('+ctx+',&quot;d&quot;,this.value)">'
+          + ckChips(it.pic, true, ctx) + '</li>';
+      }
+      return '<li>'+esc(it.t)
+        + (it.d ? '<span class="ckDetail">'+esc(it.d)+'</span>' : '')
+        + ckChips(it.pic, CK.edit, ctx) + '</li>';
+    }).join('');
+    return '<div class="ckSec">'+head+'<ul class="ckList">'+items+'</ul>'
+      + (ed ? '<button class="ckAdd" onclick="ckAddItem('+q+','+si+')">+ เพิ่มรายการ</button>'
+            + ' <button class="ckAdd" onclick="ckDelSec('+q+','+si+')">ลบหัวข้อนี้</button>' : '')
+      + '</div>';
+  }).join('');
+  if(ed) h += '<button class="ckAdd" onclick="ckAddSec('+q+')">+ เพิ่มหัวข้อ</button>';
+  return h;
+}
+
+/* ── แก้เนื้อหาคู่มือ (master) ─────────────────────── */
+function ckManualEdit(ph, fn){
+  if(!ckMaster()) return;
+  var m = JSON.parse(JSON.stringify(ckManual(ph)));
+  fn(m);
+  CK.v['manual.'+ph] = m;
+  ckRenderBody();
+  ckMark('manual.'+ph, m);
+}
+function ckSetSec(ph,si,f,v){ var m=ckManual(ph); if(!m[si]) return; m[si][f]=v; CK.v['manual.'+ph]=m; ckMark('manual.'+ph,m); }
+function ckSetItem(ph,si,ii,f,v){ var it=ckItem(ph,si,ii); if(!it) return; it[f]=v; CK.v['manual.'+ph]=ckManual(ph); ckMark('manual.'+ph,ckManual(ph)); }
+function ckDelItem(ph,si,ii){ ckManualEdit(ph,function(m){ m[si].items.splice(ii,1); }); }
+function ckAddItem(ph,si){ ckManualEdit(ph,function(m){ m[si].items.push({t:'รายการใหม่',d:'',pic:[]}); }); }
+function ckDelSec(ph,si){
+  if(!confirm('ลบหัวข้อ "'+(ckManual(ph)[si]||{}).h+'" ทั้งหมด?')) return;
+  ckManualEdit(ph,function(m){ m.splice(si,1); });
+}
+function ckAddSec(ph){ ckManualEdit(ph,function(m){ m.push({h:'หัวข้อใหม่',when:'',items:[{t:'รายการใหม่',d:'',pic:[]}]}); }); }
+
+/* ── แก้คอลัมน์ (master) ───────────────────────────── */
+function ckAddCol(){
+  if(!ckMaster()) return;
+  var n = prompt('ชื่อคอลัมน์ใหม่:',''); if(!n || !n.trim()) return;
+  var cols = ckColsPlain();
+  cols.push({ k:'c'+Date.now(), name:n.trim(), auto:false });
+  CK.v.cols = cols; ckRenderBody(); ckMark('cols', cols);
+}
+function ckRenameCol(ci){
+  if(!ckMaster()) return;
+  var cols = ckColsPlain(); if(!cols[ci] || cols[ci].auto) return;
+  var n = prompt('เปลี่ยนชื่อคอลัมน์:', cols[ci].name); if(!n || !n.trim()) return;
+  cols[ci].name = n.trim();
+  CK.v.cols = cols; ckRenderBody(); ckMark('cols', cols);
+}
+function ckDelCol(ci){
+  if(!ckMaster()) return;
+  var cols = ckColsPlain(); if(!cols[ci] || cols[ci].auto) return;
+  if(!confirm('ลบคอลัมน์ "'+cols[ci].name+'" ? (ที่ติ๊กไว้ในคอลัมน์นี้จะหายไปด้วย)')) return;
+  cols.splice(ci,1);
+  CK.v.cols = cols; ckRenderBody(); ckMark('cols', cols);
+}
+
+/* ── คัดลอกจากรอบก่อน / ล้าง (master) ─────────────── */
+function ckCopyPrev(){
+  if(!ckMaster()) return;
+  if(!confirm('คัดลอกคอลัมน์ · คู่มือ · PIC รายไซต์ จากรอบก่อนหน้ามาทับของรอบนี้?\n(ที่ติ๊กไว้และโน้ตของรอบก่อนจะไม่ถูกคัดลอกมา)')) return;
+  post({ action:'copyChecklist', round_id:ckRound() }).then(function(d){
+    if(!d || d.status !== 'ok') throw new Error((d && d.message) || 'คัดลอกไม่สำเร็จ');
+    CK.dirty = {};                               // ของ server เป็นตัวตั้ง
+    ckApplyServer(d.checklist || {});
+    ckRenderBody(); ckPaintSync();
+    toast('คัดลอกจากรอบ '+d.from_round_id+' แล้ว ('+d.copied+' รายการ)','success');
+  }).catch(function(e){ toast(String(e && e.message || e),'error'); });
+}
+function ckReset(){
+  if(!ckMaster()) return;
+  var why = prompt('ล้างเช็คลิสต์ทั้งรอบ (ติ๊ก · โน้ต · PIC · คู่มือ) — ระบุเหตุผล:','');
+  if(!why || !why.trim()) return;
+  post({ action:'resetChecklist', round_id:ckRound(), reason:why.trim() }).then(function(d){
+    if(!d || d.status !== 'ok') throw new Error((d && d.message) || 'ล้างไม่สำเร็จ');
+    CK.v = {}; CK.dirty = {};
+    try{ localStorage.removeItem(CK_LS); }catch(e){}
+    ckRenderBody(); ckPaintSync();
+    toast('ล้างเช็คลิสต์แล้ว — กลับเป็นคู่มือตั้งต้น','success');
+  }).catch(function(e){ toast(String(e && e.message || e),'error'); });
+}
+
+/* ── วาดทั้งแท็บ ───────────────────────────────────── */
+function ckRenderBar(){
+  var bar = document.getElementById('ckPhaseBar'); if(!bar) return;
+  bar.innerHTML = CK_PHASES.map(function(p){
+    return '<button class="'+(p.id===CK.phase?'on':'')+'" onclick="ckSetPhase(&quot;'+p.id+'&quot;)">'
+      + '<span>'+p.icon+' '+esc(p.name)+'</span><span class="pSub">'+esc(p.sub)+'</span></button>';
+  }).join('');
+
+  var hint = (CK.phase === 'before')
+    ? '🔒 <b>Doc No. · เวลาถึงหน้างาน · Site</b> มาจากระบบ แก้ที่แท็บการตั้งค่า → Site &nbsp;·&nbsp; '
+      + '🟢 <b>ยอดระบบ</b> ระบบเช็คให้เอง &nbsp;·&nbsp; 👤 <b>PIC</b> เลือกจากรายชื่อผู้ใช้ กดเปลี่ยนได้ตลอด'
+    : 'คู่มืออ่านอย่างเดียว ไม่มีช่องติ๊ก — แต่ละข้อระบุผู้รับผิดชอบได้มากกว่า 1 คน';
+  hint += '<br>💾 ติ๊ก/โน้ต/PIC บันทึกให้เองทันที ไม่ต้องกดบันทึก · รีเฟรชหรือเน็ตหลุดไม่หาย · admin คนอื่นเห็นภายใน '
+        + Math.round(POLL_MS/1000) + ' วินาที';
+  if(!ckMaster()) hint += '<br>🔑 แก้ <b>คอลัมน์และเนื้อหาคู่มือ</b> ได้เฉพาะผู้ดูแลระบบ (master) — ติ๊ก/โน้ต/PIC แก้ได้ทุกคน';
+  document.getElementById('ckHint').innerHTML = hint;
+
+  var btn = document.getElementById('ckEditBtn');
+  if(btn) btn.innerHTML = CK.edit ? '✓ เสร็จแล้ว' : '✏️ แก้ไขเนื้อหา';
+
+  var tools = document.getElementById('ckTools');
+  if(tools){
+    tools.innerHTML = ckMaster()
+      ? '<button class="btn btn-outline btn-sm" onclick="ckCopyPrev()">📑 คัดลอกจากรอบก่อน</button>'
+        + '<button class="btn btn-outline btn-sm" onclick="ckReset()">🗑 ล้างเช็คลิสต์รอบนี้</button>'
+        + '<span class="hint">คัดลอก = เอาคอลัมน์ · คู่มือ · PIC มา ไม่เอาที่ติ๊กไว้</span>'
+      : '';
+  }
+}
+function ckRenderBody(){
+  var el = document.getElementById('ckBody'); if(!el) return;
+  el.innerHTML = (CK.phase === 'before') ? ckRenderPrep() : ckRenderManual(CK.phase);
+}
+function ckSetPhase(id){ CK.phase = id; ckRenderBar(); ckRenderBody(); }
+function ckToggleEdit(){ CK.edit = !CK.edit; ckRenderBar(); ckRenderBody(); }
+function ckRenderAll(){ ckRenderBar(); ckRenderBody(); ckPaintSync(); }
+
+/* เข้าแท็บ: โหลดของในเครื่องก่อน (ขึ้นทันที) แล้วให้ poll เอาของ server มาเติม */
+function ckEnter(){
+  CK.on = true;
+  var rid = ckRound();
+  if(rid && CK.bound !== rid){ CK.v = {}; CK.dirty = {}; CK.bound = rid; ckLsLoad(); }
+  ckRenderAll();
+  loadData(false);                               // ดึงพร้อม want_checklist ทันที ไม่รอครบ 12 วิ
+}
+function ckLeave(){ CK.on = false; }
+
 function openOverlay(id){ _modalOpen=true; document.getElementById(id).classList.add('open'); }
 function closeOverlay(id){ document.getElementById(id).classList.remove('open'); _modalOpen=false; }
 
