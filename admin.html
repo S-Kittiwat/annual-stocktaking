@@ -343,13 +343,31 @@ table.recon .grp{border-left:1px solid var(--border);}
 .ckSync.send .dot{animation:ckp 1s infinite;}
 @keyframes ckp{0%,100%{opacity:1}50%{opacity:.25}}
 .ckTbl{width:100%;border-collapse:collapse;font-size:13px;}
+.ckTbl col.cDoc{width:96px;} .ckTbl col.cTime{width:52px;}
+.ckTbl col.cSite{width:30%;} .ckTbl col.cPic{width:118px;}
+.ckTbl col.cTick{width:38px;}
+.ckTbl th.vert{height:104px;padding:6px 2px;vertical-align:bottom;text-align:center;}
+.ckTbl th.vert>span{writing-mode:vertical-rl;transform:rotate(180deg);display:inline-block;
+  white-space:nowrap;max-height:92px;overflow:hidden;text-overflow:ellipsis;font-weight:700;font-size:11px;}
+.ckTbl th.vert.autoCol>span{color:#1e8a4d;}
+.ckTbl td.tick{text-align:center;padding:7px 2px;}
+.ckTbl tr.hasNote>td{border-bottom:0;}
+.ckTbl tr.noteRow>td{padding:0 9px 9px 9px;}
+.ckTbl tr.noteRow .lbl{font-size:11px;color:var(--muted,#999);margin-bottom:3px;}
+.ckColMgr{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-top:11px;
+  padding:9px 11px;border:1px dashed var(--border,#d8d8d8);border-radius:9px;}
+.ckColMgr .cTag{display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:999px;
+  font-size:12px;background:rgba(0,0,0,.04);border:1px solid var(--border,#e0e0e0);}
+.ckColMgr .cTag.auto{opacity:.65;}
+.ckColMgr .cTag button{border:0;background:none;cursor:pointer;color:inherit;font-size:12px;padding:0;line-height:1;}
 .ckTbl th,.ckTbl td{padding:8px 9px;border-bottom:1px solid var(--border,#e8e8e8);vertical-align:top;text-align:left;}
 .ckTbl thead th{position:sticky;top:0;background:var(--surface,#fff);font-size:11.5px;font-weight:700;
   letter-spacing:.02em;white-space:nowrap;z-index:1;}
 .ckTbl th.lockCol{color:var(--muted,#888);}
 .ckTbl tbody tr:hover{background:rgba(0,0,0,.02);}
-.ckTbl .mono{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px;white-space:nowrap;}
-.ckTbl .siteCell{font-weight:600;min-width:150px;}
+.ckTbl .mono{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:11.5px;
+  overflow:hidden;text-overflow:ellipsis;}
+.ckTbl .siteCell{font-weight:600;line-height:1.45;word-break:break-word;}
 .ckGrp{font-size:11px;color:var(--muted,#888);font-weight:400;margin-top:2px;}
 .ckBox{display:inline-flex;align-items:center;justify-content:center;width:26px;height:26px;border-radius:7px;
   border:1.5px solid var(--border,#d6d6d6);background:var(--surface,#fff);cursor:pointer;font-size:14px;
@@ -357,11 +375,11 @@ table.recon .grp{border-left:1px solid var(--border);}
 .ckBox.on{background:rgba(34,160,90,.15);border-color:rgba(34,160,90,.5);color:#1e8a4d;font-weight:700;}
 .ckBox.auto{cursor:default;border-style:dashed;}
 .ckBox.auto.on{background:rgba(34,160,90,.1);}
-.ckNote{width:100%;min-width:170px;min-height:34px;resize:vertical;font:inherit;font-size:12.5px;
+.ckNote{width:100%;min-height:34px;resize:vertical;font:inherit;font-size:12.5px;
   padding:6px 8px;border-radius:7px;border:1px solid var(--border,#ddd);background:var(--surface,#fff);color:inherit;}
-.ckNoteRo{font-size:12.5px;color:var(--muted,#777);line-height:1.55;min-width:170px;}
-.ckPicSel{font:inherit;font-size:12.5px;padding:4px 7px;border-radius:7px;
-  border:1px solid var(--border,#ddd);background:var(--surface,#fff);color:inherit;max-width:130px;}
+.ckNoteRo{font-size:12.5px;color:var(--muted,#777);line-height:1.55;}
+.ckPicSel{font:inherit;font-size:12px;padding:4px 6px;border-radius:7px;
+  border:1px solid var(--border,#ddd);background:var(--surface,#fff);color:inherit;max-width:100%;width:100%;}
 .ckSec{border:1px solid var(--border,#e4e4e4);border-radius:11px;padding:13px 15px;margin-bottom:11px;
   background:var(--surface,#fff);}
 .ckSec h4{margin:0 0 3px;font-size:14.5px;}
@@ -4211,7 +4229,8 @@ var CK_PHASES = [
 ];
 
 function ckRound(){ return S.round ? S.round.round_id : ''; }
-function ckMaster(){ return myUserId === 'master'; }
+/* ทุกคนแก้ได้ — สิ่งที่ต้องทำเปลี่ยนไปตามรอบ คนที่ลงไปทำคือคนที่รู้ว่าต้องแก้อะไร */
+function ckMaster(){ return true; }
 function ckCols(){ return CK.v.cols || CK_DEFAULT_COLS; }
 function ckManual(ph){ return CK.v['manual.'+ph] || CK_DEFAULT_MANUAL[ph] || []; }
 function ckUsers(){ return (S.agents||[]).map(function(a){ return a.name; }).filter(Boolean); }
@@ -4367,42 +4386,69 @@ function ckSetNote(sid,v){ ckMark('r.'+sid+'.note', v); }   /* ไม่ re-rend
 function ckRenderPrep(){
   var rows = ckRows();
   if(!rows.length) return '<div class="empty">ยังไม่มีไซต์ที่ใช้งานในรอบนี้ — เพิ่มที่แท็บการตั้งค่า → Site</div>';
-  var cols = ckCols(), ed = CK.edit && ckMaster();
+  var cols = ckCols(), nCol = 4 + cols.length;
 
-  var head = '<tr><th class="lockCol">🔒 Doc No.</th><th class="lockCol">🔒 เวลาถึงหน้างาน</th>'
+  // หัวคอลัมน์ติ๊กวางแนวตั้ง → กว้างแค่ 38px ต่อช่อง ใส่ได้หลายคอลัมน์โดยไม่ต้องเลื่อนซ้ายขวา
+  var colgroup = '<colgroup><col class="cDoc"><col class="cTime"><col class="cSite"><col class="cPic">'
+    + cols.map(function(){ return '<col class="cTick">'; }).join('') + '</colgroup>';
+
+  var head = '<tr><th class="lockCol">🔒 Doc No.</th><th class="lockCol">🔒 เวลา</th>'
     + '<th class="lockCol">🔒 Site</th><th>👤 PIC</th>'
-    + cols.map(function(c,ci){
-        return '<th>'+(c.auto?'🟢 ':'')+esc(c.name)
-          + (ed && !c.auto ? '<div class="ckGrp"><a href="#" onclick="ckRenameCol('+ci+');return false;">แก้ชื่อ</a> · '
-              + '<a href="#" onclick="ckDelCol('+ci+');return false;">ลบ</a></div>' : '')
-          + '</th>';
+    + cols.map(function(c){
+        return '<th class="vert'+(c.auto?' autoCol':'')+'" title="'+esc(c.name)+'">'
+          + '<span>'+(c.auto?'🟢 ':'')+esc(c.name)+'</span></th>';
       }).join('')
-    + '<th>ข้อควรรู้ของไซต์</th></tr>';
+    + '</tr>';
 
   var body = rows.map(function(r){
     var cells = cols.map(function(c){
       if(c.auto){
         var on = !!r[c.k];
-        return '<td><span class="ckBox auto'+(on?' on':'')+'" title="ระบบเช็คให้เอง">'+(on?'✓':'…')+'</span></td>';
+        return '<td class="tick"><span class="ckBox auto'+(on?' on':'')+'" title="ระบบเช็คให้เอง">'
+          + (on?'✓':'…')+'</span></td>';
       }
       var v = CK.v['r.'+r.id+'.'+c.k] ? 1 : 0;
-      return '<td><button class="ckBox'+(v?' on':'')+'" onclick="ckTick(&quot;'+esc(r.id)+'&quot;,&quot;'+esc(c.k)+'&quot;)">'
-        + (v?'✓':'')+'</button></td>';
+      return '<td class="tick"><button class="ckBox'+(v?' on':'')+'" title="'+esc(c.name)+'" '
+        + 'onclick="ckTick(&quot;'+esc(r.id)+'&quot;,&quot;'+esc(c.k)+'&quot;)">'+(v?'✓':'')+'</button></td>';
     }).join('');
+
     var note = CK.v['r.'+r.id+'.note'] || '';
-    var noteCell = CK.edit
-      ? '<td><textarea class="ckNote" oninput="ckSetNote(&quot;'+esc(r.id)+'&quot;,this.value)">'+esc(note)+'</textarea></td>'
-      : '<td><div class="ckNoteRo">'+(note?esc(note):'<span class="ckNone">—</span>')+'</div></td>';
-    return '<tr>'
-      + '<td class="mono">'+esc(r.doc||'—')+'</td>'
+    // โน้ตย้ายมาเป็นแถวของตัวเองใต้ไซต์ — ไม่กินความกว้างของตาราง
+    var showNote = CK.edit || !!note;
+    var noteRow = showNote
+      ? '<tr class="noteRow"><td colspan="'+nCol+'">'
+        + '<div class="lbl">ข้อควรรู้ของไซต์นี้</div>'
+        + (CK.edit
+            ? '<textarea class="ckNote" placeholder="เช่น ไม่มีไฟฟ้า ปริ้นเอกสารจากคลังที่ 1 · มี Audit เข้าหน้างาน" '
+              + 'oninput="ckSetNote(&quot;'+esc(r.id)+'&quot;,this.value)">'+esc(note)+'</textarea>'
+            : '<div class="ckNoteRo">'+esc(note)+'</div>')
+        + '</td></tr>'
+      : '';
+
+    return '<tr'+(showNote?' class="hasNote"':'')+'>'
+      + '<td class="mono" title="'+esc(r.doc)+'">'+esc(r.doc||'—')+'</td>'
       + '<td class="mono">'+esc(r.time||'—')+'</td>'
       + '<td class="siteCell">'+esc(r.site)+(r.group?'<div class="ckGrp">🏬 '+esc(r.group)+'</div>':'')+'</td>'
       + '<td>'+ckPicSel(CK.v['r.'+r.id+'.pic']||'', 'ckSetPic(&quot;'+esc(r.id)+'&quot;,this.value)')+'</td>'
-      + cells + noteCell + '</tr>';
+      + cells + '</tr>' + noteRow;
   }).join('');
 
-  return '<div class="table-wrap"><table class="ckTbl"><thead>'+head+'</thead><tbody>'+body+'</tbody></table></div>'
-    + (ed ? '<button class="ckAdd" onclick="ckAddCol()">+ เพิ่มคอลัมน์</button>' : '');
+  return '<div class="table-wrap"><table class="ckTbl">'+colgroup
+    + '<thead>'+head+'</thead><tbody>'+body+'</tbody></table></div>'
+    + (CK.edit ? ckColMgr() : '');
+}
+
+/* แถบจัดการคอลัมน์ — อยู่ใต้ตาราง ไม่เบียดความกว้างของหัวตาราง */
+function ckColMgr(){
+  var cols = ckCols();
+  return '<div class="ckColMgr"><span class="hint" style="margin:0;">คอลัมน์:</span>'
+    + cols.map(function(c,ci){
+        if(c.auto) return '<span class="cTag auto" title="ระบบเช็คให้เอง แก้ไม่ได้">🟢 '+esc(c.name)+'</span>';
+        return '<span class="cTag">'+esc(c.name)
+          + '<button title="แก้ชื่อ" onclick="ckRenameCol('+ci+')">✏️</button>'
+          + '<button title="ลบคอลัมน์" onclick="ckDelCol('+ci+')">✕</button></span>';
+      }).join('')
+    + '<button class="ckAdd" style="margin:0;" onclick="ckAddCol()">+ เพิ่มคอลัมน์</button></div>';
 }
 
 /* ── วาดคู่มือ (ระหว่าง/หลังนับ) ────────────────────── */
@@ -4521,7 +4567,9 @@ function ckRenderBar(){
     : 'คู่มืออ่านอย่างเดียว ไม่มีช่องติ๊ก — แต่ละข้อระบุผู้รับผิดชอบได้มากกว่า 1 คน';
   hint += '<br>💾 ติ๊ก/โน้ต/PIC บันทึกให้เองทันที ไม่ต้องกดบันทึก · รีเฟรชหรือเน็ตหลุดไม่หาย · admin คนอื่นเห็นภายใน '
         + Math.round(POLL_MS/1000) + ' วินาที';
-  if(!ckMaster()) hint += '<br>🔑 แก้ <b>คอลัมน์และเนื้อหาคู่มือ</b> ได้เฉพาะผู้ดูแลระบบ (master) — ติ๊ก/โน้ต/PIC แก้ได้ทุกคน';
+  hint += (CK.phase === 'before')
+    ? '<br>✏️ กด <b>แก้ไขเนื้อหา</b> เพื่อเพิ่ม/ลบ/เปลี่ยนชื่อคอลัมน์ และใส่ข้อควรรู้รายไซต์ — สิ่งที่ต้องทำเปลี่ยนได้ทุกรอบ'
+    : '<br>✏️ กด <b>แก้ไขเนื้อหา</b> เพื่อแก้ข้อความ เพิ่ม/ลบรายการและหัวข้อ';
   document.getElementById('ckHint').innerHTML = hint;
 
   var btn = document.getElementById('ckEditBtn');
