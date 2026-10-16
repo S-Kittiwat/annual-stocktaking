@@ -342,6 +342,16 @@ table.recon .grp{border-left:1px solid var(--border);}
 .ckSync.err{background:rgba(220,70,60,.12);border-color:rgba(220,70,60,.42);color:#c0392b;}
 .ckSync.send .dot{animation:ckp 1s infinite;}
 @keyframes ckp{0%,100%{opacity:1}50%{opacity:.25}}
+.ckWho{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:12px;
+  padding:9px 11px;border:1px solid var(--border,#e4e4e4);border-radius:10px;}
+.ckWho .lb{font-size:12px;color:var(--muted,#999);margin-right:2px;white-space:nowrap;}
+.ckWho button{font:inherit;font-size:12.5px;padding:4px 12px;border-radius:999px;cursor:pointer;
+  border:1.5px solid var(--border,#dcdcdc);background:var(--surface,#fff);color:inherit;}
+.ckWho button:hover{border-color:var(--accent,#b8893d);}
+.ckWho button.on{background:var(--accent,#b8893d);border-color:var(--accent,#b8893d);color:#fff;font-weight:700;}
+.ckWho .sum{flex:1;min-width:180px;text-align:right;font-size:12px;color:var(--muted,#999);}
+.ckWho .sum b{color:inherit;}
+.ckChip.me{background:rgba(184,137,61,.32);border-color:var(--accent,#b8893d);font-weight:700;}
 .ckSite{border:1px solid var(--border,#e4e4e4);border-radius:11px;padding:12px 14px;margin-bottom:10px;
   background:var(--surface,#fff);}
 .ckSiteHd{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:10px;}
@@ -4174,7 +4184,7 @@ function switchTab(name){
    โครง (คอลัมน์/คู่มือ) แก้ได้เฉพาะ master · ติ๊ก/โน้ต/PIC ทุกคนแก้ได้
    ══════════════════════════════════════════════════════════════════ */
 var CK = { phase:'before', edit:false, v:{}, dirty:{}, state:'ok', at:null,
-           timer:null, on:false, fails:0, bound:'' };
+           timer:null, on:false, fails:0, bound:'', who:'' };   /* who = กรองดูเฉพาะงานของคนนี้ ('' = ทุกคน) */
 var CK_DEBOUNCE = 2000;
 var CK_LS       = 'stockCountChecklist';
 var CK_LOCKED   = ['doc','time','site'];     // มาจากระบบ — แก้ที่หน้าจัดการ Site
@@ -4341,7 +4351,7 @@ function ckChips(list, editable, ctx){
   var h = '<div class="ckPicRow">';
   if(!list.length && !editable) h += '<span class="ckNone">— ยังไม่ระบุผู้รับผิดชอบ —</span>';
   h += list.map(function(u){
-    return '<span class="ckChip">'+esc(u)
+    return '<span class="ckChip'+(CK.who && u===CK.who ? ' me' : '')+'">'+esc(u)
       + (editable ? '<button class="x" title="เอาออก" onclick="ckPicDel('+ctx+',&quot;'+esc(u)+'&quot;)">✕</button>' : '')
       + '</span>';
   }).join('');
@@ -4356,6 +4366,44 @@ function ckChips(list, editable, ctx){
   }
   return h + '</div>';
 }
+/* ── กรอง "ดูเฉพาะงานของคนนี้" — เป็นมุมมองของคนที่เปิดดูเท่านั้น ไม่ซิงค์ให้คนอื่น ── */
+function ckSetWho(n){ CK.who = (CK.who === n) ? '' : n; ckRenderBar(); ckRenderBody(); }
+function ckSitesOf(n){ return ckRows().filter(function(r){ return String(CK.v['r.'+r.id+'.pic']||'') === n; }); }
+function ckItemsOf(n, ph){
+  var c = 0;
+  ckManual(ph).forEach(function(sec){
+    (sec.items||[]).forEach(function(it){ if((it.pic||[]).indexOf(n) >= 0) c++; });
+  });
+  return c;
+}
+function ckWhoBar(){
+  var us = ckUsers();
+  if(!us.length) return '';
+  var me = myUserName && us.indexOf(myUserName) >= 0 ? myUserName : '';
+  var btn = function(val,label){
+    return '<button class="'+(CK.who===val?'on':'')+'" onclick="ckSetWho(&quot;'+esc(val)+'&quot;)">'+esc(label)+'</button>';
+  };
+  var h = '<div class="ckWho"><span class="lb">👤 ดูเฉพาะงานของ:</span>'
+    + '<button class="'+(CK.who?'':'on')+'" onclick="ckSetWho(&quot;&quot;)">ทุกคน</button>'
+    + (me ? btn(me, me+' (ฉัน)') : '')
+    + us.filter(function(u){ return u !== me; }).map(function(u){ return btn(u,u); }).join('');
+  if(CK.who){
+    var sites = ckSitesOf(CK.who);
+    var tick = 0, tot = 0;
+    sites.forEach(function(r){
+      ckCols().forEach(function(c){
+        tot++;
+        if(c.auto ? !!r[c.k] : !!CK.v['r.'+r.id+'.'+c.k]) tick++;
+      });
+    });
+    h += '<span class="sum">' + esc(CK.who) + ' — ก่อนนับ <b>' + sites.length + ' ไซต์</b>'
+      + (sites.length ? ' (ติ๊กแล้ว ' + tick + '/' + tot + ')' : '')
+      + ' · ระหว่างนับ <b>' + ckItemsOf(CK.who,'during') + ' ข้อ</b>'
+      + ' · หลังนับ <b>' + ckItemsOf(CK.who,'after') + ' ข้อ</b></span>';
+  }
+  return h + '</div>';
+}
+
 function ckItem(ph,si,ii){ var s=ckManual(ph)[si]; return s && s.items ? s.items[ii] : null; }
 function ckPicAdd(ph,si,ii,u){
   if(!u) return;
@@ -4383,7 +4431,13 @@ function ckSetNote(sid,v){ ckMark('r.'+sid+'.note', v); }   /* ไม่ re-rend
 /* ── วาดตารางก่อนนับ ───────────────────────────────── */
 function ckRenderPrep(){
   var rows = ckRows();
-  if(!rows.length) return '<div class="empty">ยังไม่มีไซต์ที่ใช้งานในรอบนี้ — เพิ่มที่แท็บการตั้งค่า → Site</div>';
+  if(!rows.length) return ckWhoBar()
+    + '<div class="empty">ยังไม่มีไซต์ที่ใช้งานในรอบนี้ — เพิ่มที่แท็บการตั้งค่า → Site</div>';
+  if(CK.who){
+    rows = rows.filter(function(r){ return String(CK.v['r.'+r.id+'.pic']||'') === CK.who; });
+    if(!rows.length) return ckWhoBar()
+      + '<div class="empty">ยังไม่มีไซต์ไหนที่ PIC เป็น ' + esc(CK.who) + '</div>';
+  }
   var cols = ckCols();
 
   // การ์ดต่อไซต์ + ชิปติ๊กที่ตัดบรรทัดเอง — ชื่อคอลัมน์อ่านแนวนอนเต็ม ๆ และไม่ต้องเลื่อนซ้ายขวา
@@ -4426,7 +4480,7 @@ function ckRenderPrep(){
       + '</div>';
   }).join('');
 
-  return body + (CK.edit ? ckColMgr() : '');
+  return ckWhoBar() + body + (CK.edit ? ckColMgr() : '');
 }
 
 /* แถบจัดการรายการที่ต้องเช็ค — อยู่ใต้การ์ดทั้งหมด */
@@ -4445,15 +4499,21 @@ function ckColMgr(){
 /* ── วาดคู่มือ (ระหว่าง/หลังนับ) ────────────────────── */
 function ckRenderManual(ph){
   var secs = ckManual(ph), ed = CK.edit && ckMaster(), q = '&quot;'+ph+'&quot;';
-  if(!secs.length) return '<div class="empty">ยังไม่มีเนื้อหา</div>';
+  if(!secs.length) return ckWhoBar() + '<div class="empty">ยังไม่มีเนื้อหา</div>';
+  var hit = 0;
   var h = secs.map(function(sec,si){
     var head = ed
       ? '<h4><input class="ckIn" value="'+esc(sec.h)+'" oninput="ckSetSec('+q+','+si+',&quot;h&quot;,this.value)"></h4>'
         + '<div class="ckWhen"><input class="ckIn sm" placeholder="ช่วงเวลา/เงื่อนไข" value="'+esc(sec.when||'')+'" '
         + 'oninput="ckSetSec('+q+','+si+',&quot;when&quot;,this.value)"></div>'
       : '<h4>'+esc(sec.h)+'</h4>' + (sec.when ? '<div class="ckWhen">⏱ '+esc(sec.when)+'</div>' : '');
-    var items = (sec.items||[]).map(function(it,ii){
-      var ctx = q+','+si+','+ii;
+    // ผูก index เดิมไว้ก่อนกรอง — ปุ่มแก้/ลบอ้าง index ของ MANUAL จริง ไม่ใช่ลำดับหลังกรอง
+    var pool = (sec.items||[]).map(function(it,ii){ return { it:it, ii:ii }; });
+    if(CK.who && !ed) pool = pool.filter(function(x){ return (x.it.pic||[]).indexOf(CK.who) >= 0; });
+    if(CK.who && !pool.length && !ed) return '';
+    hit += pool.length;
+    var items = pool.map(function(x){
+      var it = x.it, ii = x.ii, ctx = q+','+si+','+ii;
       if(ed){
         return '<li class="ed">'
           + '<div style="display:flex;gap:6px;align-items:center;">'
@@ -4474,7 +4534,9 @@ function ckRenderManual(ph){
       + '</div>';
   }).join('');
   if(ed) h += '<button class="ckAdd" onclick="ckAddSec('+q+')">+ เพิ่มหัวข้อ</button>';
-  return h;
+  if(CK.who && !ed && !hit)
+    h = '<div class="empty">ยังไม่มีข้อไหนที่ระบุให้ ' + esc(CK.who) + ' รับผิดชอบในช่วงนี้</div>';
+  return ckWhoBar() + h;
 }
 
 /* ── แก้เนื้อหาคู่มือ (master) ─────────────────────── */
@@ -4556,7 +4618,9 @@ function ckRenderBar(){
     ? '🔒 <b>Doc No. · เวลาถึงหน้างาน · Site</b> มาจากระบบ แก้ที่แท็บการตั้งค่า → Site &nbsp;·&nbsp; '
       + '🟢 <b>ยอดระบบ</b> ระบบเช็คให้เอง &nbsp;·&nbsp; 👤 <b>PIC</b> เลือกจากรายชื่อผู้ใช้ กดเปลี่ยนได้ตลอด '
       + '&nbsp;·&nbsp; ตัวเลขมุมขวาของแต่ละไซต์ = ติ๊กไปแล้วกี่ข้อ'
-    : 'คู่มืออ่านอย่างเดียว ไม่มีช่องติ๊ก — แต่ละข้อระบุผู้รับผิดชอบได้มากกว่า 1 คน';
+      + '&nbsp;·&nbsp; กดชื่อคนด้านล่างเพื่อดูเฉพาะงานของคนนั้น (เห็นคนเดียว ไม่กระทบคนอื่น)'
+    : 'คู่มืออ่านอย่างเดียว ไม่มีช่องติ๊ก — แต่ละข้อระบุผู้รับผิดชอบได้มากกว่า 1 คน'
+      + ' &nbsp;·&nbsp; กดชื่อคนด้านล่างเพื่อดูเฉพาะข้อที่คนนั้นรับผิดชอบ';
   hint += '<br>💾 ติ๊ก/โน้ต/PIC บันทึกให้เองทันที ไม่ต้องกดบันทึก · รีเฟรชหรือเน็ตหลุดไม่หาย · admin คนอื่นเห็นภายใน '
         + Math.round(POLL_MS/1000) + ' วินาที';
   hint += (CK.phase === 'before')
