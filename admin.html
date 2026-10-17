@@ -1150,7 +1150,10 @@ function siteBookState(site_id){
     var g = (S.booksV2||{})[site_id] || {};
     var filled = items.filter(function(it){
       var row = g[it.item_id] || {};
-      return Object.keys(row).some(function(k){ return Number(row[k]) > 0; });
+      // มีแถวในชีต = Admin กรอกแล้ว (รวมกรณีกรอก 0) — ไม่ใช่ต้องมากกว่า 0
+      return Object.keys(row).some(function(k){
+        var v = row[k]; return v !== undefined && v !== null && v !== '' && !isNaN(Number(v));
+      });
     }).length;
     return { filled:filled, total:items.length, ok:(filled >= items.length) };
   }
@@ -2385,15 +2388,25 @@ function siteCfg(){ return V2CFG || null; }
 function siteItems(){ var c=siteCfg(); return c ? c.items.filter(function(i){return i.is_active!==false;}).sort(function(a,b){return (a.sort||0)-(b.sort||0);}) : []; }
 function siteBookStatuses(){ var c=siteCfg(); return c ? c.book_statuses.filter(function(s){return s.is_active!==false;}).sort(function(a,b){return (a.sort||0)-(b.sort||0);}) : []; }
 
-function siteBookVal(sid,itemId,stId){
-  return ((BOOK_DRAFT[sid]||{})[itemId]||{})[stId] || 0;
+/* ค่าที่โชว์ในช่อง — '' = ยังไม่กรอก · '0' = กรอก 0 จริง (ไซต์นั้นไม่มีสินค้านี้ / หน้าบัญชีเป็น 0)
+   ห้ามคืน 0 ให้ช่องที่ยังไม่กรอก ไม่งั้นแยกสองกรณีนี้ไม่ออก */
+function siteBookRaw(sid,itemId,stId){
+  var v = ((BOOK_DRAFT[sid]||{})[itemId]||{})[stId];
+  return (v === undefined || v === null || v === '') ? '' : v;
 }
+function siteBookVal(sid,itemId,stId){
+  return Number(siteBookRaw(sid,itemId,stId)) || 0;     // ใช้คำนวณผลรวมเท่านั้น
+}
+function siteBookHas(sid,itemId,stId){ return siteBookRaw(sid,itemId,stId) !== ''; }
 function siteBookFilled(sid){
   var items=siteItems(); if(!items.length) return 0;
   var b=BOOK_DRAFT[sid]||{};
   return items.filter(function(i){
     var row=b[i.item_id]||{};
-    return Object.keys(row).some(function(k){ return Number(row[k])>0; });
+    // กรอก 0 ก็นับว่ากรอกแล้ว — ไซต์ที่ไม่มีสินค้านั้นต้องขึ้นครบได้
+    return Object.keys(row).some(function(k){
+      var v=row[k]; return v!==undefined && v!==null && v!=='' && !isNaN(Number(v));
+    });
   }).length;
 }
 function siteDirty(){
@@ -2551,8 +2564,8 @@ function siteEditorHtml(d,idx){
       h += '<tr><td title="'+esc(st.status_name)+'">'+esc(st.status_name)
         +  (st.is_baseline?' <span class="badge ob">ฐานเทียบ</span>':(st.is_outstanding?' <span class="badge">คงค้าง</span>':''))+'</td>'
         +  items.map(function(it){
-             return '<td><input class="input mono bb-in" type="number" value="'
-               + siteBookVal(d.site_id,it.item_id,st.status_id)
+             return '<td><input class="input mono bb-in" type="number" placeholder="ยังไม่กรอก" value="'
+               + siteBookRaw(d.site_id,it.item_id,st.status_id)
                + '" oninput="siteBookSet(\''+esc(d.site_id)+'\',\''+esc(it.item_id)+'\',\''+esc(st.status_id)+'\',this.value)"></td>';
            }).join('')
         +  '</tr>';
@@ -2647,7 +2660,14 @@ function siteBookSet(sid,itemId,stId,val){
   siteSync();
   if(!BOOK_DRAFT[sid]) BOOK_DRAFT[sid]={};
   if(!BOOK_DRAFT[sid][itemId]) BOOK_DRAFT[sid][itemId]={};
-  BOOK_DRAFT[sid][itemId][stId]=Number(val)||0;
+  var t = String(val==null?'':val).trim();
+  if(t===''){
+    delete BOOK_DRAFT[sid][itemId][stId];                       // ล้างช่อง = กลับไปเป็น "ยังไม่กรอก"
+    if(!Object.keys(BOOK_DRAFT[sid][itemId]).length) delete BOOK_DRAFT[sid][itemId];
+  } else {
+    var n = Number(t);
+    BOOK_DRAFT[sid][itemId][stId] = isNaN(n) ? 0 : n;           // 0 ที่พิมพ์เอง = ยอดจริง เก็บไว้
+  }
   // อัปเดตแถวรวมสด ๆ โดยไม่ re-render (กันทับช่องที่พิมพ์อยู่)
   var bsts=siteBookStatuses();
   siteItems().forEach(function(it){
