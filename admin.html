@@ -1372,10 +1372,26 @@ function saveItemConfig(){
 var V2CFG = null, V2LIM = { max_items_per_type:4, max_types:4 };
 
 function v2Dirty(){ S.v2Dirty = true; var m=document.getElementById('v2DirtyMark'); if(m) m.style.display='inline'; }
-function v2Err(msg){
+function v2Err(msg, html){
   var el=document.getElementById('v2Errors'); if(!el) return;
-  if(!msg){ el.style.display='none'; el.textContent=''; return; }
-  el.style.display='block'; el.textContent=msg;
+  if(!msg && !html){ el.style.display='none'; el.innerHTML=''; return; }
+  el.style.display='block';
+  if(html) el.innerHTML = html; else el.textContent = msg;
+}
+/* เตือนเรื่องของกำพร้าพร้อมปุ่มแก้ให้ — เรียกทุกครั้งที่วาด config ใหม่ */
+function v2WarnOrphans(){
+  if(!V2CFG) return false;
+  var orp = v2Orphans();
+  if(!orp.total) return false;
+  var names = orp.items.map(function(i){ return esc(i.item_name||'(ไม่มีชื่อ)'); })
+    .concat(orp.statuses.map(function(s){ return esc(s.status_name||'(ไม่มีชื่อ)'); }));
+  v2Err('', '<b>มีรายการ/สถานะที่ไม่ได้ผูกกับชนิดไหนแล้ว '+orp.total+' รายการ</b>'
+    + '<div style="margin-top:4px;">'+names.join(' · ')+'</div>'
+    + '<div style="margin-top:6px;font-weight:400;">มักเกิดตอนคัดลอกการตั้งค่าจากรอบก่อนแล้วลบ/ปิดชนิดบางตัว '
+    + 'ถ้าปล่อยไว้จะบันทึกไม่ผ่าน</div>'
+    + '<button class="btn btn-outline btn-sm" style="margin-top:8px;" onclick="v2FixOrphans()">'
+    + '🧹 ลบของกำพร้าทิ้ง</button>');
+  return true;
 }
 function v2RoundId(){ return S.round ? S.round.round_id : ''; }
 
@@ -1446,6 +1462,13 @@ function v2Set(kind, idx, field, val){
 function v2Toggle(kind, idx, field){
   if(!V2CFG || !V2CFG[kind] || !V2CFG[kind][idx]) return;
   V2CFG[kind][idx][field] = !V2CFG[kind][idx][field];
+  // ปิด/เปิดชนิด → ของที่ผูกอยู่ต้องตามไปด้วย ไม่งั้นเหลือสถานะกำพร้าชี้ไปยังชนิดที่ปิดอยู่
+  if(kind==='types' && field==='is_active'){
+    var tid = String(V2CFG[kind][idx].type_id||''), on = !!V2CFG[kind][idx][field];
+    ['items','count_statuses'].forEach(function(k){
+      (V2CFG[k]||[]).forEach(function(x){ if(String(x.type_id)===tid) x.is_active = on; });
+    });
+  }
   // ฐานเทียบเลือกได้ตัวเดียว
   if(field==='is_baseline' && V2CFG[kind][idx][field]){
     V2CFG[kind].forEach(function(r,i){ if(i!==idx) r.is_baseline=false; });
@@ -1456,8 +1479,52 @@ function v2Del(kind, idx){
   if(!V2CFG || !V2CFG[kind]) return;
   var r = V2CFG[kind][idx];
   var name = r.type_name || r.item_name || r.status_name || r.adjust_name || '';
-  if(!confirm('ลบ "'+name+'" ?\n\nถ้ารอบนี้มียอดที่นับไว้แล้ว ระบบจะไม่ให้ลบ — ใช้ปุ่ม "ปิด" แทน')) return;
-  V2CFG[kind].splice(idx,1); v2Dirty(); v2Render();
+  var warn = '';
+  // ลบชนิดต้องลบของที่ผูกอยู่ด้วย ไม่งั้นเหลือรายการ/สถานะกำพร้า
+  // ที่ชี้ไปยังชนิดที่ไม่มีแล้ว → server ปฏิเสธตอนบันทึกว่า "อ้างชนิดที่ไม่มีอยู่"
+  if(kind==='types'){
+    var tid = String(r.type_id||'');
+    var nIt = (V2CFG.items||[]).filter(function(x){ return String(x.type_id)===tid; }).length;
+    var nSt = (V2CFG.count_statuses||[]).filter(function(x){ return String(x.type_id)===tid; }).length;
+    if(nIt || nSt) warn = '\n\nจะลบของที่ผูกกับชนิดนี้ไปด้วย: รายการ '+nIt+' · สถานะการนับ '+nSt;
+  }
+  if(!confirm('ลบ "'+name+'" ?'+warn+'\n\nถ้ารอบนี้มียอดที่นับไว้แล้ว ระบบจะไม่ให้ลบ — ใช้ปุ่ม "ปิด" แทน')) return;
+  V2CFG[kind].splice(idx,1);
+  if(kind==='types'){
+    var tid2 = String(r.type_id||'');
+    V2CFG.items = (V2CFG.items||[]).filter(function(x){ return String(x.type_id)!==tid2; });
+    V2CFG.count_statuses = (V2CFG.count_statuses||[]).filter(function(x){ return String(x.type_id)!==tid2; });
+  }
+  v2Dirty(); v2Render();
+}
+
+/* รายการ/สถานะที่ชี้ไปยังชนิดที่ไม่มีอยู่ หรือชนิดที่ถูกปิดไว้ — เป็นของกำพร้า
+   ปล่อยไว้จะบันทึกไม่ผ่าน และ error ฝั่ง server อ่านยากว่าต้องไปแก้ตรงไหน */
+function v2Orphans(){
+  var cfg = V2CFG || {};
+  var live = {};
+  (cfg.types||[]).forEach(function(t){ if(t.is_active!==false) live[String(t.type_id)]=1; });
+  var items = (cfg.items||[]).filter(function(i){
+    return i.is_active!==false && !live[String(i.type_id||'')]; });
+  var cst = (cfg.count_statuses||[]).filter(function(x){
+    return x.is_active!==false && !live[String(x.type_id||'')]; });
+  return { items:items, statuses:cst, total:items.length+cst.length };
+}
+/* ลบของกำพร้าทิ้งในคลิกเดียว — ใช้ตอนคัดลอก config รอบก่อนมาแล้วชนิดไม่ตรงกัน */
+function v2FixOrphans(){
+  var orp = v2Orphans();
+  if(!orp.total){ v2Err(''); return; }
+  var names = orp.items.map(function(i){ return i.item_name; })
+    .concat(orp.statuses.map(function(s){ return s.status_name; }));
+  if(!confirm('ลบรายการ/สถานะที่ไม่ได้ผูกกับชนิดไหนแล้ว '+orp.total+' รายการ?\n\n'
+      + names.join(' · '))) return;
+  var live = {};
+  (V2CFG.types||[]).forEach(function(t){ if(t.is_active!==false) live[String(t.type_id)]=1; });
+  V2CFG.items = (V2CFG.items||[]).filter(function(i){
+    return i.is_active===false || live[String(i.type_id||'')]; });
+  V2CFG.count_statuses = (V2CFG.count_statuses||[]).filter(function(x){
+    return x.is_active===false || live[String(x.type_id||'')]; });
+  v2Dirty(); v2Render(); v2Err('');
 }
 
 function v2Save(){
@@ -1492,6 +1559,7 @@ function v2Chk(kind,i,field,on){
 }
 
 function v2Render(keepFocus){
+  setTimeout(function(){ try { if(V2CFG) v2WarnOrphans(); } catch(e) {} }, 0);
   if(!document.getElementById('v2TypesTable')) return;
   var focusId = (keepFocus && document.activeElement && document.activeElement.id) ? document.activeElement.id : '';
   var lbl = document.getElementById('setupRoundLabel');
@@ -2049,6 +2117,10 @@ function wizLocalErrors(){
     per[i.type_id]=(per[i.type_id]||0)+1;
     if(!String(i.unit||'').trim()) e.push('รายการ "'+i.item_name+'" ยังไม่ได้ระบุหน่วย');
   });
+  // สถานะการนับที่ชี้ไปยังชนิดที่ไม่มี/ถูกปิด — เดิมไม่ได้ตรวจ จึงขึ้นเขียวแล้วไปเด้งที่ server
+  cst.forEach(function(x){
+    if(!tid[x.type_id]) e.push('สถานะ "'+x.status_name+'" อ้างชนิดที่ไม่มีอยู่');
+  });
   var maxI=(V2LIM.max_items_per_type||4);
   types.forEach(function(t){
     if(!per[t.type_id]) e.push('ชนิด "'+t.type_name+'" ยังไม่มีรายการ');
@@ -2078,6 +2150,10 @@ function wizCheckReady(){
       + '<b>ยังเริ่มรอบไม่ได้</b><ul style="margin:6px 0 0 18px;">'
       + errs.map(function(x){ return '<li>'+esc(x)+'</li>'; }).join('')+'</ul></div>';
     btn.disabled=true; btn.style.opacity='.5';
+    if(typeof v2Orphans==='function' && v2Orphans().total){
+      box.innerHTML += '<button class="btn btn-outline btn-sm" style="margin-top:8px;" '
+        + 'onclick="v2FixOrphans();wizCheckReady();">🧹 ลบรายการ/สถานะที่ไม่ได้ผูกกับชนิดไหนแล้ว</button>';
+    }
   }else{
     box.innerHTML='<div style="background:rgba(52,211,153,.1);border:1px solid var(--success);border-radius:8px;padding:11px 13px;font-size:12.5px;color:var(--success);">'
       + '✓ ตั้งค่าครบแล้ว พร้อมบันทึกและเริ่มรอบ</div>';
