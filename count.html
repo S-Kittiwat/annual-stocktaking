@@ -4122,11 +4122,12 @@ async function printDocGroup(opts){
       var sid = need[i];
       showToast('⏳ กำลังสร้างเอกสาร ' + _siteNameById(sid) + ' (' + (i+1) + '/' + need.length + ')', 'info');
       if (String(sid) !== String(activeSid())) switchSite(sid, { quiet:true });
-      var r = null;
-      try { r = await printDoc(); } catch(e) { r = null; }
+      var r = null, why = '';
+      try { r = await printDoc(); } catch(e) { why = String(e && e.message || e); }
       if (r && r.url) got.push({ sid:sid, name:_siteNameById(sid), url:r.url, fname:_lastDocName });
       else if (siteDocUrl) got.push({ sid:sid, name:_siteNameById(sid), url:siteDocUrl, fname:_lastDocName });
-      else failed.push(_siteNameById(sid));
+      else failed.push({ sid:sid, name:_siteNameById(sid),
+                         why: why || (r && r.error) || _docFail || 'ไม่ทราบสาเหตุ' });
     }
   } finally {
     _docQuiet = false;
@@ -4135,7 +4136,30 @@ async function printDocGroup(opts){
   visitPersist();
   render();
   if (got.length || _groupDocRows().some(function(r){ return r.url; })) _showDocLinks(got, failed);
-  else showToast('❌ สร้างเอกสารไม่สำเร็จ: ' + failed.join(', '), 'error');
+  else if (failed.length) _showDocFail(failed);
+}
+
+/* ทุกไซต์สร้างไม่สำเร็จ — บอกสาเหตุ ไม่ใช่แค่รายชื่อ
+   ถ้าเหตุผลเดียวกันหมด (เช่น ยังไม่ได้อัปแม่แบบ) บอกครั้งเดียวแล้วจบ */
+function _showDocFail(failed){
+  var reasons = {};
+  failed.forEach(function(f){ (reasons[f.why] = reasons[f.why] || []).push(f.name); });
+  var keys = Object.keys(reasons);
+  var msg = (keys.length === 1)
+    ? '❌ สร้างเอกสารไม่สำเร็จทั้ง ' + failed.length + ' ไซต์ — ' + keys[0]
+    : '❌ สร้างเอกสารไม่สำเร็จ: ' + keys.map(function(k){
+        return reasons[k].join(', ') + ' (' + k + ')'; }).join(' · ');
+  showToast(msg, 'error');
+  try { console.error('[printDocGroup] ' + msg, failed); } catch(e) {}
+  var box = document.getElementById('docFailBox');
+  if (box) {
+    box.innerHTML = '<b>สร้างเอกสารไม่สำเร็จ</b><div style="margin-top:5px;">'
+      + keys.map(function(k){
+          return '<div style="margin-top:4px;">• ' + esc(k) + '<div style="opacity:.8;font-size:11.5px;">'
+            + esc(reasons[k].join(', ')) + '</div></div>'; }).join('')
+      + '</div>';
+    box.style.display = 'block';
+  }
 }
 
 // กล่องลิงก์รวมหลายไซต์ — แสดง "ทุกไซต์ในกลุ่ม" เสมอ
@@ -4191,8 +4215,13 @@ function _showDocLinks(list, failed){
           + 'onclick="copyAllDocLinks()">📋 คัดลอกลิงก์ทั้งหมด ('+have.length+' ไซต์)</button>'
         : '')
     + ((failed && failed.length)
-        ? '<div style="margin-top:10px;color:var(--danger);font-size:12px;">สร้างไม่สำเร็จ: '
-          + esc(failed.join(', ')) + ' — กดสร้างอีกครั้ง</div>' : '');
+        ? '<div style="margin-top:10px;color:var(--danger);font-size:12px;">สร้างไม่สำเร็จ:'
+          + failed.map(function(f){
+              var nm = (f && f.name) ? f.name : String(f);
+              var wy = (f && f.why) ? ' — ' + f.why : '';
+              return '<div style="margin-top:3px;">• ' + esc(nm) + esc(wy) + '</div>';
+            }).join('')
+          + '</div>' : '');
 
   document.getElementById('dlFile').textContent = '';
   var inp = document.getElementById('docLinkInput'); if (inp) { inp.style.display='none'; inp.value=''; }
@@ -4205,14 +4234,16 @@ function _showDocLinks(list, failed){
 }
 
 function printDoc() {
-  if (!V2_OK())          { showToast('ยังไม่มี config ของรอบ — กดตรวจสอบสถานะอีกครั้ง', 'warn'); return; }
-  if (!locations.length) { showToast('ยังไม่มีข้อมูลนับ', 'warn'); return; }
+  // ทุกทางที่ล้มเหลว ต้องคืนเหตุผลออกไปเสมอ — โหมดกลุ่มเคยกลืนสาเหตุ เหลือแค่ "ไม่สำเร็จ" ไล่ต่อไม่ได้
+  var _fail = function(msg, type){ showToast('❌ ' + msg, type || 'error'); return { error: msg }; };
+  if (!V2_OK())          return _fail('ยังไม่มี config ของรอบ — กดตรวจสอบสถานะอีกครั้ง', 'warn');
+  if (!locations.length) return _fail('ยังไม่มีข้อมูลนับ', 'warn');
   if (typeof window.PizZip === 'undefined' || typeof window.docxtemplater === 'undefined') {
-    showToast('โหลดตัวสร้างเอกสารไม่สำเร็จ — เช็คอินเทอร์เน็ตแล้วรีเฟรชหน้า', 'error'); return;
+    return _fail('โหลดตัวสร้างเอกสารไม่สำเร็จ — เช็คอินเทอร์เน็ตแล้วรีเฟรชหน้า');
   }
   var btns = document.querySelectorAll('.btn-print');
   for (var i=0;i<btns.length;i++) { btns[i].disabled = true; }
-  _docResult = null;
+  _docResult = null; _docFail = '';
   showToast('⏳ กำลังสร้างเอกสาร...', 'info');
 
   var fname = _docFileName();
@@ -4252,12 +4283,14 @@ function printDoc() {
           return (e.properties && e.properties.explanation) || e.message;
         }).join(' · ');
       }
+      _docFail = m;
       showToast('❌ สร้างเอกสารไม่สำเร็จ: ' + m, 'error');
     })
     .then(function(){
       var bs = document.querySelectorAll('.btn-print');
       for (var j=0;j<bs.length;j++) { bs[j].disabled = false; }
-      return _docResult;        // ส่งผลการอัปโหลดออกไปให้ printDocGroup ใช้
+      // ส่งผลออกไปให้ printDocGroup — ล้มเหลวก็ต้องรู้ว่าเพราะอะไร
+      return _docResult || { error: _docFail || 'ไม่ทราบสาเหตุ' };
     });
 }
 
@@ -4402,6 +4435,7 @@ function _copyDocLink() {
 
 var _lastDocBlob = null, _lastDocName = '';
 var _docQuiet = false;   // true = พิมพ์เป็นชุด ยังไม่เปิดกล่องลิงก์ทีละใบ
+var _docFail  = '';      // เหตุผลที่สร้างเอกสารไม่สำเร็จครั้งล่าสุด
 var _docResult = null;   // ผลการอัปโหลดเอกสารครั้งล่าสุด (printDoc ส่งคืนให้ printDocGroup)
 
 // โหลดไฟล์ที่สร้างไว้ลงเครื่องนี้ (กดเอง ไม่ใช่อัตโนมัติ)
