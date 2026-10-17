@@ -2,7 +2,7 @@
 //  Stock Count App — Global Config
 // ============================================================
 var STOCKCOUNT_CONFIG = {
-  API_URL: 'https://script.google.com/macros/s/AKfycby5AYmX-oBSt0Qj77uPByfBN_JB7tEHzqVRKUmXm1UTzDu-Mk2kE0UyyqhIlDAkb5zwRg/exec',
+  API_URL: 'https://script.google.com/macros/s/AKfycbybCSFHgqFT3R9sz0G83z3oBAanhXkmtrUxU1UBjz3cPOFbXWIhUHXjwKeKcK6tbIWFfA/exec',
   APP_NAME: 'StockCount',
   VERSION: '1.0.1'
 };
