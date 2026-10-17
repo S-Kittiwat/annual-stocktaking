@@ -1043,9 +1043,11 @@ function loadData(showSpin){
       // v2: config ชนิด/สถานะ — ถ้ากำลังแก้ค้างอยู่ อย่าดึงของ server มาทับ (บทเรียน 2.6)
       if(d.item_config && !S.typesDirty) applyItemConfig(d.item_config);
       // config v2 ของรอบ — หน้าภาพรวม/กระทบยอดต้องใช้ แต่ห้ามทับตอนกำลังแก้ค้างใน Setting
-      if(d.config_v2 && !S.v2Dirty){
+      if(d.config_v2 && !S.v2Dirty && !wizOpen()){
         V2CFG = d.config_v2;
         if(d.config_v2.limits) V2LIM = d.config_v2.limits;
+      } else if(d.config_v2 && d.config_v2.limits){
+        V2LIM = d.config_v2.limits;        // เพดานจำนวนรายการยังอัปเดตได้ ไม่กระทบค่าที่กรอกไว้
       }
       if(d.checklist) ckApplyServer(d.checklist);
     }
@@ -2019,6 +2021,14 @@ function wizRenderReview(){
 
 /* ตรวจความพร้อมจากข้อมูลในเครื่องล้วน (ยังไม่มีอะไรอยู่บน server ให้ตรวจ)
    ใช้กติกาชุดเดียวกับ validateRoundConfig_ ฝั่ง backend ซึ่งจะตรวจซ้ำอีกชั้นตอนบันทึก */
+/* ตัวช่วยตั้งรอบเปิดอยู่หรือเปล่า — ระหว่างนี้ห้ามให้ข้อมูลจาก server มาทับ V2CFG
+   รอบที่เพิ่งสร้างยังไม่มี config ฝั่ง server (types/items ว่าง แต่ object ไม่ null)
+   ถ้าปล่อยให้ทับ จะล้างค่าที่คัดลอกมาจากรอบก่อนทิ้งทั้งชุด */
+function wizOpen(){
+  var el = document.getElementById('wizard');
+  return !!(el && el.style.display === 'block');
+}
+
 function wizLocalErrors(){
   var e=[], cfg=V2CFG||{};
   if(!WZ_ROUND.year) e.push('ยังไม่ได้ระบุปี');
@@ -2095,6 +2105,9 @@ function wizStart(){
   }
   btn.textContent='กำลังบันทึก…';
   say('⏳ '+steps[0]+'…');
+  // ถือ config ที่กรอก/คัดลอกไว้ไว้กับตัว — ขั้น "สร้างรอบ" เรียก loadData ซึ่งเคยทับ V2CFG
+  // ด้วย config ว่างของรอบที่เพิ่งสร้าง ทำให้ขั้นถัดไปบันทึกของว่างแล้วเด้งว่ายังไม่ได้ตั้งค่า
+  var CFG_KEEP = V2CFG ? JSON.parse(JSON.stringify(V2CFG)) : null;
 
   // 1) สร้างรอบ (ถ้ายังไม่มีรอบร่างค้างอยู่)
   // ใช้รอบร่างเดิมต่อได้เฉพาะเมื่อยังไม่ได้สั่งเปิดรอบใหม่
@@ -2109,7 +2122,10 @@ function wizStart(){
     WIZ.forceNew = false;          // รอบใหม่ถูกสร้างแล้ว กดซ้ำจะไม่สร้างซ้ำ
     return loadData(false);
   }).then(function(){
+    if(CFG_KEEP) V2CFG = CFG_KEEP;          // กู้คืนหลัง loadData
     at=1; say('⏳ '+steps[1]+'…');
+    if(!V2CFG || !(V2CFG.types||[]).length)
+      throw new Error('การตั้งค่าหายไประหว่างสร้างรอบ — ปิดหน้าต่างนี้แล้วเปิดใหม่อีกครั้ง');
     return post({action:'saveRoundConfig', round_id:S.round.round_id, config:V2CFG});
   }).then(function(d){
     if(d && d.status==='error') throw new Error(d.message||'บันทึกการตั้งค่าไม่สำเร็จ');
