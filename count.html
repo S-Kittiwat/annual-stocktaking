@@ -2274,17 +2274,12 @@ function groupGaps(){
 // เงื่อนไข "ไม่มีลิงก์" สำคัญเฉพาะโหมดกลุ่ม เพราะกล่องลิงก์คือทางเดียวที่จะได้ไฟล์
 // (เคยพลาด: ใบที่อัปโหลดไม่สำเร็จ หรือพิมพ์ไว้ตั้งแต่เวอร์ชันก่อนที่ยังไม่เก็บลิงก์
 //  จะถูกนับว่า "เสร็จแล้ว" ทั้งที่ผู้นับไม่มีไฟล์ไปพิมพ์)
-function _siteNeedsDoc(sid){
-  var act = String(sid) === String(activeSid());
-  if (_siteGap(sid) === null) return false;                    // ปิดงานแล้ว
-  if (act) return !_printed || _docStale() || (visitOn() && !siteDocUrl);
-  var o = SITES[sid] || {};
-  if (!o._printed) return true;
-  if (!o.siteDocUrl) return true;                              // พิมพ์แล้วแต่ไม่มีไฟล์
-  return _sigOfSite(sid) !== o._printedSig;
-}
-// ลายเซ็นยอดของไซต์อื่น — คำนวณโดยสลับเข้าไปชั่วคราวแล้วสลับกลับ
-// (ใช้สูตรเดิมทั้งหมด ไม่ copy logic มาเขียนใหม่)
+/* ══ กฎเดียวสำหรับ "ต้องสร้างเอกสารยืนยันใหม่ไหม" ══
+   เดิมกฎนี้เขียนไว้ 3 ที่ด้วยเงื่อนไขไม่ตรงกัน (การ์ด Submit · ซ่อน/แสดงขั้น 3-4 · ประตูโหมดคลังรวม)
+   ผลคือโดนบล็อกไม่ให้ส่ง แต่ปุ่มสร้างเอกสารถูกซ่อน = ตันสนิท
+   ต้องสร้างใหม่เมื่อ: ใบส่งครั้งแรก · ตีกลับเรื่องยอดระบบ · ยอดเปลี่ยนหลังพิมพ์
+   ไม่ต้องสร้างใหม่เมื่อ: ตีกลับเรื่องไฟล์/รูปอย่างเดียว และยอดยังเท่าเดิม — ใบที่เซ็นมาแล้วยังใช้ได้ */
+/* ลายเซ็นยอดของไซต์ใดไซต์หนึ่ง — ไซต์ที่ไม่ได้เปิดอยู่ต้องสลับ state ไปคำนวณแล้วสลับกลับ */
 function _sigOfSite(sid){
   if (!VISIT || String(sid) === String(activeSid())) return _totalsSig();
   var back = VISIT.active_sid;
@@ -2293,6 +2288,40 @@ function _sigOfSite(sid){
   try { sig = _totalsSig(); } catch(e) { sig = null; }
   _siteStash(sid); VISIT.active_sid = back; _siteApply(back);
   return sig;
+}
+function _rejStepsOf(sub){
+  var raw = (sub && sub.reject_steps) || [];
+  return Array.isArray(raw) ? raw.map(function(k){ return String(k||'').trim(); }).filter(Boolean) : [];
+}
+/* ไซต์นี้เป็น "ฉบับแก้ไขที่ไม่แตะยอด" หรือเปล่า — ถ้าใช่ ไม่ต้องพิมพ์/ไม่ต้องมีลิงก์เอกสาร */
+function _siteRevNoPrint(sid){
+  var act = String(sid) === String(activeSid());
+  var sub = act ? siteSubmission : ((SITES[sid] || {}).siteSubmission || null);
+  var st  = String((sub || {}).status || '');
+  if (st !== 'rejected' && st !== 'reopened') return false;
+  var steps = _rejStepsOf(sub);
+  if (!steps.length) return false;                 // ตีกลับเปล่า = ต้องทำใหม่ทั้งหมด
+  if (steps.indexOf('book') >= 0) return false;    // ยอดระบบเปลี่ยน = ต้องพิมพ์ใหม่
+  // ยอดต้องไม่เปลี่ยนไปจากตอนพิมพ์ใบที่เซ็นมา
+  var o = act ? { _printedSig:_printedSig } : (SITES[sid] || {});
+  if (o._printedSig === null || o._printedSig === undefined) return true;  // ไม่มีฐานเทียบ = ถือว่ายอดเดิม
+  return _sigOfSite(sid) === o._printedSig;
+}
+function _siteNeedsDoc(sid){
+  if (_siteGap(sid) === null) return false;                    // ปิดงานแล้ว
+  if (_siteRevNoPrint(sid)) return false;                      // แก้เฉพาะไฟล์/รูป — ใบเซ็นเดิมใช้ได้
+  var act = String(sid) === String(activeSid());
+  if (act) return !_printed || _docStale() || (visitOn() && !siteDocUrl);
+  var o = SITES[sid] || {};
+  if (!o._printed) return true;
+  if (!o.siteDocUrl) return true;                              // พิมพ์แล้วแต่ไม่มีไฟล์
+  return _sigOfSite(sid) !== o._printedSig;
+}
+/* การ์ด Submit ของไซต์ที่เปิดอยู่ — ใช้กฎเดียวกัน */
+function _needPrintNow(){
+  if (!_isRevision()) return true;                 // ใบส่งครั้งแรก ต้องมีเอกสารเสมอ
+  if (_siteRevNoPrint(activeSid())) return false;
+  return true;
 }
 function groupNeedDocs(){
   if (!visitOn()) return [];
@@ -2480,7 +2509,7 @@ function renderStep2(content) {
     (function(){
       var _isRe = _isRevision();
       var _stale = _docStale();
-      var _needPrint = !_isRe || _rejNeedsBook() || _stale;
+      var _needPrint = _needPrintNow();
       var ready = hasLoc && _offDone && _photoOk() && _hasSignedFile() && (!_needPrint || (_step3Seen && _printed && !_stale));
       return '<div class="submit-card" id="submitCard">'+
       '<div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:8px;">📋 ตรวจสอบก่อน Submit</div>'+
@@ -2625,7 +2654,8 @@ function _applyRejFocus(){
   var needCount = V2TYPES().some(function(t){ return _rejNeeds('count:'+t.type_id); });
   var needPhoto = _rejNeeds('photo');
   var needAdj   = _rejNeedsAnyAdj();
-  var needPrint = _rejNeedsBook() || _docStale();
+  // ห้ามซ่อนปุ่มสร้างเอกสารถ้าประตูใดประตูหนึ่งยังเรียกหาเอกสารอยู่ — กันสถานะ "บล็อกแต่กดอะไรไม่ได้"
+  var needPrint = _needPrintNow() || _siteNeedsDoc(activeSid());
   var needFile  = _rejNeeds('file') || needPrint;
   if (needPhoto) needFile = true;           // รูปอยู่การ์ดเดียวกับใบเซ็น
 
@@ -2670,7 +2700,7 @@ function updateSubmitCard() {
   var _isRe   = _isRevision();
   var _stale     = _docStale();
   var _printOk   = _printed && !_stale;
-  var _needPrint = !_isRe || _rejNeedsBook() || _stale;
+  var _needPrint = _needPrintNow();
   var ready   = hasLoc && _offDone && _photoOk() && hasFile && (!_needPrint || (_step3Seen && _printOk));
   // โหมดคลังรวม — ส่งได้เมื่อครบทุกไซต์ (คนเซ็นรับรองทีเดียว)
   var _gGaps = [], _gDocs = [], _gFiles = [];
