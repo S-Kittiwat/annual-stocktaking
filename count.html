@@ -595,6 +595,7 @@ function _sitesInGroup(group){
 
 // เริ่มการเดินทาง — siteIds ตัวแรกคือไซต์ที่เปิดอยู่
 function visitStart(siteIds, group){
+  if (typeof stopGroupPoll === 'function') stopGroupPoll();
   SITES = {};
   VISIT = { round_id:_curRoundId(), group_name:String(group||''),
             site_ids:(siteIds||[]).slice(), active_sid:(siteIds||[])[0] || '',
@@ -718,6 +719,8 @@ async function refreshGroupStatus(){
     if (x.doc_no) o.siteDocNo = String(x.doc_no);   // โหมดคลังรวมไม่ได้เรียก getBookBalance
     var st = String((x.submission || {}).status || '');
     if (st === 'pending' || st === 'approved') o._submitState = 'ok';
+    // ถูกตีกลับ/เปิดแก้ไข → ปลดสถานะ "ส่งแล้ว" ไม่งั้นไซต์นั้นยังค้างหน้าล็อก แก้อะไรไม่ได้
+    else if (st === 'rejected' || st === 'reopened') o._submitState = 'none';
   });
   _siteApply(cur);
   // ไซต์ที่ถูกตีกลับ: ดึงยอด/รูป/รายการปรับปรุงเดิมจาก server กลับมา
@@ -1287,6 +1290,7 @@ function _clearStaleSession(msg) {
   ADJ = {}; ADJFILES = {}; V2SUB = null;
   visitClear();
   try { stopSitePoll(); } catch(e) {}
+  try { stopGroupPoll(); } catch(e) {}
   if (msg) showToast(msg, 'info');
 }
 
@@ -1559,10 +1563,80 @@ function _renderLockScreen(content, status) {
         '<div id="queueStatusBox" style="margin-top:16px;padding:14px;border-radius:var(--rs);background:var(--surface);border:1px solid var(--border);font-size:14px;color:var(--muted);"><span class="spinner"></span> กำลังตรวจสอบคิว…</div>'+
         '<button class="btn btn-outline" onclick="recheckStatus()" style="width:100%;margin-top:14px;">🔄 ตรวจสอบสถานะอีกครั้ง</button>'+
         '<div style="font-size:11px;color:var(--muted);margin-top:8px;">เมื่อถึงคิว เจ้าหน้าที่จะเรียกตรวจ และจะมีลิงก์เข้าห้อง Teams ให้กด</div>'+
+        _groupWaitRows()+
       '</div>';
   }
   content.innerHTML = html;
   if (status !== 'approved') startSitePoll(); else stopSitePoll();
+  // โหมดคลังรวม: ต้องเฝ้าทุกไซต์ ไม่ใช่เฉพาะไซต์ที่เปิดอยู่
+  if (visitOn() && status !== 'approved') startGroupPoll(); else stopGroupPoll();
+}
+
+/* ── โหมดคลังรวม: เฝ้าทั้งกลุ่มระหว่างรอตรวจ ──
+   poll เดิมดูแค่ไซต์ที่เปิดอยู่ (session.site) ส่ง 8 ไซต์แล้วถูกตีกลับไซต์ที่ 5
+   ผู้นับจะไม่รู้เลย เพราะนั่งอยู่หน้าไซต์ที่ 1 ที่ยังขึ้นว่า "รอ Admin ตรวจ" */
+var _groupPollTimer = null;
+function stopGroupPoll(){ if(_groupPollTimer){ clearInterval(_groupPollTimer); _groupPollTimer=null; } }
+function startGroupPoll(){
+  stopGroupPoll();
+  if (!visitOn()) return;
+  pollGroupStatus();
+  _groupPollTimer = setInterval(pollGroupStatus, 10000);
+}
+/* ไซต์ในกลุ่มที่ถูกตีกลับ/เปิดแก้ไข — ต้องกลับไปแก้ */
+function groupRejected(){
+  return visitSites().filter(function(sid){
+    var o = (String(sid) === String(activeSid())) ? { siteSubmission:siteSubmission } : (SITES[sid] || {});
+    var st = String((o.siteSubmission || {}).status || '');
+    return st === 'rejected' || st === 'reopened';
+  });
+}
+async function pollGroupStatus(){
+  if (!visitOn()) { stopGroupPoll(); return; }
+  try { await refreshGroupStatus(); } catch(e) { return; }
+  var rej = groupRejected();
+  if (!rej.length) { render(); return; }
+  stopGroupPoll();
+  var sid = rej[0];
+  if (String(sid) !== String(activeSid())) {
+    switchSite(sid, { quiet:true });           // พาไปไซต์ที่ต้องแก้ทันที
+    showToast('↩ ' + _siteNameById(sid) + ' ถูกตีกลับ — พามาแก้ที่ไซต์นี้แล้ว', 'warn');
+  } else {
+    showToast('↩ ไซต์นี้ถูกตีกลับ — แก้ตามที่เจ้าหน้าที่ระบุแล้วส่งใหม่', 'warn');
+  }
+  try { saveProgress(); } catch(e) {}
+  render();
+}
+/* แถบสรุปสถานะทุกไซต์ — ให้เห็นว่าใน 8 ใบ ใบไหนอยู่ตรงไหน */
+function _groupWaitRows(){
+  if (!visitOn()) return '';
+  var rows = visitSites().map(function(sid){
+    var o = (String(sid) === String(activeSid())) ? { siteSubmission:siteSubmission } : (SITES[sid] || {});
+    var st = String((o.siteSubmission || {}).status || '');
+    var ico = (st === 'approved') ? '✅' : (st === 'pending') ? '⏳'
+            : (st === 'rejected' || st === 'reopened') ? '↩' : '•';
+    var txt = (st === 'approved') ? 'อนุมัติแล้ว' : (st === 'pending') ? 'รอตรวจ'
+            : (st === 'rejected') ? 'ถูกตีกลับ — ต้องแก้' : (st === 'reopened') ? 'เปิดให้แก้ไข'
+            : 'ยังไม่ได้ส่ง';
+    var hot = (st === 'rejected' || st === 'reopened');
+    return '<button type="button" onclick="goFixSite(\'' + esc(sid) + '\')" '
+      + 'style="display:flex;gap:8px;align-items:center;width:100%;text-align:left;padding:9px 11px;'
+      + 'border-radius:8px;border:1px solid ' + (hot ? 'var(--danger)' : 'var(--border)') + ';'
+      + 'background:' + (hot ? 'rgba(220,38,38,.08)' : 'var(--surface)') + ';'
+      + 'color:' + (hot ? 'var(--danger)' : 'var(--text)') + ';font:inherit;font-size:12.5px;'
+      + (hot ? 'font-weight:700;' : '') + 'cursor:pointer;">'
+      + '<span>' + ico + '</span><span style="flex:1;">' + esc(_siteNameById(sid)) + '</span>'
+      + '<span style="opacity:.75;">' + esc(txt) + '</span></button>';
+  }).join('');
+  return '<div style="margin-top:14px;text-align:left;">'
+    + '<div style="font-size:11px;color:var(--muted);margin-bottom:6px;">ไซต์ในกลุ่มนี้ ' + visitSites().length + ' ไซต์</div>'
+    + '<div style="display:flex;flex-direction:column;gap:6px;">' + rows + '</div></div>';
+}
+function goFixSite(sid){
+  if (String(sid) === String(activeSid())) { render(); return; }
+  switchSite(sid, { quiet:true });
+  try { saveProgress(); } catch(e) {}
+  render();
 }
 
 // ── หน้ารอคิว: poll สถานะคิวของ Site เป็นระยะ ──
