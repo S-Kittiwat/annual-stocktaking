@@ -715,6 +715,7 @@ async function refreshGroupStatus(){
     o.siteSubmission= x.submission || null;
     o.V2FOLDER      = x.folder_url || '';
     o.V2FILES       = Number(x.file_count || 0);
+    if (x.doc_no) o.siteDocNo = String(x.doc_no);   // โหมดคลังรวมไม่ได้เรียก getBookBalance
     var st = String((x.submission || {}).status || '');
     if (st === 'pending' || st === 'approved') o._submitState = 'ok';
   });
@@ -1012,6 +1013,7 @@ async function _loadCountSetup(site) {
     V2SUB   = d.submission || null;
     V2FOLDER = d.folder_url || '';
     V2FILES  = Number(d.file_count || 0);
+    if (d.doc_no) siteDocNo = String(d.doc_no);   // เลขที่เอกสารมากับ setup แล้ว
     if (V2SUB) siteSubmission = V2SUB;      // v2 เป็นแหล่งข้อมูลหลัก
     return { ok:!!d.ready, reason:d.reason||'', has_book:!!d.has_book, round:d.round||null };
   } catch (e) {
@@ -1170,7 +1172,8 @@ async function fetchBookBalance(site) {
     .then(function(r){ return r.json(); })
     .then(function(data) {
       siteSubmission = data.submission || V2SUB || null; // v2 ชนะ v1 ถ้า v1 ไม่มีใบ
-      siteDocNo = data.doc_no || '';            // เลขที่เอกสารของ site นี้ (Admin)
+      // อย่าล้างเลขที่เอกสารที่ setup ส่งมาแล้ว ถ้ารอบนี้ v1 ไม่มีข้อมูล
+      if (data.doc_no) siteDocNo = String(data.doc_no);
       if (data.status === 'ok' && data.book) {
         bookBalance = data.book;
       }
@@ -2111,6 +2114,7 @@ function confirmStep1() {
       o.siteSubmission= g.submission || null;
       o.V2FOLDER      = g.folder_url || '';
       o.V2FILES       = Number(g.file_count || 0);
+      o.siteDocNo     = g.doc_no ? String(g.doc_no) : '';   // เลขที่เอกสารรายไซต์
     });
     _siteApply(VISIT.active_sid);
     files = [];
